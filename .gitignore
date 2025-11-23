@@ -1,0 +1,113 @@
+# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+
+# MCP workspace (Docker development)
+mcp-workspace/
+
+# compiled output
+dist
+tmp
+out-tsc
+# dependencies
+node_modules
+package-lock.json
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+# misc
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
+npm-debug.log
+yarn-error.log
+testem.log
+/typings
+# System Files
+.DS_Store
+Thumbs.db
+.nx/cache
+.nx/workspace-data
+.cursor/rules/
+.kiro/
+.roo/
+.amazonq/
+.claude/
+.venv/
+.nx/
+.pnpm-store/
+.github/instructions/nx.instructions.md
+vite.config.*.timestamp*
+vitest.config.*.timestamp*
+/reports
+__pycache__/
+
+runtime-config.json
+
+# Working Documents
+docs/PRD.md
+/scripts/
+.roomodes
+.taskmaster
+.windsurfrules
+.cursor/
+/backup
+/packages/backend/src/research_data
+
+# Added by Claude Task Master
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dev-debug.log
+# Dependency directories
+node_modules/
+pnpm-lock.yaml
+# Environment variables
+.env
+.env.bak
+certificate.pem
+packages/infra/certs/
+# Editor directories and files
+conversation_checkpoints.db
+conversation_checkpoints.db-shm
+conversation_checkpoints.db-wal
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+ref_src/
+/packages/infra/src/lambda_layer/python/
+/packages/infra/src/lambda_layer/common/
+/packages/backup
+
+# Backend
+/packages/results/
+/packages/backend/local_dev/data
+
+# Frontend
+/packages/frontend/.next
+/packages/frontend/src/.next
+packages/frontend/tsconfig.tsbuildinfo
+
+# Infra
+/packages/infra/*.xlsx
+/packages/infra/cdk.out/
+/packages/infra/stack-outputs-backup.json
+/packages/infra/.eslintcache
+cdk.context.json
