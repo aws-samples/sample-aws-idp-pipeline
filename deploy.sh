@@ -187,6 +187,13 @@ while true; do
     esac
 done
 
+# Pre-create OpenSearch Service-Linked Role (if not exists)
+echo "Checking OpenSearch Service-Linked Role..."
+aws iam get-role --role-name AWSServiceRoleForAmazonOpenSearchService >/dev/null 2>&1 || \
+    (aws iam create-service-linked-role --aws-service-name opensearch.amazonaws.com >/dev/null 2>&1 && \
+    echo "✓ Created OpenSearch Service-Linked Role" && sleep 10) || \
+    echo "✓ OpenSearch Service-Linked Role already exists"
+
 # Validate CloudFormation template
 echo "Validating CloudFormation template..."
 aws cloudformation validate-template --template-body file://deploy-codebuild.yml > /dev/null 2>&1
