@@ -32,7 +32,7 @@
       "outputs": ["{workspaceRoot}/dist/{projectRoot}/checkov"],
       "dependsOn": ["synth"],
       "options": {
-        "command": "uvx --with pycares==4.11.0 checkov==3.2.495 --config-file packages/infra/checkov.yml --file dist/packages/infra/cdk.out/**/*.template.json"
+        "command": "uvx --with pycares==4.11.0 checkov==3.2.495 --config-file packages/infra/checkov.yml --directory dist/packages/infra/cdk.out/**/*.template.json"
       }
     },
     "compile": {
