@@ -32,11 +32,11 @@ export class AgentStack extends Stack {
 
     const extraHash = getDockerImageHash();
 
-    // process.cwd()는 항상 프로젝트 루트를 가리킴 (CI/로컬 모두)
+    // nx synth는 packages/infra에서 실행되므로 ../..로 루트 이동
     const dockerImage = AgentRuntimeArtifact.fromAsset(
-      path.join(
+      path.resolve(
         process.cwd(),
-        'packages/agents/idp-agent/idp_agent/idp_v2_idp_agent/idp_agent',
+        '../../packages/agents/idp-agent/idp_agent/idp_v2_idp_agent/idp_agent',
       ),
       {
         platform: Platform.LINUX_ARM64,
