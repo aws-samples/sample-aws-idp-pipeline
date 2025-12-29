@@ -55,7 +55,7 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/infra",
-        "command": "cdk deploy --require-approval=never --app ../../dist/packages/infra/cdk.out"
+        "command": "cdk deploy --all --require-approval=never --app ../../dist/packages/infra/cdk.out"
       }
     },
     "destroy": {
