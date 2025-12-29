@@ -1,4 +1,5 @@
 import { ApplicationStack } from './stacks/application-stack.js';
+import { AgentStack } from './stacks/agent-stack.js';
 import { App } from ':idp-v2/common-constructs';
 import { StorageStack } from './stacks/storage-stack.js';
 
@@ -14,6 +15,10 @@ new StorageStack(app, 'IDP-V2-Storage', {
 });
 
 new ApplicationStack(app, 'IDP-V2-Application', {
+  env,
+});
+
+new AgentStack(app, 'IDP-V2-Agent', {
   env,
 });
 

@@ -1,0 +1,146 @@
+{
+  "name": "idp_v2.idp_agent",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "packages/agents/idp-agent/idp_agent/idp_v2_idp_agent",
+  "release": {
+    "version": {
+      "versionActions": "@nxlv/python/src/release/version-actions"
+    }
+  },
+  "tags": [],
+  "metadata": {
+    "generator": "py#project",
+    "ports": [8081],
+    "components": [
+      {
+        "generator": "py#strands-agent",
+        "name": "idp-agent",
+        "port": 8081
+      }
+    ]
+  },
+  "targets": {
+    "add": {
+      "executor": "@nxlv/python:add",
+      "options": {}
+    },
+    "build": {
+      "dependsOn": ["lint", "compile", "test", "bundle", "docker"],
+      "options": {
+        "outputPath": "{workspaceRoot}/dist/packages/agents/idp-agent/idp_agent"
+      }
+    },
+    "compile": {
+      "executor": "@nxlv/python:build",
+      "outputs": [
+        "{workspaceRoot}/dist/packages/agents/idp-agent/idp_agent/build"
+      ],
+      "options": {
+        "outputPath": "{workspaceRoot}/dist/packages/agents/idp-agent/idp_agent/build",
+        "publish": false,
+        "lockedVersions": true,
+        "bundleLocalDependencies": true
+      },
+      "cache": true
+    },
+    "format": {
+      "executor": "@nxlv/python:ruff-format",
+      "outputs": [],
+      "options": {
+        "filePatterns": ["idp_v2_idp_agent", "tests"]
+      },
+      "cache": true
+    },
+    "install": {
+      "executor": "@nxlv/python:install",
+      "options": {
+        "silent": false,
+        "args": "",
+        "verbose": false,
+        "debug": false
+      }
+    },
+    "lint": {
+      "executor": "@nxlv/python:ruff-check",
+      "outputs": [],
+      "options": {
+        "lintFilePatterns": ["idp_v2_idp_agent", "tests"]
+      },
+      "cache": true,
+      "dependsOn": ["format"]
+    },
+    "lock": {
+      "executor": "@nxlv/python:lock",
+      "options": {
+        "update": false
+      }
+    },
+    "remove": {
+      "executor": "@nxlv/python:remove",
+      "options": {}
+    },
+    "sync": {
+      "executor": "@nxlv/python:sync",
+      "options": {}
+    },
+    "test": {
+      "executor": "@nxlv/python:run-commands",
+      "outputs": [
+        "{workspaceRoot}/reports/{projectRoot}/unittests",
+        "{workspaceRoot}/coverage/{projectRoot}"
+      ],
+      "options": {
+        "command": "uv run pytest tests/",
+        "cwd": "{projectRoot}"
+      },
+      "cache": true
+    },
+    "update": {
+      "executor": "@nxlv/python:update",
+      "options": {}
+    },
+    "bundle-arm": {
+      "cache": true,
+      "executor": "nx:run-commands",
+      "outputs": [
+        "{workspaceRoot}/dist/packages/agents/idp-agent/idp_agent/bundle-arm"
+      ],
+      "options": {
+        "commands": [
+          "uv export --frozen --no-dev --no-editable --project packages/agents/idp-agent/idp_agent --package idp_v2.idp_agent -o dist/packages/agents/idp-agent/idp_agent/bundle-arm/requirements.txt",
+          "uv pip install -n --no-deps --no-installer-metadata --no-compile-bytecode --python-platform aarch64-manylinux2014 --target dist/packages/agents/idp-agent/idp_agent/bundle-arm -r dist/packages/agents/idp-agent/idp_agent/bundle-arm/requirements.txt"
+        ],
+        "parallel": false
+      },
+      "dependsOn": ["compile"]
+    },
+    "bundle": {
+      "dependsOn": ["bundle-arm"]
+    },
+    "idp-agent-docker": {
+      "cache": true,
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "docker build --platform linux/arm64 -t idp-v2-idp-agent:latest packages/agents/idp-agent/idp_agent/idp_v2_idp_agent/idp_agent --build-context workspace=."
+        ],
+        "parallel": false
+      },
+      "dependsOn": ["bundle-arm"]
+    },
+    "docker": {
+      "dependsOn": ["idp-agent-docker"]
+    },
+    "idp-agent-serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "uv run fastapi dev idp_v2_idp_agent/idp_agent/main.py --port 8081"
+        ],
+        "cwd": "{projectRoot}"
+      },
+      "continuous": true
+    }
+  }
+}

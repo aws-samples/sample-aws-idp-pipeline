@@ -27,6 +27,9 @@ importers:
         specifier: 0.5.21
         version: 0.5.21
     devDependencies:
+      '@aws-cdk/aws-bedrock-agentcore-alpha':
+        specifier: 2.229.1-alpha.0
+        version: 2.229.1-alpha.0(@aws-cdk/aws-bedrock-alpha@2.229.1-alpha.0(aws-cdk-lib@2.230.0(constructs@10.4.3))(constructs@10.4.3))(aws-cdk-lib@2.230.0(constructs@10.4.3))(constructs@10.4.3)
       '@eslint/js':
         specifier: ^9.8.0
         version: 9.39.2
@@ -45,6 +48,9 @@ importers:
       '@nx/workspace':
         specifier: 22.1.3
         version: 22.1.3(@swc-node/register@1.9.2(@swc/core@1.5.29(@swc/helpers@0.5.18))(@swc/types@0.1.25)(typescript@5.9.3))(@swc/core@1.5.29(@swc/helpers@0.5.18))
+      '@nxlv/python':
+        specifier: 21.2.0
+        version: 21.2.0(nx@22.1.3(@swc-node/register@1.9.2(@swc/core@1.5.29(@swc/helpers@0.5.18))(@swc/types@0.1.25)(typescript@5.9.3))(@swc/core@1.5.29(@swc/helpers@0.5.18)))
       '@swc-node/register':
         specifier: ~1.9.1
         version: 1.9.2(@swc/core@1.5.29(@swc/helpers@0.5.18))(@swc/types@0.1.25)(typescript@5.9.3)
@@ -123,6 +129,21 @@ packages:
 
   '@aws-cdk/asset-node-proxy-agent-v6@2.1.0':
     resolution: {integrity: sha512-7bY3J8GCVxLupn/kNmpPc5VJz8grx+4RKfnnJiO1LG+uxkZfANZG3RMHhE+qQxxwkyQ9/MfPtTpf748UhR425A==}
+
+  '@aws-cdk/aws-bedrock-agentcore-alpha@2.229.1-alpha.0':
+    resolution: {integrity: sha512-9YLmd2xFPlj47Lh1Lo1bPpOoGPmoPP3SfeTJFGvvl2X2hccSDX9lBl0epNLB/ob4Itr3ECyPEcVKcKqmPT/9bw==}
+    engines: {node: '>= 18.0.0'}
+    peerDependencies:
+      '@aws-cdk/aws-bedrock-alpha': 2.229.1-alpha.0
+      aws-cdk-lib: ^2.229.1
+      constructs: ^10.0.0
+
+  '@aws-cdk/aws-bedrock-alpha@2.229.1-alpha.0':
+    resolution: {integrity: sha512-ruAkBjSRHjFeyfD3JX72Gid+27Z+F1Bu0ytu5AVyJKtBSMY5xvcgH00OyqnRMc1aCP3i1Pm6a9saHK5PKmJ95w==}
+    engines: {node: '>= 18.0.0'}
+    peerDependencies:
+      aws-cdk-lib: ^2.229.1
+      constructs: ^10.0.0
 
   '@aws-cdk/cloud-assembly-schema@48.20.0':
     resolution: {integrity: sha512-+eeiav9LY4wbF/EFuCt/vfvi/Zoxo8bf94PW5clbMraChEliq83w4TbRVy0jB9jE0v1ooFTtIjSQkowSPkfISg==}
@@ -5229,6 +5250,17 @@ snapshots:
   '@aws-cdk/asset-awscli-v1@2.2.242': {}
 
   '@aws-cdk/asset-node-proxy-agent-v6@2.1.0': {}
+
+  '@aws-cdk/aws-bedrock-agentcore-alpha@2.229.1-alpha.0(@aws-cdk/aws-bedrock-alpha@2.229.1-alpha.0(aws-cdk-lib@2.230.0(constructs@10.4.3))(constructs@10.4.3))(aws-cdk-lib@2.230.0(constructs@10.4.3))(constructs@10.4.3)':
+    dependencies:
+      '@aws-cdk/aws-bedrock-alpha': 2.229.1-alpha.0(aws-cdk-lib@2.230.0(constructs@10.4.3))(constructs@10.4.3)
+      aws-cdk-lib: 2.230.0(constructs@10.4.3)
+      constructs: 10.4.3
+
+  '@aws-cdk/aws-bedrock-alpha@2.229.1-alpha.0(aws-cdk-lib@2.230.0(constructs@10.4.3))(constructs@10.4.3)':
+    dependencies:
+      aws-cdk-lib: 2.230.0(constructs@10.4.3)
+      constructs: 10.4.3
 
   '@aws-cdk/cloud-assembly-schema@48.20.0': {}
 
