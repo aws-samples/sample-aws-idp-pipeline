@@ -1,0 +1,41 @@
+import uvicorn
+from bedrock_agentcore.runtime.models import PingStatus
+from fastapi.responses import PlainTextResponse, StreamingResponse
+from pydantic import BaseModel
+
+from .agent import get_agent
+from .init import app
+
+
+class InvokeInput(BaseModel):
+    prompt: str
+    session_id: str
+
+
+async def handle_invoke(input: InvokeInput):
+    """Streaming handler for agent invocation"""
+    with get_agent(session_id=input.session_id) as agent:
+        stream = agent.stream_async(input.prompt)
+        async for event in stream:
+            print(event)
+            content = event.get("event", {}).get("contentBlockDelta", {}).get("delta", {}).get("text")
+            if content is not None:
+                yield content
+            elif event.get("event", {}).get("messageStop") is not None:
+                yield "\n"
+
+
+@app.post("/invocations", openapi_extra={"x-streaming": True}, response_class=PlainTextResponse)
+async def invoke(input: InvokeInput) -> str:
+    """Entry point for agent invocation"""
+    return StreamingResponse(handle_invoke(input), media_type="text/event-stream")
+
+
+@app.get("/ping")
+def ping() -> str:
+    # TODO: if running an async task, return PingStatus.HEALTHY_BUSY
+    return PingStatus.HEALTHY
+
+
+if __name__ == "__main__":
+    uvicorn.run("idp_v2_idp_agent.idp_agent.main:app", port=8080)

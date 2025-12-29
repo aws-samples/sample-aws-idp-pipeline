@@ -38,6 +38,12 @@
       "options": {
         "targetName": "lint"
       }
+    },
+    {
+      "plugin": "@nxlv/python",
+      "options": {
+        "packageManager": "uv"
+      }
     }
   ],
   "targetDefaults": {
