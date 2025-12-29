@@ -4,6 +4,7 @@ stages:
 
 variables:
   NODE_VERSION: "22"
+  PATH: "/root/.local/bin:$PATH"
 
 .node_setup: &node_setup
   image: node:${NODE_VERSION}
@@ -16,6 +17,7 @@ variables:
   before_script:
     - corepack enable pnpm
     - pnpm config set store-dir .pnpm-store
+    - curl -LsSf https://astral.sh/uv/install.sh | sh
 
 build:
   stage: build
