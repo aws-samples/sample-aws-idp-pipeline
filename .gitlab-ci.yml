@@ -35,10 +35,16 @@ build:
 
 deploy:
   stage: deploy
-  <<: *node_setup
-  script:
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    - apk add --no-cache nodejs npm python3 py3-pip aws-cli
     - npm install -g aws-cdk
-    - pnpm nx run @idp-v2/infra:deploy-ci
+  script:
+    - cdk deploy --all --require-approval=never --app dist/packages/infra/cdk.out
   dependencies:
     - build
   rules:
