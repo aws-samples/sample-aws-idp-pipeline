@@ -20,8 +20,9 @@
     "baseUrl": ".",
     "rootDir": ".",
     "paths": {
+      ":idp-v2/infra": ["packages/infra/src/index.ts"],
       ":idp-v2/common-constructs": ["packages/common/constructs/src/index.ts"],
-      ":idp-v2/infra": ["packages/infra/src/index.ts"]
+      ":idp-v2/frontend": ["packages/frontend/src/index.ts"]
     }
   }
 }

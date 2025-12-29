@@ -6,7 +6,7 @@
   "tags": [],
   "targets": {
     "build": {
-      "dependsOn": ["lint", "compile", "test"]
+      "dependsOn": ["lint", "compile", "test", "@idp-v2/frontend:build"]
     },
     "compile": {
       "executor": "nx:run-commands",

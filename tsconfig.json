@@ -8,6 +8,9 @@
     },
     {
       "path": "./packages/common/constructs"
+    },
+    {
+      "path": "./packages/frontend"
     }
   ]
 }
