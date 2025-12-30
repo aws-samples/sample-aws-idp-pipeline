@@ -3,7 +3,7 @@ stages:
   - deploy
 
 variables:
-  NODE_VERSION: "22"
+  NODE_VERSION: '22'
 
 .node_setup: &node_setup
   image: node:${NODE_VERSION}
@@ -30,8 +30,6 @@ build:
       - node_modules/
       - packages/*/node_modules/
     expire_in: 1 hour
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
 
 deploy:
   stage: deploy
@@ -39,7 +37,7 @@ deploy:
   services:
     - docker:dind
   variables:
-    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_CERTDIR: '/certs'
   before_script:
     - apk add --no-cache nodejs npm python3 py3-pip aws-cli
     - npm install -g aws-cdk
@@ -48,6 +46,6 @@ deploy:
   dependencies:
     - build
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "deploy"
   environment:
     name: production
