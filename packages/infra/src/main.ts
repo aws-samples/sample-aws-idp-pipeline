@@ -16,6 +16,7 @@ new StorageStack(app, 'IDP-V2-Storage', {
 
 new ApplicationStack(app, 'IDP-V2-Application', {
   env,
+  crossRegionReferences: true,
 });
 
 new AgentStack(app, 'IDP-V2-Agent', {
