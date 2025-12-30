@@ -1,10 +1,13 @@
 [project]
 name = "nx-workspace"
 version = "1.0.0"
-dependencies = [ "idp_v2.idp_agent" ]
+dependencies = [ "idp_v2.backend", "idp_v2.idp_agent" ]
 
 [tool.uv.workspace]
-members = [ "packages/agents/idp-agent/idp_agent" ]
+members = [ "packages/agents/idp-agent/idp_agent", "packages/backend" ]
+
+[tool.uv.sources."idp_v2.backend"]
+workspace = true
 
 [tool.uv.sources."idp_v2.idp_agent"]
 workspace = true

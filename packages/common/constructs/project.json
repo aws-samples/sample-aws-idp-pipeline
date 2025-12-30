@@ -6,7 +6,13 @@
   "tags": [],
   "targets": {
     "build": {
-      "dependsOn": ["lint", "compile", "test", "@idp-v2/frontend:build"]
+      "dependsOn": [
+        "lint",
+        "compile",
+        "test",
+        "@idp-v2/frontend:build",
+        "idp_v2.backend:build"
+      ]
     },
     "compile": {
       "executor": "nx:run-commands",
@@ -14,7 +20,8 @@
       "options": {
         "command": "tsc --build tsconfig.lib.json",
         "cwd": "{projectRoot}"
-      }
+      },
+      "dependsOn": ["generate:backend-metadata"]
     },
     "test": {
       "executor": "@nx/vitest:test",
@@ -22,6 +29,24 @@
       "options": {
         "reportsDirectory": "../../../coverage/packages/common/constructs"
       }
+    },
+    "generate:backend-metadata": {
+      "cache": true,
+      "executor": "nx:run-commands",
+      "inputs": [
+        {
+          "dependentTasksOutputFiles": "**/*.json"
+        }
+      ],
+      "outputs": [
+        "{workspaceRoot}/packages/common/constructs/src/generated/backend"
+      ],
+      "options": {
+        "commands": [
+          "nx g @aws/nx-plugin:open-api#ts-metadata --openApiSpecPath=\"dist/packages/backend/openapi/openapi.json\" --outputPath=\"packages/common/constructs/src/generated/backend\" --no-interactive"
+        ]
+      },
+      "dependsOn": ["idp_v2.backend:openapi"]
     }
   },
   "metadata": {

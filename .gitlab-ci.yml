@@ -16,7 +16,9 @@ variables:
   before_script:
     - corepack enable pnpm
     - pnpm config set store-dir .pnpm-store
-    - curl -LsSf https://astral.sh/uv/install.sh | sh && ln -sf $HOME/.local/bin/uvx /usr/local/bin/uvx
+    - curl -LsSf https://astral.sh/uv/install.sh | sh
+    - export PATH="$HOME/.local/bin:$PATH"
+    - uv sync
 
 build:
   stage: build
