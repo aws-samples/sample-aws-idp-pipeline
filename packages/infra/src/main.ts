@@ -2,6 +2,7 @@ import { ApplicationStack } from './stacks/application-stack.js';
 import { AgentStack } from './stacks/agent-stack.js';
 import { App } from ':idp-v2/common-constructs';
 import { StorageStack } from './stacks/storage-stack.js';
+import { WorkflowStack } from './stacks/workflow-stack.js';
 
 const app = new App();
 
@@ -11,6 +12,10 @@ const env = {
 };
 
 new StorageStack(app, 'IDP-V2-Storage', {
+  env,
+});
+
+new WorkflowStack(app, 'IDP-V2-Workflow', {
   env,
 });
 
