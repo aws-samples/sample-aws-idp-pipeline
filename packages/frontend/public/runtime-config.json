@@ -1,1 +1,11 @@
-{"cognitoProps":{"region":"us-east-1","identityPoolId":"us-east-1:ba36ddb0-6c8b-41d3-a3f0-93567409e534","userPoolId":"us-east-1_Fdv5TRvaj","userPoolWebClientId":"2h80ofedo7ecer9npvls4r15f4"}}
+{
+  "cognitoProps": {
+    "region": "us-east-1",
+    "identityPoolId": "us-east-1:623ff7c4-cd54-4920-b680-572071037d49",
+    "userPoolId": "us-east-1_cyhGB8Kxa",
+    "userPoolWebClientId": "4d59lmri02vnjecj976u5d9q5"
+  },
+  "apis": {
+    "Backend": "https://9a3ma4f73d.execute-api.us-east-1.amazonaws.com/"
+  }
+}

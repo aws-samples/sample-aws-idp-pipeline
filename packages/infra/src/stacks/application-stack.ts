@@ -8,9 +8,7 @@ export class ApplicationStack extends Stack {
 
     const userIdentity = new UserIdentity(this, 'UserIdentity');
 
-    const backend = new Backend(this, 'Backend', {
-      integrations: Backend.defaultIntegrations(this).build(),
-    });
+    const backend = new Backend(this, 'Backend');
 
     const frontend = new Frontend(this, 'Frontend');
 

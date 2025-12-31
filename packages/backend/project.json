@@ -1,131 +1,37 @@
 {
-  "name": "idp_v2.backend",
+  "name": "@idp-v2/backend",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "projectType": "application",
   "sourceRoot": "packages/backend/src",
-  "release": {
-    "version": {
-      "versionActions": "@nxlv/python/src/release/version-actions"
-    }
-  },
+  "projectType": "library",
   "tags": [],
-  "metadata": {
-    "generator": "py#fast-api",
-    "ports": [8000],
-    "apiName": "backend",
-    "apiType": "fast-api",
-    "auth": "IAM"
-  },
   "targets": {
-    "add": {
-      "executor": "@nxlv/python:add",
-      "options": {}
-    },
     "build": {
-      "dependsOn": ["lint", "compile", "test", "bundle", "openapi"],
-      "options": {
-        "outputPath": "{workspaceRoot}/dist/packages/backend"
-      }
-    },
-    "bundle": {
-      "dependsOn": ["bundle-x86"]
-    },
-    "bundle-x86": {
-      "cache": true,
-      "executor": "nx:run-commands",
-      "outputs": ["{workspaceRoot}/dist/packages/backend/bundle-x86"],
-      "options": {
-        "commands": [
-          "uv export --frozen --no-dev --no-editable --project packages/backend --package idp_v2.backend -o dist/packages/backend/bundle-x86/requirements.txt",
-          "uv pip install -n --no-deps --no-installer-metadata --no-compile-bytecode --python-platform x86_64-manylinux2014 --target dist/packages/backend/bundle-x86 -r dist/packages/backend/bundle-x86/requirements.txt"
-        ],
-        "parallel": false
-      },
-      "dependsOn": ["compile"]
+      "dependsOn": ["lint", "compile", "test"]
     },
     "compile": {
-      "executor": "@nxlv/python:build",
-      "outputs": ["{workspaceRoot}/dist/packages/backend/build"],
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/packages/backend/tsc"],
       "options": {
-        "outputPath": "{workspaceRoot}/dist/packages/backend/build",
-        "publish": false,
-        "lockedVersions": true,
-        "bundleLocalDependencies": true
-      },
-      "cache": true
-    },
-    "format": {
-      "executor": "@nxlv/python:ruff-format",
-      "outputs": [],
-      "options": {
-        "filePatterns": ["src", "tests"]
-      },
-      "cache": true
-    },
-    "install": {
-      "executor": "@nxlv/python:install",
-      "options": {
-        "silent": false,
-        "args": "",
-        "verbose": false,
-        "debug": false
-      }
-    },
-    "lint": {
-      "executor": "@nxlv/python:ruff-check",
-      "outputs": [],
-      "options": {
-        "lintFilePatterns": ["src", "tests"]
-      },
-      "cache": true,
-      "dependsOn": ["format"]
-    },
-    "lock": {
-      "executor": "@nxlv/python:lock",
-      "options": {
-        "update": false
-      }
-    },
-    "openapi": {
-      "cache": true,
-      "executor": "@nxlv/python:run-commands",
-      "outputs": ["{workspaceRoot}/dist/packages/backend/openapi"],
-      "options": {
-        "command": "uv run python scripts/generate_open_api.py \"../../dist/packages/backend/openapi/openapi.json\"",
+        "command": "tsc --build tsconfig.lib.json",
         "cwd": "{projectRoot}"
       }
-    },
-    "remove": {
-      "executor": "@nxlv/python:remove",
-      "options": {}
-    },
-    "serve": {
-      "executor": "@nxlv/python:run-commands",
-      "options": {
-        "command": "uv run fastapi dev src/main.py --port 8000",
-        "cwd": "packages/backend"
-      },
-      "continuous": true
-    },
-    "sync": {
-      "executor": "@nxlv/python:sync",
-      "options": {}
     },
     "test": {
-      "executor": "@nxlv/python:run-commands",
-      "outputs": [
-        "{workspaceRoot}/reports/{projectRoot}/unittests",
-        "{workspaceRoot}/coverage/{projectRoot}"
-      ],
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
       "options": {
-        "command": "uv run pytest tests/",
-        "cwd": "{projectRoot}"
-      },
-      "cache": true
+        "reportsDirectory": "../../coverage/packages/backend"
+      }
     },
-    "update": {
-      "executor": "@nxlv/python:update",
-      "options": {}
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/server.ts",
+        "cwd": "{projectRoot}"
+      }
     }
+  },
+  "metadata": {
+    "generator": "ts#project"
   }
 }

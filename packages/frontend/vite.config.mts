@@ -27,7 +27,9 @@ export default defineConfig(() => ({
     }),
     react(),
     tailwindcss(),
-    tsconfigPaths(),
+    tsconfigPaths({
+      ignoreConfigErrors: true,
+    }),
   ],
   build: {
     outDir: '../../dist/packages/frontend',

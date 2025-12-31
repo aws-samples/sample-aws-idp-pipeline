@@ -50,7 +50,13 @@ const AppLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
   >([{ text: '/', href: '/' }]);
   const matchRoute = useMatchRoute();
   const { pathname, search } = useLocation();
-  const navItems = useMemo(() => [{ to: '/', label: 'Home' }], []);
+  const navItems = useMemo(
+    () => [
+      { to: '/', label: 'Home' },
+      { to: '/test', label: 'Test' },
+    ],
+    [],
+  );
   useEffect(() => {
     const breadcrumbs = getBreadcrumbs(
       matchRoute,

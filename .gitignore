@@ -41,7 +41,6 @@ Thumbs.db
 CLAUDE.md
 
 vitest.config.*.timestamp*
-
 /reports
 
 # Lambda layers (generated during CDK synth)

@@ -8,6 +8,7 @@ import React, {
 
 export interface CognitoProps {
   region: string;
+  identityPoolId: string;
   userPoolId: string;
   userPoolWebClientId: string;
 }
