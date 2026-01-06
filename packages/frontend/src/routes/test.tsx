@@ -44,18 +44,53 @@ function RouteComponent() {
   }, [apis, cognitoProps, user]);
 
   return (
-    <>
-      <h1>Test</h1>
-      <button onClick={handleGetTables} disabled={loading}>
-        {loading ? 'Loading...' : 'Get Tables'}
-      </button>
-      {tables.length > 0 && (
-        <ul>
-          {tables.map((table) => (
-            <li key={table}>{table}</li>
-          ))}
-        </ul>
-      )}
-    </>
+    <div style={{ padding: '20px' }}>
+      <h1>API Test</h1>
+
+      <section style={{ marginBottom: '20px' }}>
+        <h2>Tables</h2>
+        <button onClick={handleGetTables} disabled={loading}>
+          {loading ? 'Loading...' : 'Load Tables'}
+        </button>
+        <table
+          style={{
+            marginTop: '10px',
+            borderCollapse: 'collapse',
+            width: '100%',
+          }}
+        >
+          <thead>
+            <tr>
+              <th
+                style={{
+                  border: '1px solid #ccc',
+                  padding: '8px',
+                  textAlign: 'left',
+                }}
+              >
+                Table Name
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {tables.length === 0 ? (
+              <tr>
+                <td style={{ border: '1px solid #ccc', padding: '8px' }}>
+                  No tables loaded
+                </td>
+              </tr>
+            ) : (
+              tables.map((table) => (
+                <tr key={table}>
+                  <td style={{ border: '1px solid #ccc', padding: '8px' }}>
+                    {table}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </section>
+    </div>
   );
 }

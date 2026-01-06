@@ -90,6 +90,10 @@ export class Backend extends Construct {
       'BackendTable',
       SSM_KEYS.BACKEND_TABLE_NAME,
     );
+    const lancedbExpressBucketName = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.LANCEDB_EXPRESS_BUCKET_NAME,
+    );
 
     this.service = new ApplicationLoadBalancedFargateService(this, 'Service', {
       cluster,
@@ -107,6 +111,7 @@ export class Backend extends Construct {
           LANCEDB_LOCK_TABLE_NAME: lancedbLockTable.tableName,
           DOCUMENT_STORAGE_BUCKET_NAME: documentStorage.bucketName,
           BACKEND_TABLE_NAME: backendTable.tableName,
+          LANCEDB_EXPRESS_BUCKET_NAME: lancedbExpressBucketName,
         },
       },
       runtimePlatform: {
