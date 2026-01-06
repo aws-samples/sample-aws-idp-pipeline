@@ -2,22 +2,20 @@
 name = "nx-workspace"
 version = "1.0.0"
 dependencies = [
- "boto3>=1.42.0",
- "fastapi[standard]>=0.123.0",
- "idp_v2.backend",
- "idp_v2.backend",
- "idp_v2.idp_agent",
- "lancedb>=0.26.0",
- "polars>=1.36.1",
- "pydantic>=2.12.5",
- "ruff>=0.14.10",
- "tantivy>=0.25.1",
+  "boto3>=1.42.0",
+  "fastapi[standard]>=0.123.0",
+  "idp_v2.backend",
+  "idp_v2.idp_agent",
+  "lancedb>=0.26.0",
+  "polars>=1.36.1",
+  "pydantic>=2.12.5",
+  "ruff>=0.14.10",
+  "tantivy>=0.25.1"
 ]
 
 [tool.uv.workspace]
 members = [
-  "packages/agents/idp-agent/idp_agent",
-  "packages/backend",
+  "packages/agents/idp-agent",
   "packages/backend"
 ]
 
@@ -34,5 +32,5 @@ dev = [
   "pytest>=8.3.4",
   "pytest-sugar>=1.0.0",
   "pytest-cov>=6.0.0",
-  "pytest-html>=4.1.1",
+  "pytest-html>=4.1.1"
 ]

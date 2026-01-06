@@ -1020,31 +1020,11 @@ wheels = [
 name = "idp-v2-backend"
 version = "1.0.0"
 source = { editable = "packages/backend" }
-dependencies = [
-    { name = "boto3" },
-    { name = "fastapi" },
-    { name = "lancedb" },
-    { name = "polars" },
-    { name = "pydantic" },
-    { name = "tantivy" },
-    { name = "uvicorn" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "boto3", specifier = ">=1.42.0" },
-    { name = "fastapi", specifier = ">=0.123.0" },
-    { name = "lancedb", specifier = ">=0.26.0" },
-    { name = "polars", specifier = ">=1.36.1" },
-    { name = "pydantic", specifier = ">=2.12.5" },
-    { name = "tantivy", specifier = ">=0.25.1" },
-    { name = "uvicorn", specifier = ">=0.38.0" },
-]
 
 [[package]]
 name = "idp-v2-idp-agent"
 version = "1.0.0"
-source = { editable = "packages/agents/idp-agent/idp_agent" }
+source = { editable = "packages/agents/idp-agent" }
 dependencies = [
     { name = "aws-opentelemetry-distro" },
     { name = "bedrock-agentcore" },
@@ -1516,7 +1496,7 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.42.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.123.0" },
     { name = "idp-v2-backend", editable = "packages/backend" },
-    { name = "idp-v2-idp-agent", editable = "packages/agents/idp-agent/idp_agent" },
+    { name = "idp-v2-idp-agent", editable = "packages/agents/idp-agent" },
     { name = "lancedb", specifier = ">=0.26.0" },
     { name = "polars", specifier = ">=1.36.1" },
     { name = "pydantic", specifier = ">=2.12.5" },

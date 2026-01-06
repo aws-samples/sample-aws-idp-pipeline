@@ -1,37 +1,108 @@
 {
-  "name": "@idp-v2/backend",
+  "name": "idp_v2.backend",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "packages/backend/src",
-  "projectType": "library",
+  "projectType": "application",
+  "sourceRoot": "packages/backend/idp_v2_backend",
+  "release": {
+    "version": {
+      "versionActions": "@nxlv/python/src/release/version-actions"
+    }
+  },
   "tags": [],
   "targets": {
+    "add": {
+      "executor": "@nxlv/python:add",
+      "options": {}
+    },
     "build": {
-      "dependsOn": ["lint", "compile", "test"]
+      "dependsOn": [
+        "lint",
+        "compile",
+        "test"
+      ],
+      "options": {
+        "outputPath": "{workspaceRoot}/dist/packages/backend"
+      }
     },
     "compile": {
-      "executor": "nx:run-commands",
-      "outputs": ["{workspaceRoot}/dist/packages/backend/tsc"],
+      "executor": "@nxlv/python:build",
+      "outputs": [
+        "{workspaceRoot}/dist/packages/backend/build"
+      ],
       "options": {
-        "command": "tsc --build tsconfig.lib.json",
-        "cwd": "{projectRoot}"
+        "outputPath": "{workspaceRoot}/dist/packages/backend/build",
+        "publish": false,
+        "lockedVersions": true,
+        "bundleLocalDependencies": true
+      },
+      "cache": true
+    },
+    "format": {
+      "executor": "@nxlv/python:ruff-format",
+      "outputs": [],
+      "options": {
+        "filePatterns": [
+          "idp_v2_backend",
+          "tests"
+        ]
+      },
+      "cache": true
+    },
+    "install": {
+      "executor": "@nxlv/python:install",
+      "options": {
+        "silent": false,
+        "args": "",
+        "verbose": false,
+        "debug": false
       }
+    },
+    "lint": {
+      "executor": "@nxlv/python:ruff-check",
+      "outputs": [],
+      "options": {
+        "lintFilePatterns": [
+          "idp_v2_backend",
+          "tests"
+        ]
+      },
+      "cache": true,
+      "dependsOn": [
+        "format"
+      ]
+    },
+    "lock": {
+      "executor": "@nxlv/python:lock",
+      "options": {
+        "update": false
+      }
+    },
+    "remove": {
+      "executor": "@nxlv/python:remove",
+      "options": {}
+    },
+    "sync": {
+      "executor": "@nxlv/python:sync",
+      "options": {}
     },
     "test": {
-      "executor": "@nx/vitest:test",
-      "outputs": ["{options.reportsDirectory}"],
+      "executor": "@nxlv/python:run-commands",
+      "outputs": [
+        "{workspaceRoot}/reports/{projectRoot}/unittests",
+        "{workspaceRoot}/coverage/{projectRoot}"
+      ],
       "options": {
-        "reportsDirectory": "../../coverage/packages/backend"
-      }
-    },
-    "serve": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "tsx src/server.ts",
+        "command": "uv run pytest tests/",
         "cwd": "{projectRoot}"
-      }
+      },
+      "cache": true
+    },
+    "update": {
+      "executor": "@nxlv/python:update",
+      "options": {}
     }
   },
   "metadata": {
-    "generator": "ts#project"
+    "generator": "py#project"
   }
 }
