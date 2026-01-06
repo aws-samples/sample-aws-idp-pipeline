@@ -6,6 +6,6 @@
     "userPoolWebClientId": "4d59lmri02vnjecj976u5d9q5"
   },
   "apis": {
-    "Backend": "https://9a3ma4f73d.execute-api.us-east-1.amazonaws.com/"
+    "Backend": "https://slhu1hr4jf.execute-api.us-east-1.amazonaws.com/"
   }
 }
