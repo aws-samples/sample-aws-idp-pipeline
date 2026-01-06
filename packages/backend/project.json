@@ -2,7 +2,7 @@
   "name": "idp_v2.backend",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
-  "sourceRoot": "packages/backend/idp_v2_backend",
+  "sourceRoot": "packages/backend/app",
   "release": {
     "version": {
       "versionActions": "@nxlv/python/src/release/version-actions"
@@ -15,20 +15,14 @@
       "options": {}
     },
     "build": {
-      "dependsOn": [
-        "lint",
-        "compile",
-        "test"
-      ],
+      "dependsOn": ["lint", "compile", "test"],
       "options": {
         "outputPath": "{workspaceRoot}/dist/packages/backend"
       }
     },
     "compile": {
       "executor": "@nxlv/python:build",
-      "outputs": [
-        "{workspaceRoot}/dist/packages/backend/build"
-      ],
+      "outputs": ["{workspaceRoot}/dist/packages/backend/build"],
       "options": {
         "outputPath": "{workspaceRoot}/dist/packages/backend/build",
         "publish": false,
@@ -41,10 +35,7 @@
       "executor": "@nxlv/python:ruff-format",
       "outputs": [],
       "options": {
-        "filePatterns": [
-          "idp_v2_backend",
-          "tests"
-        ]
+        "filePatterns": ["app", "tests"]
       },
       "cache": true
     },
@@ -61,15 +52,10 @@
       "executor": "@nxlv/python:ruff-check",
       "outputs": [],
       "options": {
-        "lintFilePatterns": [
-          "idp_v2_backend",
-          "tests"
-        ]
+        "lintFilePatterns": ["app", "tests"]
       },
       "cache": true,
-      "dependsOn": [
-        "format"
-      ]
+      "dependsOn": ["format"]
     },
     "lock": {
       "executor": "@nxlv/python:lock",

@@ -1,24 +1,32 @@
 import { Construct } from 'constructs';
-import { Distribution } from 'aws-cdk-lib/aws-cloudfront';
-import { Architecture, Tracing } from 'aws-cdk-lib/aws-lambda';
-import { DockerImageFunction, DockerImageCode } from 'aws-cdk-lib/aws-lambda';
-import { CfnOutput, Duration, RemovalPolicy } from 'aws-cdk-lib';
+import { CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
 import { Platform } from 'aws-cdk-lib/aws-ecr-assets';
-import {
-  CorsHttpMethod,
-  CfnApi,
-  HttpApi,
-  HttpMethod,
-} from 'aws-cdk-lib/aws-apigatewayv2';
-import { HttpIamAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
-import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
-import { Grant, IGrantable } from 'aws-cdk-lib/aws-iam';
 import { RuntimeConfig } from '../../core/runtime-config.js';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { SSM_KEYS } from '../../constants/ssm-keys.js';
 import { Bucket, IBucket } from 'aws-cdk-lib/aws-s3';
 import { Table, ITable } from 'aws-cdk-lib/aws-dynamodb';
+import { IVpc, SubnetType, Port, SecurityGroup } from 'aws-cdk-lib/aws-ec2';
+import {
+  AwsLogDriver,
+  Cluster,
+  ContainerImage,
+  CpuArchitecture,
+  OperatingSystemFamily,
+} from 'aws-cdk-lib/aws-ecs';
+import { ApplicationLoadBalancedFargateService } from 'aws-cdk-lib/aws-ecs-patterns';
+import {
+  HttpApi,
+  HttpMethod,
+  VpcLink,
+  CorsHttpMethod,
+} from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpAlbIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import { HttpIamAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
+import { Grant, IGrantable } from 'aws-cdk-lib/aws-iam';
+import { Distribution } from 'aws-cdk-lib/aws-cloudfront';
+import { CfnApi } from 'aws-cdk-lib/aws-apigatewayv2';
 
 function getBucketFromSsm(
   scope: Construct,
@@ -40,16 +48,26 @@ function getTableFromSsm(
   return { table, tableName };
 }
 
-export class Backend extends Construct {
-  public readonly api: HttpApi;
-  public readonly handler: DockerImageFunction;
+export interface BackendProps {
+  vpc: IVpc;
+}
 
-  constructor(scope: Construct, id: string) {
+export class Backend extends Construct {
+  public readonly service: ApplicationLoadBalancedFargateService;
+  public readonly api: HttpApi;
+
+  constructor(scope: Construct, id: string, props: BackendProps) {
     super(scope, id);
+
+    const { vpc } = props;
+
+    const cluster = new Cluster(this, 'Cluster', {
+      vpc,
+    });
 
     const logGroup = new LogGroup(this, 'BackendLogGroup', {
       retention: RetentionDays.ONE_WEEK,
-      removalPolicy: RemovalPolicy.DESTROY, // 원하는 설정 추가 가능
+      removalPolicy: RemovalPolicy.DESTROY,
     });
 
     const lancedbStorage = getBucketFromSsm(
@@ -73,33 +91,65 @@ export class Backend extends Construct {
       SSM_KEYS.BACKEND_TABLE_NAME,
     );
 
-    this.handler = new DockerImageFunction(this, 'Function', {
-      code: DockerImageCode.fromImageAsset('../backend', {
-        platform: Platform.LINUX_ARM64,
-      }),
-      architecture: Architecture.ARM_64,
-      timeout: Duration.seconds(30),
-      tracing: Tracing.ACTIVE,
-      logGroup,
-      memorySize: 4096,
-      environment: {
-        LANCEDB_STORAGE_BUCKET_NAME: lancedbStorage.bucketName,
-        LANCEDB_LOCK_TABLE_NAME: lancedbLockTable.tableName,
-        DOCUMENT_STORAGE_BUCKET_NAME: documentStorage.bucketName,
-        BACKEND_TABLE_NAME: backendTable.tableName,
+    this.service = new ApplicationLoadBalancedFargateService(this, 'Service', {
+      cluster,
+      taskImageOptions: {
+        image: ContainerImage.fromAsset('../backend', {
+          platform: Platform.LINUX_ARM64,
+        }),
+        containerPort: 8000,
+        logDriver: new AwsLogDriver({
+          logGroup,
+          streamPrefix: 'backend',
+        }),
+        environment: {
+          LANCEDB_STORAGE_BUCKET_NAME: lancedbStorage.bucketName,
+          LANCEDB_LOCK_TABLE_NAME: lancedbLockTable.tableName,
+          DOCUMENT_STORAGE_BUCKET_NAME: documentStorage.bucketName,
+          BACKEND_TABLE_NAME: backendTable.tableName,
+        },
       },
+      runtimePlatform: {
+        cpuArchitecture: CpuArchitecture.ARM64,
+        operatingSystemFamily: OperatingSystemFamily.LINUX,
+      },
+      memoryLimitMiB: 4096,
+      cpu: 1024,
+      desiredCount: 1,
+      publicLoadBalancer: false,
     });
 
-    lancedbStorage.bucket.grantReadWrite(this.handler);
-    documentStorage.bucket.grantReadWrite(this.handler);
-    lancedbLockTable.table.grantReadWriteData(this.handler);
-    backendTable.table.grantReadWriteData(this.handler);
+    const taskRole = this.service.taskDefinition.taskRole;
+    lancedbStorage.bucket.grantReadWrite(taskRole);
+    documentStorage.bucket.grantReadWrite(taskRole);
+    lancedbLockTable.table.grantReadWriteData(taskRole);
+    backendTable.table.grantReadWriteData(taskRole);
 
-    const integration = new HttpLambdaIntegration('Integration', this.handler);
+    // Security Group for VPC Link
+    const vpcLinkSg = new SecurityGroup(this, 'VpcLinkSg', {
+      vpc,
+      description: 'Security group for VPC Link',
+      allowAllOutbound: true,
+    });
+
+    // VPC Link for API Gateway - use private subnets
+    const vpcLink = new VpcLink(this, 'VpcLink', {
+      vpc,
+      subnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
+      securityGroups: [vpcLinkSg],
+    });
+
+    // Allow VPC Link to access ALB
+    this.service.loadBalancer.connections.allowFrom(
+      vpcLinkSg,
+      Port.tcp(80),
+      'Allow from VPC Link',
+    );
+
+    // HTTP API with IAM auth
     const authorizer = new HttpIamAuthorizer();
 
-    // Create HTTP API
-    this.api = new HttpApi(this, 'IDP-V2-Api', {
+    this.api = new HttpApi(this, 'Api', {
       corsPreflight: {
         allowOrigins: ['*'],
         allowMethods: [CorsHttpMethod.ANY],
@@ -113,20 +163,12 @@ export class Backend extends Construct {
       },
     });
 
-    // Public routes (no auth)
-    this.api.addRoutes({
-      path: '/docs',
-      methods: [HttpMethod.GET],
-      integration,
-    });
+    const integration = new HttpAlbIntegration(
+      'AlbIntegration',
+      this.service.listener,
+      { vpcLink },
+    );
 
-    this.api.addRoutes({
-      path: '/openapi',
-      methods: [HttpMethod.GET],
-      integration,
-    });
-
-    // Protected routes (IAM auth)
     this.api.addRoutes({
       path: '/{proxy+}',
       methods: [
@@ -150,19 +192,21 @@ export class Backend extends Construct {
       value: this.api.url ?? '',
     });
 
-    // Register the API URL in runtime configuration
     RuntimeConfig.ensure(this).config.apis = {
       ...RuntimeConfig.ensure(this).config.apis,
       Backend: this.api.url,
     };
   }
 
-  /**
-   * Restricts CORS to the website CloudFront distribution domains
-   */
-  public restrictCorsTo(
-    ...websites: { cloudFrontDistribution: Distribution }[]
-  ) {
+  grantInvokeAccess(grantee: IGrantable) {
+    Grant.addToPrincipal({
+      grantee,
+      actions: ['execute-api:Invoke'],
+      resourceArns: [this.api.arnForExecuteApi('*', '/*', '*')],
+    });
+  }
+
+  restrictCorsTo(...websites: { cloudFrontDistribution: Distribution }[]) {
     const allowedOrigins = websites.map(
       ({ cloudFrontDistribution }) =>
         `https://${cloudFrontDistribution.distributionDomainName}`,
@@ -191,16 +235,5 @@ export class Backend extends Construct {
       ],
       allowCredentials: true,
     };
-  }
-
-  /**
-   * Grants IAM permissions to invoke any method on this API.
-   */
-  public grantInvokeAccess(grantee: IGrantable) {
-    Grant.addToPrincipal({
-      grantee,
-      actions: ['execute-api:Invoke'],
-      resourceArns: [this.api.arnForExecuteApi('*', '/*', '*')],
-    });
   }
 }
