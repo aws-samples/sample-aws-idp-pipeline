@@ -1,7 +1,11 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
-import { S3Bucket, SSM_KEYS } from ':idp-v2/common-constructs';
+import {
+  S3Bucket,
+  S3DirectoryBucket,
+  SSM_KEYS,
+} from ':idp-v2/common-constructs';
 import { AttributeType, Billing, TableV2 } from 'aws-cdk-lib/aws-dynamodb';
 
 export class StorageStack extends Stack {
@@ -50,6 +54,22 @@ export class StorageStack extends Stack {
     new StringParameter(this, 'BackendTableNameParam', {
       parameterName: SSM_KEYS.BACKEND_TABLE_NAME,
       stringValue: backendTable.tableName,
+    });
+
+    // Express One Zone Storage Bucket
+    const expressStorage = new S3DirectoryBucket(this, 'ExpressStorage', {
+      bucketPrefix: 'lancedb-ex',
+      availabilityZoneId: 'use1-az4',
+    });
+
+    new StringParameter(this, 'LancedbExpressBucketNameParam', {
+      parameterName: SSM_KEYS.LANCEDB_EXPRESS_BUCKET_NAME,
+      stringValue: expressStorage.bucketName,
+    });
+
+    new StringParameter(this, 'LancedbExpressAzIdParam', {
+      parameterName: SSM_KEYS.LANCEDB_EXPRESS_AZ_ID,
+      stringValue: 'use1-az4',
     });
   }
 }

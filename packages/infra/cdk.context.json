@@ -6,5 +6,68 @@
     "us-east-1d",
     "us-east-1e",
     "us-east-1f"
-  ]
+  ],
+  "ssm:account=975050239358:parameterName=/idp-v2/vpc/id:region=us-east-1": "vpc-0ded4bf553cc141a1",
+  "vpc-provider:account=975050239358:filter.vpc-id=vpc-0ded4bf553cc141a1:region=us-east-1:returnAsymmetricSubnets=true": {
+    "vpcId": "vpc-0ded4bf553cc141a1",
+    "vpcCidrBlock": "10.0.0.0/16",
+    "ownerAccountId": "975050239358",
+    "availabilityZones": [],
+    "subnetGroups": [
+      {
+        "name": "Private",
+        "type": "Private",
+        "subnets": [
+          {
+            "subnetId": "subnet-0cae8d745694ece92",
+            "cidr": "10.0.2.0/24",
+            "availabilityZone": "us-east-1a",
+            "routeTableId": "rtb-0b90c224b83fc17ce"
+          },
+          {
+            "subnetId": "subnet-0282dade4b517635c",
+            "cidr": "10.0.3.0/24",
+            "availabilityZone": "us-east-1b",
+            "routeTableId": "rtb-03623c1f702150a20"
+          }
+        ]
+      },
+      {
+        "name": "Isolated",
+        "type": "Isolated",
+        "subnets": [
+          {
+            "subnetId": "subnet-041cabdb26013a486",
+            "cidr": "10.0.4.0/24",
+            "availabilityZone": "us-east-1a",
+            "routeTableId": "rtb-0f2d2b201e95a5b5b"
+          },
+          {
+            "subnetId": "subnet-0b4882a047dc3bc9b",
+            "cidr": "10.0.5.0/24",
+            "availabilityZone": "us-east-1b",
+            "routeTableId": "rtb-07ea9facc9238777f"
+          }
+        ]
+      },
+      {
+        "name": "Public",
+        "type": "Public",
+        "subnets": [
+          {
+            "subnetId": "subnet-02b1caad25b3febdd",
+            "cidr": "10.0.0.0/24",
+            "availabilityZone": "us-east-1a",
+            "routeTableId": "rtb-00a4d1f127e5b9a09"
+          },
+          {
+            "subnetId": "subnet-06d38d06dbc15a672",
+            "cidr": "10.0.1.0/24",
+            "availabilityZone": "us-east-1b",
+            "routeTableId": "rtb-03fb4fbcf0e423810"
+          }
+        ]
+      }
+    ]
+  }
 }
