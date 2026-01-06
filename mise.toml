@@ -1,0 +1,9 @@
+[env]
+_.file = ".env.local"
+
+[tasks.deploy]
+description = "Deploy a specific CDK stack (fzf)"
+run = """
+stack=$(echo "IDP-V2-Vpc\nIDP-V2-Storage\nIDP-V2-Workflow\nIDP-V2-Application\nIDP-V2-Agent" | fzf --prompt="Select stack: ")
+pnpm nx run @idp-v2/infra:deploy $stack
+"""
