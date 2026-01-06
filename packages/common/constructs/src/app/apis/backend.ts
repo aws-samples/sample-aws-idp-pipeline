@@ -24,7 +24,7 @@ import {
 } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpAlbIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { HttpIamAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
-import { Grant, IGrantable } from 'aws-cdk-lib/aws-iam';
+import { Grant, IGrantable, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Distribution } from 'aws-cdk-lib/aws-cloudfront';
 import { CfnApi } from 'aws-cdk-lib/aws-apigatewayv2';
 
@@ -124,6 +124,13 @@ export class Backend extends Construct {
     documentStorage.bucket.grantReadWrite(taskRole);
     lancedbLockTable.table.grantReadWriteData(taskRole);
     backendTable.table.grantReadWriteData(taskRole);
+
+    taskRole.addToPrincipalPolicy(
+      new PolicyStatement({
+        actions: ['s3express:*'],
+        resources: ['*'],
+      }),
+    );
 
     // Security Group for VPC Link
     const vpcLinkSg = new SecurityGroup(this, 'VpcLinkSg', {

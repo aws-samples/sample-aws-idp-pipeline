@@ -1,0 +1,19 @@
+[env]
+_.file = ".env.local"
+AWS_PROFILE = "summit"
+AWS_REGION = "us-east-1"
+
+[tasks.env]
+description = "Fetch environment variables from SSM and save to .env.local"
+run = """
+echo "LANCEDB_STORAGE_BUCKET_NAME=$(aws ssm get-parameter --name /idp-v2/lancedb/storage/bucket-name --query Parameter.Value --output text)" > .env.local
+echo "LANCEDB_LOCK_TABLE_NAME=$(aws ssm get-parameter --name /idp-v2/lancedb/lock/table-name --query Parameter.Value --output text)" >> .env.local
+echo "DOCUMENT_STORAGE_BUCKET_NAME=$(aws ssm get-parameter --name /idp-v2/document-storage/bucket-name --query Parameter.Value --output text)" >> .env.local
+echo "BACKEND_TABLE_NAME=$(aws ssm get-parameter --name /idp-v2/backend/table-name --query Parameter.Value --output text)" >> .env.local
+echo "LANCEDB_EXPRESS_BUCKET_NAME=$(aws ssm get-parameter --name /idp-v2/lancedb/express/bucket-name --query Parameter.Value --output text)" >> .env.local
+echo ".env.local created"
+"""
+
+[tasks.dev]
+description = "Run FastAPI development server"
+run = "uv run fastapi dev app/main.py"
