@@ -17,6 +17,7 @@ export interface IRuntimeConfig {
   cognitoProps?: CognitoProps;
   apis?: Record<string, unknown>;
   documentStorageBucketName?: string;
+  agentRuntimeArn?: string;
 }
 
 /**

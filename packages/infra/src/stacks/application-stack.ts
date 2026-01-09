@@ -31,6 +31,12 @@ export class ApplicationStack extends Stack {
     RuntimeConfig.ensure(this).config.documentStorageBucketName =
       documentStorageBucketName;
 
+    const agentRuntimeArn = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.AGENT_RUNTIME_ARN,
+    );
+    RuntimeConfig.ensure(this).config.agentRuntimeArn = agentRuntimeArn;
+
     const userIdentity = new UserIdentity(this, 'UserIdentity');
 
     const backend = new Backend(this, 'Backend', { vpc });
