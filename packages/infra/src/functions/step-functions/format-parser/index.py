@@ -1,25 +1,42 @@
 import json
+import os
+
+from shared.ddb_client import (
+    record_step_start,
+    record_step_complete,
+    record_step_error,
+    StepName,
+)
+from shared.websocket import notify_step_start, notify_step_complete, notify_step_error
+
 from parsers import parse_pdf
+
 
 PARSERS = {
     'application/pdf': parse_pdf,
-    # Future formats:
-    # 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': parse_docx,
-    # 'application/vnd.openxmlformats-officedocument.presentationml.presentation': parse_pptx,
-    # 'image/png': parse_image,
-    # 'image/jpeg': parse_image,
 }
 
 
 def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
+    workflow_id = event.get('workflow_id')
     file_type = event.get('file_type', '')
+
+    record_step_start(workflow_id, StepName.FORMAT_PARSER)
+    notify_step_start(workflow_id, 'FormatParser')
 
     parser = PARSERS.get(file_type)
 
     if parser is None:
         print(f'No parser available for file type: {file_type}')
+        record_step_complete(
+            workflow_id,
+            StepName.FORMAT_PARSER,
+            skipped=True,
+            reason=f'No parser for {file_type}'
+        )
+        notify_step_complete(workflow_id, 'FormatParser', message='Skipped - no parser')
         return {
             **event,
             'format_parsing': 'skipped',
@@ -28,12 +45,16 @@ def handler(event, _context):
 
     try:
         result = parser(event)
+        record_step_complete(workflow_id, StepName.FORMAT_PARSER)
+        notify_step_complete(workflow_id, 'FormatParser')
         return {
             **result,
             'format_parsing': 'completed'
         }
     except Exception as e:
         print(f'Error in format parsing: {e}')
+        record_step_error(workflow_id, StepName.FORMAT_PARSER, str(e))
+        notify_step_error(workflow_id, 'FormatParser', str(e))
         return {
             **event,
             'format_parsing': 'failed',

@@ -10,12 +10,12 @@ from lancedb.embeddings import TextEmbeddingFunction, register
 from pydantic import PrivateAttr
 from kiwipiepy import Kiwi
 
-LANCEDB_BUCKET_SSM_KEY = '/idp-v2/lancedb/storage/bucket-name'
-LANCEDB_LOCK_TABLE_SSM_KEY = '/idp-v2/lancedb/lock/table-name'
+LANCEDB_EXPRESS_BUCKET_SSM_KEY = '/idp-v2/lancedb/express/bucket-name'
 
-_db_connection = None
+_db_connections = {}
 _table_name = 'documents'
 _kiwi = None
+_bucket_name = None
 
 
 def get_ssm_parameter(key: str) -> str:
@@ -24,15 +24,19 @@ def get_ssm_parameter(key: str) -> str:
     return response['Parameter']['Value']
 
 
-def get_lancedb_connection():
-    global _db_connection
-    if _db_connection is None:
-        bucket_name = get_ssm_parameter(LANCEDB_BUCKET_SSM_KEY)
-        lock_table_name = get_ssm_parameter(LANCEDB_LOCK_TABLE_SSM_KEY)
-        _db_connection = lancedb.connect(
-            f's3+ddb://{bucket_name}/idp-v2?ddbTableName={lock_table_name}'
-        )
-    return _db_connection
+def get_bucket_name():
+    global _bucket_name
+    if _bucket_name is None:
+        _bucket_name = get_ssm_parameter(LANCEDB_EXPRESS_BUCKET_SSM_KEY)
+    return _bucket_name
+
+
+def get_lancedb_connection(project_id: str):
+    global _db_connections
+    if project_id not in _db_connections:
+        bucket_name = get_bucket_name()
+        _db_connections[project_id] = lancedb.connect(f's3://{bucket_name}/{project_id}.lance')
+    return _db_connections[project_id]
 
 
 def get_kiwi():
@@ -101,25 +105,20 @@ bedrock_embeddings = BedrockEmbeddingFunction.create()
 
 
 class DocumentRecord(LanceModel):
-    document_id: str
+    workflow_id: str
     segment_id: str
     segment_index: int
-    status: str
     content: str = bedrock_embeddings.SourceField()
     vector: Vector(1024) = bedrock_embeddings.VectorField()
     keywords: str
-    tools_json: str  # JSON string instead of dict
-    content_combined: str
     file_uri: str
     file_type: str
     image_uri: Optional[str] = None
     created_at: datetime
-    updated_at: datetime
 
 
-def get_or_create_table(db=None):
-    if db is None:
-        db = get_lancedb_connection()
+def get_or_create_table(project_id: str):
+    db = get_lancedb_connection(project_id)
     table_names = db.table_names()
     if _table_name in table_names:
         return db.open_table(_table_name)
@@ -130,69 +129,59 @@ def get_or_create_table(db=None):
 
 
 def action_add_record(params: dict) -> dict:
-    table = get_or_create_table()
-    now = datetime.now(timezone.utc)
+    project_id = params.get('project_id', 'default')
+    table = get_or_create_table(project_id)
 
-    content_combined = params.get('content_combined', '')
-    keywords = extract_keywords(content_combined) if content_combined else ''
-    tools = params.get('tools', {})
+    workflow_id = params.get('workflow_id', '')
+    segment_index = params.get('segment_index', 0)
+    segment_id = f'{workflow_id}_{segment_index:04d}'
+    content = params.get('content_combined', '')
+    keywords = extract_keywords(content) if content else ''
+    created_at_str = params.get('created_at', '')
+
+    if created_at_str:
+        created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+    else:
+        created_at = datetime.now(timezone.utc)
 
     record = {
-        'document_id': params['document_id'],
-        'segment_id': params['segment_id'],
-        'segment_index': params.get('segment_index', 0),
-        'status': params.get('status', 'completed'),
-        'content': content_combined[:10000],
+        'workflow_id': workflow_id,
+        'segment_id': segment_id,
+        'segment_index': segment_index,
+        'content': content[:10000],
         'keywords': keywords,
-        'tools_json': json.dumps(tools),
-        'content_combined': content_combined,
         'file_uri': params.get('file_uri', ''),
         'file_type': params.get('file_type', ''),
         'image_uri': params.get('image_uri'),
-        'created_at': now,
-        'updated_at': now
+        'created_at': created_at
     }
 
     table.add([record])
-    return {'success': True, 'segment_id': params['segment_id']}
-
-
-def action_update_status(params: dict) -> dict:
-    table = get_or_create_table()
-    document_id = params['document_id']
-    segment_id = params.get('segment_id')
-    status = params['status']
-
-    if segment_id:
-        where_clause = f"document_id = '{document_id}' AND segment_id = '{segment_id}'"
-    else:
-        where_clause = f"document_id = '{document_id}'"
-
-    table.update(where=where_clause, values={'status': status, 'updated_at': datetime.now(timezone.utc)})
-    return {'success': True}
+    return {'success': True, 'segment_id': segment_id}
 
 
 def action_get_segments(params: dict) -> dict:
-    table = get_or_create_table()
-    document_id = params['document_id']
-    results = table.search().where(f"document_id = '{document_id}'").to_list()
+    project_id = params.get('project_id', 'default')
+    table = get_or_create_table(project_id)
+    workflow_id = params['workflow_id']
+    results = table.search().where(f"workflow_id = '{workflow_id}'").to_list()
     results = sorted(results, key=lambda x: x.get('segment_index', 0))
 
     segments = []
     for r in results:
         segments.append({
-            'document_id': r['document_id'],
+            'workflow_id': r['workflow_id'],
             'segment_id': r['segment_id'],
             'segment_index': r['segment_index'],
-            'content_combined': r.get('content_combined', ''),
-            'status': r.get('status', '')
+            'content': r.get('content', ''),
         })
 
     return {'success': True, 'segments': segments}
 
 
 def action_search(params: dict) -> dict:
-    table = get_or_create_table()
+    project_id = params.get('project_id', 'default')
+    table = get_or_create_table(project_id)
     query = params.get('query', '')
     limit = params.get('limit', 10)
 
@@ -204,11 +193,11 @@ def action_search(params: dict) -> dict:
     seen_ids = set()
     combined = []
     for r in vector_results + fts_results:
-        key = (r['document_id'], r['segment_id'])
+        key = (r['workflow_id'], r['segment_id'])
         if key not in seen_ids:
             seen_ids.add(key)
             combined.append({
-                'document_id': r['document_id'],
+                'workflow_id': r['workflow_id'],
                 'segment_id': r['segment_id'],
                 'segment_index': r['segment_index'],
                 'content': r.get('content', ''),
@@ -226,7 +215,6 @@ def handler(event, context):
 
     actions = {
         'add_record': action_add_record,
-        'update_status': action_update_status,
         'get_segments': action_get_segments,
         'search': action_search,
     }

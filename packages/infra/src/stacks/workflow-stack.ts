@@ -11,6 +11,8 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as cr from 'aws-cdk-lib/custom-resources';
+import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import { WebSocketLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Platform } from 'aws-cdk-lib/aws-ecr-assets';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -24,7 +26,6 @@ const __dirname = path.dirname(__filename);
 export class WorkflowStack extends Stack {
   public readonly stateMachine: sfn.StateMachine;
   public readonly documentBucket: s3.IBucket;
-  public readonly lancedbBucket: s3.IBucket;
 
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
@@ -33,26 +34,21 @@ export class WorkflowStack extends Stack {
     // Lookup Existing Storage Resources (from SSM)
     // ========================================
 
-    // LanceDB Storage Bucket (existing)
-    const lancedbBucketName = ssm.StringParameter.valueForStringParameter(
+    // LanceDB Express Bucket (S3 Directory Bucket)
+    const lancedbExpressBucketName = ssm.StringParameter.valueForStringParameter(
       this,
-      SSM_KEYS.LANCEDB_STORAGE_BUCKET_NAME,
-    );
-    this.lancedbBucket = s3.Bucket.fromBucketName(
-      this,
-      'LancedbBucket',
-      lancedbBucketName,
+      SSM_KEYS.LANCEDB_EXPRESS_BUCKET_NAME,
     );
 
-    // LanceDB Lock Table (existing)
-    const lancedbLockTableName = ssm.StringParameter.valueForStringParameter(
+    // Backend Table (existing) - for workflow state management
+    const backendTableName = ssm.StringParameter.valueForStringParameter(
       this,
-      SSM_KEYS.LANCEDB_LOCK_TABLE_NAME,
+      SSM_KEYS.BACKEND_TABLE_NAME,
     );
-    const lancedbLockTable = dynamodb.Table.fromTableName(
+    const backendTable = dynamodb.Table.fromTableName(
       this,
-      'LancedbLockTable',
-      lancedbLockTableName,
+      'BackendTable',
+      backendTableName,
     );
 
     // Document Storage Bucket (existing)
@@ -116,6 +112,65 @@ export class WorkflowStack extends Stack {
     const lancedbWriteQueue = new sqs.Queue(this, 'LanceDBWriteQueue', {
       queueName: 'idp-v2-lancedb-write-queue',
       visibilityTimeout: Duration.minutes(5),
+    });
+
+    // ========================================
+    // WebSocket API for real-time notifications
+    // ========================================
+
+    const websocketHandler = new lambda.Function(this, 'WebSocketHandler', {
+      functionName: 'idp-v2-websocket-handler',
+      runtime: lambda.Runtime.PYTHON_3_14,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, '../functions/websocket'),
+      ),
+      timeout: Duration.seconds(30),
+      memorySize: 256,
+      environment: {
+        BACKEND_TABLE_NAME: backendTableName,
+      },
+    });
+
+    backendTable.grantReadWriteData(websocketHandler);
+
+    const webSocketApi = new apigwv2.WebSocketApi(this, 'WorkflowWebSocketApi', {
+      apiName: 'idp-v2-workflow-websocket',
+      connectRouteOptions: {
+        integration: new WebSocketLambdaIntegration(
+          'ConnectIntegration',
+          websocketHandler,
+        ),
+      },
+      disconnectRouteOptions: {
+        integration: new WebSocketLambdaIntegration(
+          'DisconnectIntegration',
+          websocketHandler,
+        ),
+      },
+      defaultRouteOptions: {
+        integration: new WebSocketLambdaIntegration(
+          'DefaultIntegration',
+          websocketHandler,
+        ),
+      },
+    });
+
+    const webSocketStage = new apigwv2.WebSocketStage(
+      this,
+      'WorkflowWebSocketStage',
+      {
+        webSocketApi,
+        stageName: 'v1',
+        autoDeploy: true,
+      },
+    );
+
+    const websocketEndpoint = `https://${webSocketApi.apiId}.execute-api.${this.region}.amazonaws.com/${webSocketStage.stageName}`;
+
+    new ssm.StringParameter(this, 'WebSocketApiEndpoint', {
+      parameterName: '/idp-v2/websocket/endpoint',
+      stringValue: websocketEndpoint,
     });
 
     // ========================================
@@ -198,6 +253,33 @@ export class WorkflowStack extends Stack {
       code: createLayerCode('strands-agents pyyaml', 'strands'),
     });
 
+    // Shared code layer (ddb_client, websocket, embeddings)
+    const sharedLayer = new lambda.LayerVersion(this, 'SharedCodeLayer', {
+      layerVersionName: 'idp-v2-shared',
+      description: 'Shared Python modules (ddb_client, websocket, embeddings)',
+      compatibleRuntimes: [lambda.Runtime.PYTHON_3_14],
+      compatibleArchitectures: [lambda.Architecture.X86_64],
+      code: lambda.Code.fromAsset(path.join(__dirname, '../functions'), {
+        bundling: {
+          image: lambda.Runtime.PYTHON_3_14.bundlingImage,
+          command: [],
+          local: {
+            tryBundle(outputDir: string): boolean {
+              const pythonDir = path.join(outputDir, 'python');
+              const sharedSrc = path.join(__dirname, '../functions/shared');
+              const sharedDst = path.join(pythonDir, 'shared');
+              fs.mkdirSync(sharedDst, { recursive: true });
+              fs.cpSync(sharedSrc, sharedDst, { recursive: true });
+              return true;
+            },
+          },
+        },
+      }),
+    });
+
+    // Add shared layer to websocket handler (defined earlier)
+    websocketHandler.addLayers(sharedLayer);
+
     // ========================================
     // LanceDB Service (Container Lambda)
     // ========================================
@@ -228,9 +310,9 @@ export class WorkflowStack extends Stack {
       timeout: Duration.minutes(5),
       memorySize: 1024,
       environment: {
-        LANCEDB_BUCKET_SSM_KEY: SSM_KEYS.LANCEDB_STORAGE_BUCKET_NAME,
-        LANCEDB_LOCK_TABLE_SSM_KEY: SSM_KEYS.LANCEDB_LOCK_TABLE_NAME,
         BDA_OUTPUT_BUCKET: this.documentBucket.bucketName,
+        BACKEND_TABLE_NAME: backendTableName,
+        WEBSOCKET_API_ENDPOINT: websocketEndpoint,
       },
     };
 
@@ -241,7 +323,7 @@ export class WorkflowStack extends Stack {
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/bda-processor'),
       ),
-      layers: [coreLayer],
+      layers: [coreLayer, sharedLayer],
     });
 
     const bdaStatusChecker = new lambda.Function(this, 'BdaStatusChecker', {
@@ -251,7 +333,7 @@ export class WorkflowStack extends Stack {
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/bda-status-checker'),
       ),
-      layers: [coreLayer],
+      layers: [coreLayer, sharedLayer],
     });
 
     const documentIndexer = new lambda.Function(this, 'DocumentIndexer', {
@@ -263,7 +345,7 @@ export class WorkflowStack extends Stack {
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/document-indexer'),
       ),
-      layers: [coreLayer],
+      layers: [coreLayer, sharedLayer],
     });
 
     const formatParser = new lambda.Function(this, 'FormatParser', {
@@ -275,7 +357,7 @@ export class WorkflowStack extends Stack {
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/format-parser'),
       ),
-      layers: [coreLayer],
+      layers: [coreLayer, sharedLayer],
     });
 
     const getDocumentSegments = new lambda.Function(
@@ -291,6 +373,7 @@ export class WorkflowStack extends Stack {
             '../functions/step-functions/get-document-segments',
           ),
         ),
+        layers: [sharedLayer],
       },
     );
 
@@ -303,7 +386,7 @@ export class WorkflowStack extends Stack {
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/segment-analyzer'),
       ),
-      layers: [coreLayer, strandsLayer],
+      layers: [coreLayer, strandsLayer, sharedLayer],
       environment: {
         ...commonLambdaProps.environment,
         BEDROCK_MODEL_ID: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
@@ -319,7 +402,7 @@ export class WorkflowStack extends Stack {
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/analysis-finalizer'),
       ),
-      layers: [coreLayer],
+      layers: [coreLayer, sharedLayer],
       environment: {
         ...commonLambdaProps.environment,
         LANCEDB_WRITE_QUEUE_URL: lancedbWriteQueue.queueUrl,
@@ -335,7 +418,7 @@ export class WorkflowStack extends Stack {
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/document-summarizer'),
       ),
-      layers: [coreLayer],
+      layers: [coreLayer, sharedLayer],
       environment: {
         ...commonLambdaProps.environment,
         LANCEDB_FUNCTION_NAME: lancedbService.functionName,
@@ -354,7 +437,7 @@ export class WorkflowStack extends Stack {
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/lancedb-writer'),
       ),
-      layers: [coreLayer],
+      layers: [coreLayer, sharedLayer],
       environment: {
         ...commonLambdaProps.environment,
         LANCEDB_FUNCTION_NAME: lancedbService.functionName,
@@ -456,6 +539,14 @@ export class WorkflowStack extends Stack {
         maxConcurrency: 30,
         itemsPath: '$.segment_ids',
         resultPath: sfn.JsonPath.DISCARD,
+        itemSelector: {
+          'workflow_id.$': '$.workflow_id',
+          'project_id.$': '$.project_id',
+          'file_uri.$': '$.file_uri',
+          'file_type.$': '$.file_type',
+          'segment_count.$': '$.segment_count',
+          'segment_index.$': '$$.Map.Item.Value',
+        },
       },
     );
     parallelSegmentProcessing.itemProcessor(segmentProcessing);
@@ -488,6 +579,7 @@ export class WorkflowStack extends Stack {
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-function-trigger'),
       ),
+      layers: [sharedLayer],
       environment: {
         ...commonLambdaProps.environment,
         STEP_FUNCTION_ARN: this.stateMachine.stateMachineArn,
@@ -527,12 +619,28 @@ export class WorkflowStack extends Stack {
     lancedbWriteQueue.grantConsumeMessages(lancedbWriter);
 
     for (const fn of allFunctions) {
-      // S3 permissions
+      // S3 permissions (Document bucket)
       this.documentBucket.grantReadWrite(fn);
-      this.lancedbBucket.grantReadWrite(fn);
 
-      // DynamoDB permissions for LanceDB lock table
-      lancedbLockTable.grantReadWriteData(fn);
+      // S3 Express One Zone permissions (LanceDB)
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: [
+            's3express:CreateSession',
+            's3:GetObject',
+            's3:PutObject',
+            's3:DeleteObject',
+            's3:ListBucket',
+          ],
+          resources: [
+            `arn:aws:s3express:${this.region}:${this.account}:bucket/${lancedbExpressBucketName}`,
+            `arn:aws:s3express:${this.region}:${this.account}:bucket/${lancedbExpressBucketName}/*`,
+          ],
+        }),
+      );
+
+      // DynamoDB permissions for Backend table (workflow state)
+      backendTable.grantReadWriteData(fn);
 
       // SSM permissions
       fn.addToRolePolicy(
@@ -558,6 +666,16 @@ export class WorkflowStack extends Stack {
             'bedrock:GetDataAutomationStatus',
           ],
           resources: ['*'],
+        }),
+      );
+
+      // WebSocket API permissions (for posting messages to connections)
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['execute-api:ManageConnections'],
+          resources: [
+            `arn:aws:execute-api:${this.region}:${this.account}:${webSocketApi.apiId}/*`,
+          ],
         }),
       );
     }

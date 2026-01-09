@@ -1,9 +1,19 @@
 import json
 import os
 import re
-import uuid
 from urllib.parse import urlparse
+
 import boto3
+
+from shared.ddb_client import (
+    record_step_start,
+    record_step_complete,
+    record_step_error,
+    batch_save_segments,
+    update_workflow_status,
+    StepName,
+)
+from shared.websocket import notify_step_start, notify_step_complete, notify_step_error
 
 s3_client = None
 
@@ -35,7 +45,6 @@ def download_json_from_s3(uri: str) -> dict:
 
 
 def extract_first_image_from_markdown(markdown: str, base_uri: str) -> str:
-    """Extract first image reference from markdown and build full S3 URI."""
     pattern = r'!\[.*?\]\(\./([^)]+)\)'
     match = re.search(pattern, markdown)
     if match:
@@ -47,12 +56,15 @@ def extract_first_image_from_markdown(markdown: str, base_uri: str) -> str:
 def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
-    document_id = event.get('document_id')
+    workflow_id = event.get('workflow_id')
     file_uri = event.get('file_uri')
     file_type = event.get('file_type')
     processing_type = event.get('processing_type', 'document')
     bda_metadata_uri = event.get('bda_metadata_uri')
     bda_output_uri = event.get('bda_output_uri', '')
+
+    record_step_start(workflow_id, StepName.DOCUMENT_INDEXER)
+    notify_step_start(workflow_id, 'DocumentIndexer')
 
     segments = []
 
@@ -86,36 +98,47 @@ def handler(event, _context):
                                     markdown, bda_output_uri
                                 )
 
-                            segment_id = str(uuid.uuid4())
                             segments.append({
-                                'segment_id': segment_id,
                                 'segment_index': page_index,
-                                'content': markdown,
+                                'bda_indexer': markdown,
                                 'image_uri': image_uri,
-                                'bda_content': markdown
                             })
 
         except Exception as e:
             print(f'Error processing BDA metadata: {e}')
+            record_step_error(workflow_id, StepName.DOCUMENT_INDEXER, str(e))
+            notify_step_error(workflow_id, 'DocumentIndexer', str(e))
+            raise
 
     if not segments:
         segments.append({
-            'segment_id': str(uuid.uuid4()),
             'segment_index': 0,
-            'content': '',
-            'image_uri': None,
-            'bda_content': ''
+            'bda_indexer': '',
+            'image_uri': '',
         })
 
-    print(f'Created {len(segments)} segments for document {document_id}')
+    saved_count = batch_save_segments(workflow_id, segments)
+    print(f'Saved {saved_count} segments to DynamoDB for workflow {workflow_id}')
+
+    record_step_complete(
+        workflow_id,
+        StepName.DOCUMENT_INDEXER,
+        segment_count=saved_count
+    )
+    notify_step_complete(
+        workflow_id,
+        'DocumentIndexer',
+        segment_count=saved_count
+    )
+
+    update_workflow_status(workflow_id, 'indexing', total_segments=saved_count)
 
     return {
-        'statusCode': 200,
-        'document_id': document_id,
+        'workflow_id': workflow_id,
+        'project_id': event.get('project_id', 'default'),
         'file_uri': file_uri,
         'file_type': file_type,
         'processing_type': processing_type,
         'bda_output_uri': bda_output_uri,
-        'segments': segments,
-        'segment_count': len(segments)
+        'segment_count': saved_count
     }

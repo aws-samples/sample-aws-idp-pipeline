@@ -1,8 +1,11 @@
 import json
 import os
-import uuid
 from datetime import datetime
+
 import boto3
+
+from shared.ddb_client import generate_workflow_id, create_workflow
+from shared.websocket import notify_workflow_started
 
 sfn_client = None
 STEP_FUNCTION_ARN = os.environ.get('STEP_FUNCTION_ARN')
@@ -49,8 +52,17 @@ def get_processing_type(mime_type: str) -> str:
         return 'document'
 
 
+def extract_project_id(object_key: str) -> str:
+    """Extract project_id from S3 object key.
+    Expected format: projects/{project_id}/documents/{file_name}
+    """
+    parts = object_key.split('/')
+    if len(parts) >= 2 and parts[0] == 'projects':
+        return parts[1]
+    return 'default'
+
+
 def parse_eventbridge_s3_event(body: dict) -> dict | None:
-    """Parse EventBridge S3 Object Created event."""
     if body.get('detail-type') != 'Object Created':
         return None
 
@@ -62,9 +74,10 @@ def parse_eventbridge_s3_event(body: dict) -> dict | None:
         return None
 
     file_name = object_key.split('/')[-1]
+    project_id = extract_project_id(object_key)
 
     return {
-        'document_id': str(uuid.uuid4()),
+        'project_id': project_id,
         'file_uri': f's3://{bucket_name}/{object_key}',
         'file_name': file_name,
         'file_type': get_mime_type(file_name),
@@ -72,7 +85,6 @@ def parse_eventbridge_s3_event(body: dict) -> dict | None:
 
 
 def parse_custom_event(body: dict) -> dict | None:
-    """Parse custom document_uploaded event."""
     if body.get('event_type') != 'document_uploaded':
         return None
 
@@ -83,7 +95,7 @@ def parse_custom_event(body: dict) -> dict | None:
     file_name = body.get('file_name', '')
 
     return {
-        'document_id': body.get('document_id', str(uuid.uuid4())),
+        'project_id': body.get('project_id', 'default'),
         'file_uri': file_uri,
         'file_name': file_name,
         'file_type': body.get('file_type') or get_mime_type(file_name),
@@ -105,15 +117,20 @@ def handler(event, context):
                 print(f"Skipping unsupported event: {body.get('detail-type') or body.get('event_type')}")
                 continue
 
-            document_id = parsed['document_id']
+            project_id = parsed['project_id']
             file_uri = parsed['file_uri']
             file_name = parsed['file_name']
             file_type = parsed['file_type']
-
             processing_type = get_processing_type(file_type)
 
+            workflow_id = generate_workflow_id()
+
+            client = get_sfn_client()
+            execution_name = f'{workflow_id[:16]}-{datetime.utcnow().strftime("%Y%m%d%H%M%S")}'
+
             sfn_input = {
-                'document_id': document_id,
+                'workflow_id': workflow_id,
+                'project_id': project_id,
                 'file_uri': file_uri,
                 'file_name': file_name,
                 'file_type': file_type,
@@ -121,20 +138,31 @@ def handler(event, context):
                 'triggered_at': datetime.utcnow().isoformat()
             }
 
-            client = get_sfn_client()
-            execution_name = f'{document_id[:8]}-{datetime.utcnow().strftime("%Y%m%d%H%M%S")}'
-
             response = client.start_execution(
                 stateMachineArn=STEP_FUNCTION_ARN,
                 name=execution_name,
                 input=json.dumps(sfn_input)
             )
 
-            print(f'Started Step Function execution: {response["executionArn"]}')
+            execution_arn = response['executionArn']
+
+            create_workflow(
+                workflow_id=workflow_id,
+                project_id=project_id,
+                file_uri=file_uri,
+                file_name=file_name,
+                file_type=file_type,
+                execution_arn=execution_arn
+            )
+
+            notify_workflow_started(workflow_id, project_id, file_name)
+
+            print(f'Started workflow {workflow_id}, execution: {execution_arn}')
 
             results.append({
-                'document_id': document_id,
-                'execution_arn': response['executionArn'],
+                'workflow_id': workflow_id,
+                'project_id': project_id,
+                'execution_arn': execution_arn,
                 'status': 'started'
             })
 

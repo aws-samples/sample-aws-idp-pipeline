@@ -1,10 +1,66 @@
-from .lancedb_client import get_lancedb_connection, DocumentRecord
-from .embeddings import BedrockEmbeddingFunction
-from .keywords import extract_keywords
+# Shared module exports
+# Note: lancedb_client and embeddings are NOT imported here
+# because they require lancedb library which is only available
+# in the container Lambda. Import them directly when needed.
+
+from .ddb_client import (
+    generate_workflow_id,
+    create_workflow,
+    update_workflow_status,
+    get_workflow,
+    record_step_start,
+    record_step_complete,
+    record_step_error,
+    save_segment,
+    update_segment,
+    get_segment,
+    get_all_segments,
+    get_segment_count,
+    add_image_analysis,
+    save_connection,
+    delete_connection,
+    get_connections,
+    batch_save_segments,
+    WorkflowStatus,
+    StepName,
+)
+from .websocket import (
+    notify_step_start,
+    notify_step_complete,
+    notify_step_error,
+    notify_segment_progress,
+    notify_workflow_started,
+    notify_workflow_complete,
+    notify_workflow_error,
+    EventType,
+)
 
 __all__ = [
-    'get_lancedb_connection',
-    'DocumentRecord',
-    'BedrockEmbeddingFunction',
-    'extract_keywords',
+    'generate_workflow_id',
+    'create_workflow',
+    'update_workflow_status',
+    'get_workflow',
+    'record_step_start',
+    'record_step_complete',
+    'record_step_error',
+    'save_segment',
+    'update_segment',
+    'get_segment',
+    'get_all_segments',
+    'get_segment_count',
+    'add_image_analysis',
+    'save_connection',
+    'delete_connection',
+    'get_connections',
+    'batch_save_segments',
+    'WorkflowStatus',
+    'StepName',
+    'notify_step_start',
+    'notify_step_complete',
+    'notify_step_error',
+    'notify_segment_progress',
+    'notify_workflow_started',
+    'notify_workflow_complete',
+    'notify_workflow_error',
+    'EventType',
 ]

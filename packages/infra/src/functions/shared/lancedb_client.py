@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 import boto3
 import lancedb
@@ -36,23 +36,18 @@ bedrock_embeddings = BedrockEmbeddingFunction.create()
 
 
 class DocumentRecord(LanceModel):
-    document_id: str
-    segment_id: str
+    """Simplified LanceDB schema - only search-relevant fields"""
+    workflow_id: str
     segment_index: int
-    status: str
 
     content: str = bedrock_embeddings.SourceField()
     vector: Vector(1024) = bedrock_embeddings.VectorField()  # type: ignore
     keywords: str
 
-    tools: dict
-    content_combined: str
-
     file_uri: str
     file_type: str
     image_uri: Optional[str] = None
     created_at: datetime
-    updated_at: datetime
 
 
 def get_or_create_table(db=None):
@@ -74,17 +69,9 @@ def upsert_document(record: dict, db=None):
     return record
 
 
-def update_document_status(document_id: str, segment_id: str, status: str, db=None):
+def get_workflow_segments(workflow_id: str, db=None) -> list:
     table = get_or_create_table(db)
-    table.update(
-        where=f"document_id = '{document_id}' AND segment_id = '{segment_id}'",
-        values={'status': status, 'updated_at': datetime.utcnow()}
-    )
-
-
-def get_document_segments(document_id: str, db=None) -> list:
-    table = get_or_create_table(db)
-    results = table.search().where(f"document_id = '{document_id}'").to_list()
+    results = table.search().where(f"workflow_id = '{workflow_id}'").to_list()
     return sorted(results, key=lambda x: x['segment_index'])
 
 
@@ -97,9 +84,19 @@ def hybrid_search(query: str, keywords: str, limit: int = 10, db=None) -> list:
     seen_ids = set()
     combined = []
     for r in vector_results + fts_results:
-        key = (r['document_id'], r['segment_id'])
+        key = (r['workflow_id'], r['segment_index'])
         if key not in seen_ids:
             seen_ids.add(key)
             combined.append(r)
 
     return combined[:limit]
+
+
+def vector_search(query: str, limit: int = 10, db=None) -> list:
+    table = get_or_create_table(db)
+    return table.search(query=query, query_type='vector').limit(limit).to_list()
+
+
+def fts_search(keywords: str, limit: int = 10, db=None) -> list:
+    table = get_or_create_table(db)
+    return table.search(query=keywords, query_type='fts').limit(limit).to_list()

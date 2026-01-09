@@ -39,24 +39,26 @@ def handler(event, _context):
     for record in event.get('Records', []):
         try:
             message = json.loads(record['body'])
-            print(f'Processing message: document_id={message.get("document_id")}, segment_id={message.get("segment_id")}')
+            workflow_id = message.get('workflow_id')
+            segment_index = message.get('segment_index', 0)
+
+            print(f'Processing message: workflow_id={workflow_id}, segment_index={segment_index}')
 
             result = invoke_lancedb('add_record', {
-                'document_id': message['document_id'],
-                'segment_id': message['segment_id'],
-                'segment_index': message.get('segment_index', 0),
-                'status': message.get('status', 'completed'),
-                'tools': message.get('tools', {}),
+                'workflow_id': workflow_id,
+                'project_id': message.get('project_id', 'default'),
+                'segment_index': segment_index,
                 'content_combined': message.get('content_combined', ''),
                 'file_uri': message.get('file_uri', ''),
                 'file_type': message.get('file_type', ''),
-                'image_uri': message.get('image_uri')
+                'image_uri': message.get('image_uri', ''),
+                'created_at': message.get('created_at', '')
             })
 
             if result.get('statusCode') != 200:
                 raise Exception(result.get('error', 'Unknown error'))
 
-            print(f'Saved segment {message["segment_id"]} to LanceDB')
+            print(f'Saved workflow {workflow_id}, segment {segment_index} to LanceDB')
 
         except Exception as e:
             print(f'Error processing message: {e}')

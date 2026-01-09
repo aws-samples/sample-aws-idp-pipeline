@@ -10,9 +10,9 @@
   "dependencies": {
     "@aws-cdk/aws-lambda-python-alpha": "2.233.0-alpha.0",
     "@aws-crypto/sha256-browser": "^5.2.0",
-    "@aws-sdk/client-s3": "^3.964.0",
+    "@aws-sdk/client-s3": "^3.965.0",
     "@aws-sdk/client-ssm": "^3.958.0",
-    "@aws-sdk/credential-providers": "^3.958.0",
+    "@aws-sdk/credential-providers": "^3.965.0",
     "@aws/nx-plugin": "0.64.1",
     "@hono/node-server": "^1.19.7",
     "@hono/standard-validator": "^0.2.1",

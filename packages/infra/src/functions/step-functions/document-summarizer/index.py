@@ -3,9 +3,23 @@ import os
 
 import boto3
 
+from shared.ddb_client import (
+    get_all_segments,
+    update_workflow_status,
+    record_step_start,
+    record_step_complete,
+    record_step_error,
+    StepName,
+    WorkflowStatus,
+)
+from shared.websocket import (
+    notify_step_start,
+    notify_step_complete,
+    notify_step_error,
+    notify_workflow_complete,
+)
+
 bedrock_client = None
-lambda_client = None
-LANCEDB_FUNCTION_NAME = os.environ.get('LANCEDB_FUNCTION_NAME', 'idp-v2-lancedb-service')
 
 
 def get_bedrock_client():
@@ -16,32 +30,6 @@ def get_bedrock_client():
             region_name=os.environ.get('AWS_REGION', 'us-east-1')
         )
     return bedrock_client
-
-
-def get_lambda_client():
-    global lambda_client
-    if lambda_client is None:
-        lambda_client = boto3.client('lambda', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
-    return lambda_client
-
-
-def invoke_lancedb(action: str, params: dict) -> dict:
-    client = get_lambda_client()
-    response = client.invoke(
-        FunctionName=LANCEDB_FUNCTION_NAME,
-        InvocationType='RequestResponse',
-        Payload=json.dumps({'action': action, 'params': params})
-    )
-
-    payload = response['Payload'].read().decode('utf-8')
-
-    if 'FunctionError' in response:
-        print(f'LanceDB Lambda error: {response["FunctionError"]}, payload: {payload}')
-        return {'statusCode': 500, 'error': f'Lambda error: {payload}'}
-
-    result = json.loads(payload)
-    print(f'LanceDB response: {json.dumps(result)}')
-    return result
 
 
 def generate_summary(content: str, model_id: str) -> str:
@@ -83,46 +71,85 @@ Summary:"""
 def handler(event, context):
     print(f'Event: {json.dumps(event)}')
 
-    document_id = event.get('document_id')
+    workflow_id = event.get('workflow_id')
+    segment_count = event.get('segment_count', 0)
     model_id = os.environ.get('SUMMARIZER_MODEL_ID', 'us.anthropic.claude-3-5-haiku-20241022-v1:0')
 
+    record_step_complete(workflow_id, StepName.SEGMENT_ANALYZER, segment_count=segment_count)
+    notify_step_complete(workflow_id, 'SegmentAnalyzer', segment_count=segment_count)
+
+    record_step_start(workflow_id, StepName.DOCUMENT_SUMMARIZER)
+    notify_step_start(workflow_id, 'DocumentSummarizer')
+
     try:
-        result = invoke_lancedb('get_segments', {'document_id': document_id})
-
-        if result.get('statusCode') != 200:
-            raise Exception(result.get('error', 'Unknown error'))
-
-        segments = result.get('segments', [])
+        segments = get_all_segments(workflow_id)
 
         if not segments:
-            print(f'No segments found for document {document_id}')
+            print(f'No segments found for workflow {workflow_id}')
+            record_step_complete(
+                workflow_id,
+                StepName.DOCUMENT_SUMMARIZER,
+                skipped=True,
+                reason='No segments found'
+            )
+            notify_step_complete(workflow_id, 'DocumentSummarizer', message='No segments')
             return {
-                'statusCode': 404,
-                'document_id': document_id,
+                'workflow_id': workflow_id,
                 'status': 'no_segments',
                 'message': 'No segments found for summarization'
             }
 
+        segments_sorted = sorted(segments, key=lambda x: x.get('segment_index', 0))
+
         all_content = []
-        for segment in segments:
-            content = segment.get('content_combined', '')
-            if content:
-                all_content.append(f"### Page {segment.get('segment_index', 0) + 1}\n{content}")
+        for seg in segments_sorted:
+            segment_index = seg.get('segment_index', 0)
+            parts = []
+
+            bda_indexer = seg.get('bda_indexer', '')
+            if bda_indexer:
+                parts.append(f'BDA: {bda_indexer[:500]}')
+
+            format_parser = seg.get('format_parser', '')
+            if format_parser:
+                parts.append(f'PDF: {format_parser[:500]}')
+
+            image_analysis = seg.get('image_analysis', [])
+            for analysis in image_analysis:
+                content = analysis.get('content', '')
+                if content:
+                    parts.append(f'AI: {content[:500]}')
+
+            if parts:
+                all_content.append(f"### Page {segment_index + 1}\n" + '\n'.join(parts))
 
         combined_content = '\n\n'.join(all_content)
 
         summary = generate_summary(combined_content, model_id)
 
-        invoke_lancedb('update_status', {
-            'document_id': document_id,
-            'status': 'summarized'
-        })
+        record_step_complete(
+            workflow_id,
+            StepName.DOCUMENT_SUMMARIZER,
+            segment_count=len(segments)
+        )
+        notify_step_complete(workflow_id, 'DocumentSummarizer')
 
-        print(f'Generated summary for document {document_id} with {len(segments)} segments')
+        update_workflow_status(
+            workflow_id,
+            WorkflowStatus.COMPLETED,
+            summary=summary
+        )
+
+        notify_workflow_complete(
+            workflow_id,
+            summary=summary,
+            segment_count=len(segments)
+        )
+
+        print(f'Generated summary for workflow {workflow_id} with {len(segments)} segments')
 
         return {
-            'statusCode': 200,
-            'document_id': document_id,
+            'workflow_id': workflow_id,
             'status': 'completed',
             'segment_count': len(segments),
             'summary': summary,
@@ -131,9 +158,11 @@ def handler(event, context):
 
     except Exception as e:
         print(f'Error in document summarization: {e}')
+        record_step_error(workflow_id, StepName.DOCUMENT_SUMMARIZER, str(e))
+        notify_step_error(workflow_id, 'DocumentSummarizer', str(e))
+        update_workflow_status(workflow_id, WorkflowStatus.FAILED, error=str(e))
         return {
-            'statusCode': 500,
-            'document_id': document_id,
+            'workflow_id': workflow_id,
             'status': 'failed',
             'error': str(e)
         }
