@@ -33,6 +33,32 @@ def query_workflow_segments(workflow_id: str) -> list[Segment]:
     return [Segment(**item) for item in response.get("Items", [])]
 
 
-def delete_workflow_item(document_id: str, workflow_id: str) -> None:
+def delete_workflow_item(document_id: str, workflow_id: str) -> int:
+    """Delete workflow item and all related items (STEP, SEG#*, CONN#*, etc.)."""
     table = get_table()
+    deleted_count = 0
+
+    # Delete main workflow item under document
     table.delete_item(Key=make_workflow_key(document_id, workflow_id))
+    deleted_count += 1
+
+    # Delete all items under WF#{workflow_id} (STEP, SEG#*, CONN#*, etc.)
+    response = table.query(KeyConditionExpression=Key("PK").eq(f"WF#{workflow_id}"))
+    items = response.get("Items", [])
+
+    # Handle pagination
+    while response.get("LastEvaluatedKey"):
+        response = table.query(
+            KeyConditionExpression=Key("PK").eq(f"WF#{workflow_id}"),
+            ExclusiveStartKey=response["LastEvaluatedKey"],
+        )
+        items.extend(response.get("Items", []))
+
+    # Batch delete all related items
+    if items:
+        with table.batch_writer() as batch:
+            for item in items:
+                batch.delete_item(Key={"PK": item["PK"], "SK": item["SK"]})
+                deleted_count += 1
+
+    return deleted_count

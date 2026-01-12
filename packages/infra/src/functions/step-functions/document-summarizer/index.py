@@ -72,6 +72,7 @@ def handler(event, context):
     print(f'Event: {json.dumps(event)}')
 
     workflow_id = event.get('workflow_id')
+    document_id = event.get('document_id')
     segment_count = event.get('segment_count', 0)
     model_id = os.environ.get('SUMMARIZER_MODEL_ID', 'us.anthropic.claude-3-5-haiku-20241022-v1:0')
 
@@ -135,6 +136,7 @@ def handler(event, context):
         notify_step_complete(workflow_id, 'DocumentSummarizer')
 
         update_workflow_status(
+            document_id,
             workflow_id,
             WorkflowStatus.COMPLETED,
             summary=summary
@@ -160,7 +162,7 @@ def handler(event, context):
         print(f'Error in document summarization: {e}')
         record_step_error(workflow_id, StepName.DOCUMENT_SUMMARIZER, str(e))
         notify_step_error(workflow_id, 'DocumentSummarizer', str(e))
-        update_workflow_status(workflow_id, WorkflowStatus.FAILED, error=str(e))
+        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, error=str(e))
         return {
             'workflow_id': workflow_id,
             'status': 'failed',

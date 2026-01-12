@@ -4,6 +4,12 @@
 dist
 tmp
 out-tsc
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
 # dependencies
 node_modules
 # IDEs and editors

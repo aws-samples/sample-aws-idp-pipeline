@@ -188,7 +188,16 @@ export class WorkflowStack extends Stack {
             name: [documentBucketName],
           },
           object: {
-            key: [{ 'anything-but': { prefix: 'bda-output/' } }],
+            // Exclude BDA output files - matches both legacy and new paths:
+            // - bda-output/... (legacy)
+            // - projects/{project_id}/documents/{document_id}/bda-output/... (new)
+            key: [
+              {
+                'anything-but': {
+                  wildcard: '*bda-output/*',
+                },
+              },
+            ],
           },
         },
       },

@@ -1,4 +1,4 @@
-from app.ddb.client import batch_delete_items, get_table, now_iso
+from app.ddb.client import batch_delete_items, generate_project_id, get_table, now_iso
 from app.ddb.documents import (
     delete_document_item,
     get_document_item,
@@ -25,6 +25,7 @@ __all__ = [
     "get_table",
     "now_iso",
     "batch_delete_items",
+    "generate_project_id",
     # models
     "Project",
     "ProjectData",

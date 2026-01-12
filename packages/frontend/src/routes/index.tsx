@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from 'react-oidc-context';
 import { useAwsClient } from '../hooks/useAwsClient';
 
 interface Project {
@@ -7,22 +8,232 @@ interface Project {
   name: string;
   description: string;
   status: string;
-  started_at: string;
-  ended_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string | null;
 }
 
 export const Route = createFileRoute('/')({
   component: ProjectsPage,
 });
 
+const FOLDER_GRADIENTS = [
+  { back: '#3b82f6', tab: '#2563eb', front: '#60a5fa' },
+  { back: '#8b5cf6', tab: '#7c3aed', front: '#a78bfa' },
+  { back: '#10b981', tab: '#059669', front: '#34d399' },
+  { back: '#f59e0b', tab: '#d97706', front: '#fbbf24' },
+  { back: '#ec4899', tab: '#db2777', front: '#f472b6' },
+  { back: '#06b6d4', tab: '#0891b2', front: '#22d3ee' },
+  { back: '#6366f1', tab: '#4f46e5', front: '#818cf8' },
+  { back: '#ef4444', tab: '#dc2626', front: '#f87171' },
+];
+
+interface ProjectFolderProps {
+  project: Project;
+  colorIndex: number;
+  onEdit: (project: Project) => void;
+  onDelete: (projectId: string) => void;
+}
+
+function ProjectFolder({
+  project,
+  colorIndex,
+  onEdit,
+  onDelete,
+}: ProjectFolderProps) {
+  const [isHovered, setIsHovered] = useState(false);
+  const colors = FOLDER_GRADIENTS[colorIndex % FOLDER_GRADIENTS.length];
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  return (
+    <div className="relative">
+      <Link
+        to="/projects/$projectId"
+        params={{ projectId: project.project_id }}
+        className="block"
+      >
+        <div
+          className="relative flex flex-col items-center p-5 rounded-2xl cursor-pointer bg-white border border-slate-200 transition-all duration-500 ease-out hover:shadow-xl hover:border-slate-300 group overflow-hidden"
+          style={{
+            minHeight: '220px',
+            perspective: '1000px',
+          }}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          {/* Folder Visual */}
+          <div
+            className="relative flex items-center justify-center mb-2 overflow-hidden"
+            style={{ height: '120px', width: '160px' }}
+          >
+            {/* Back of folder */}
+            <div
+              className="absolute w-28 h-20 rounded-lg shadow-md"
+              style={{
+                background: `linear-gradient(135deg, ${colors.back} 0%, ${colors.tab} 100%)`,
+                transformOrigin: 'bottom center',
+                transform: isHovered
+                  ? 'rotateX(-8deg) scaleY(1.01)'
+                  : 'rotateX(0deg) scaleY(1)',
+                transition: 'transform 500ms cubic-bezier(0.16, 1, 0.3, 1)',
+                zIndex: 10,
+              }}
+            />
+
+            {/* Folder tab */}
+            <div
+              className="absolute w-10 h-3 rounded-t-md"
+              style={{
+                background: colors.tab,
+                top: 'calc(50% - 40px - 10px)',
+                left: 'calc(50% - 56px + 12px)',
+                transformOrigin: 'bottom center',
+                transform: isHovered
+                  ? 'rotateX(-10deg) translateY(-1px)'
+                  : 'rotateX(0deg) translateY(0)',
+                transition: 'transform 500ms cubic-bezier(0.16, 1, 0.3, 1)',
+                zIndex: 10,
+              }}
+            />
+
+            {/* Front of folder */}
+            <div
+              className="absolute w-28 h-20 rounded-lg shadow-lg"
+              style={{
+                background: `linear-gradient(135deg, ${colors.front} 0%, ${colors.back} 100%)`,
+                top: 'calc(50% - 40px + 3px)',
+                transformOrigin: 'bottom center',
+                transform: isHovered
+                  ? 'rotateX(15deg) translateY(4px)'
+                  : 'rotateX(0deg) translateY(0)',
+                transition: 'transform 500ms cubic-bezier(0.16, 1, 0.3, 1)',
+                zIndex: 30,
+              }}
+            />
+
+            {/* Folder shine effect */}
+            <div
+              className="absolute w-28 h-20 rounded-lg overflow-hidden pointer-events-none"
+              style={{
+                top: 'calc(50% - 40px + 3px)',
+                background:
+                  'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, transparent 50%)',
+                transformOrigin: 'bottom center',
+                transform: isHovered
+                  ? 'rotateX(15deg) translateY(4px)'
+                  : 'rotateX(0deg) translateY(0)',
+                transition: 'transform 500ms cubic-bezier(0.16, 1, 0.3, 1)',
+                zIndex: 31,
+              }}
+            />
+          </div>
+
+          {/* Project Info */}
+          <div className="text-center w-full">
+            <h3
+              className="text-base font-bold text-slate-800 truncate px-2 transition-all duration-300"
+              style={{
+                transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
+              }}
+            >
+              {project.name}
+            </h3>
+            <div className="flex items-center justify-center gap-2 mt-1 text-xs text-slate-500">
+              <span>{formatDate(project.created_at)}</span>
+              {project.created_by && (
+                <>
+                  <span className="text-slate-300">|</span>
+                  <span
+                    className="truncate max-w-[80px]"
+                    title={project.created_by}
+                  >
+                    {project.created_by}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </Link>
+
+      {/* Action buttons */}
+      <div
+        className="absolute top-3 right-3 flex gap-1 transition-all duration-300 z-40"
+        style={{
+          opacity: isHovered ? 1 : 0,
+          transform: isHovered ? 'translateY(0)' : 'translateY(-5px)',
+        }}
+      >
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onEdit(project);
+          }}
+          className="w-8 h-8 flex items-center justify-center bg-white/90 hover:bg-blue-500 hover:text-white text-slate-600 rounded-full shadow-md border border-slate-200 transition-colors"
+          title="Edit project"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+            />
+          </svg>
+        </button>
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onDelete(project.project_id);
+          }}
+          className="w-8 h-8 flex items-center justify-center bg-white/90 hover:bg-red-500 hover:text-white text-slate-600 rounded-full shadow-md border border-slate-200 transition-colors"
+          title="Delete project"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ProjectsPage() {
+  const { user } = useAuth();
   const { fetchApi } = useAwsClient();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [formData, setFormData] = useState({
-    project_id: '',
     name: '',
     description: '',
   });
@@ -45,14 +256,13 @@ function ProjectsPage() {
 
   const openCreateModal = () => {
     setEditingProject(null);
-    setFormData({ project_id: '', name: '', description: '' });
+    setFormData({ name: '', description: '' });
     setShowModal(true);
   };
 
   const openEditModal = (project: Project) => {
     setEditingProject(project);
     setFormData({
-      project_id: project.project_id,
       name: project.name,
       description: project.description,
     });
@@ -62,12 +272,11 @@ function ProjectsPage() {
   const closeModal = () => {
     setShowModal(false);
     setEditingProject(null);
-    setFormData({ project_id: '', name: '', description: '' });
+    setFormData({ name: '', description: '' });
   };
 
   const handleSave = async () => {
     if (!formData.name.trim()) return;
-    if (!editingProject && !formData.project_id.trim()) return;
 
     setSaving(true);
     try {
@@ -84,7 +293,11 @@ function ProjectsPage() {
         await fetchApi<Project>('projects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
+          body: JSON.stringify({
+            ...formData,
+            created_by:
+              user?.profile?.email || user?.profile?.preferred_username,
+          }),
         });
       }
       closeModal();
@@ -106,327 +319,145 @@ function ProjectsPage() {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
-  const getProjectIcon = (index: number) => {
-    const icons = [
-      // Folder
-      <svg
-        key="folder"
-        xmlns="http://www.w3.org/2000/svg"
-        className="h-10 w-10"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-        />
-      </svg>,
-      // Chart bar
-      <svg
-        key="chart"
-        xmlns="http://www.w3.org/2000/svg"
-        className="h-10 w-10"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-        />
-      </svg>,
-      // Document
-      <svg
-        key="document"
-        xmlns="http://www.w3.org/2000/svg"
-        className="h-10 w-10"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-        />
-      </svg>,
-      // Clipboard
-      <svg
-        key="clipboard"
-        xmlns="http://www.w3.org/2000/svg"
-        className="h-10 w-10"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-        />
-      </svg>,
-      // Collection
-      <svg
-        key="collection"
-        xmlns="http://www.w3.org/2000/svg"
-        className="h-10 w-10"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-        />
-      </svg>,
-      // Briefcase
-      <svg
-        key="briefcase"
-        xmlns="http://www.w3.org/2000/svg"
-        className="h-10 w-10"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-        />
-      </svg>,
-      // Database
-      <svg
-        key="database"
-        xmlns="http://www.w3.org/2000/svg"
-        className="h-10 w-10"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"
-        />
-      </svg>,
-      // Beaker
-      <svg
-        key="beaker"
-        xmlns="http://www.w3.org/2000/svg"
-        className="h-10 w-10"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
-        />
-      </svg>,
-    ];
-    return icons[index % icons.length];
-  };
-
-  const getProjectColor = (index: number) => {
-    const colors = [
-      'from-blue-500 to-blue-600',
-      'from-purple-500 to-purple-600',
-      'from-green-500 to-green-600',
-      'from-orange-500 to-orange-600',
-      'from-pink-500 to-pink-600',
-      'from-teal-500 to-teal-600',
-      'from-indigo-500 to-indigo-600',
-      'from-red-500 to-red-600',
-    ];
-    return colors[index % colors.length];
-  };
-
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-      <div className="flex justify-between items-center mb-6 flex-shrink-0">
-        <h1 className="text-2xl font-bold text-slate-800">Projects</h1>
+      <div className="flex justify-between items-center mb-8 flex-shrink-0">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-800">Projects</h1>
+          <p className="text-slate-500 mt-1">
+            Manage your document analysis projects
+          </p>
+        </div>
         <button
           onClick={openCreateModal}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40"
         >
-          <span className="text-lg">+</span>
-          <span>New Project</span>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 4v16m8-8H4"
+            />
+          </svg>
+          <span className="font-medium">New Project</span>
         </button>
       </div>
 
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-slate-500">Loading projects...</div>
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-slate-500">Loading projects...</span>
+          </div>
         </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      ) : projects.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-10 w-10 text-slate-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-slate-700 mb-1">
+              No projects yet
+            </h3>
+            <p className="text-slate-500 mb-4">
+              Create your first project to get started
+            </p>
             <button
               onClick={openCreateModal}
-              className="group flex flex-col items-center justify-center p-6 bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all min-h-[180px]"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              <div
-                className={
-                  'w-12 h-12 flex items-center justify-center bg-slate-200 ' +
-                  'group-hover:bg-blue-200 rounded-full mb-3 transition-colors'
-                }
-              >
-                <span className="text-2xl text-slate-500 group-hover:text-blue-600">
-                  +
-                </span>
+              Create Project
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto pb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {/* New Project Card */}
+            <button
+              onClick={openCreateModal}
+              className="group flex flex-col items-center justify-center p-5 bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl hover:border-blue-400 hover:bg-blue-50/50 transition-all duration-300"
+              style={{ minHeight: '220px' }}
+            >
+              <div className="w-16 h-16 flex items-center justify-center bg-slate-200 group-hover:bg-blue-200 rounded-2xl mb-4 transition-all duration-300 group-hover:scale-110">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-8 w-8 text-slate-500 group-hover:text-blue-600 transition-colors"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4v16m8-8H4"
+                  />
+                </svg>
               </div>
-              <span className="text-slate-600 group-hover:text-blue-600 font-medium">
+              <span className="text-slate-600 group-hover:text-blue-600 font-semibold transition-colors">
                 New Project
+              </span>
+              <span className="text-xs text-slate-400 mt-1">
+                Click to create
               </span>
             </button>
 
+            {/* Project Folders */}
             {projects.map((project, index) => (
-              <Link
+              <ProjectFolder
                 key={project.project_id}
-                to="/projects/$projectId"
-                params={{ projectId: project.project_id }}
-                className="group relative bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-slate-300 transition-all"
-              >
-                <div
-                  className={`h-24 bg-gradient-to-br ${getProjectColor(index)} flex items-center justify-center text-white/90`}
-                >
-                  {getProjectIcon(index)}
-                </div>
-
-                <div className="p-4">
-                  <h3 className="font-semibold text-slate-800 mb-1 truncate">
-                    {project.name}
-                  </h3>
-                  <p className="text-sm text-slate-500 mb-3 line-clamp-2 min-h-[40px]">
-                    {project.description || 'No description'}
-                  </p>
-                  <div className="flex items-center justify-between text-xs text-slate-400">
-                    <span>{formatDate(project.started_at)}</span>
-                    <span className="px-2 py-0.5 bg-slate-100 rounded-full">
-                      {project.status}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      openEditModal(project);
-                    }}
-                    className="w-8 h-8 flex items-center justify-center bg-black/20 hover:bg-blue-500 text-white rounded-full"
-                    title="Edit project"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleDeleteProject(project.project_id);
-                    }}
-                    className="w-8 h-8 flex items-center justify-center bg-black/20 hover:bg-red-500 text-white rounded-full"
-                    title="Delete project"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </Link>
+                project={project}
+                colorIndex={index}
+                onEdit={openEditModal}
+                onDelete={handleDeleteProject}
+              />
             ))}
           </div>
         </div>
       )}
 
+      {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div
+            className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl"
+            style={{
+              animation: 'modalIn 0.3s ease-out',
+            }}
+          >
             <h2 className="text-xl font-bold text-slate-800 mb-4">
               {editingProject ? 'Edit Project' : 'Create New Project'}
             </h2>
 
             <div className="space-y-4">
-              {!editingProject && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Project ID
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.project_id}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        project_id: e.target.value
-                          .replace(/\s/g, '_')
-                          .toLowerCase(),
-                      })
-                    }
-                    placeholder="my_project"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <p className="text-xs text-slate-400 mt-1">
-                    Unique identifier (no spaces)
-                  </p>
-                </div>
-              )}
-
               {editingProject && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
                     Project ID
                   </label>
-                  <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-600">
-                    {formData.project_id}
+                  <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-600 text-sm font-mono">
+                    {editingProject.project_id}
                   </div>
                 </div>
               )}
@@ -442,7 +473,7 @@ function ProjectsPage() {
                     setFormData({ ...formData, name: e.target.value })
                   }
                   placeholder="My Project"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
                 />
               </div>
 
@@ -460,7 +491,7 @@ function ProjectsPage() {
                   }
                   placeholder="Project description..."
                   rows={3}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-shadow"
                 />
               </div>
             </div>
@@ -474,11 +505,7 @@ function ProjectsPage() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={
-                  !formData.name.trim() ||
-                  (!editingProject && !formData.project_id.trim()) ||
-                  saving
-                }
+                disabled={!formData.name.trim() || saving}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
               >
                 {saving ? 'Saving...' : editingProject ? 'Save' : 'Create'}
@@ -487,6 +514,19 @@ function ProjectsPage() {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes modalIn {
+          from {
+            opacity: 0;
+            transform: scale(0.95) translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }

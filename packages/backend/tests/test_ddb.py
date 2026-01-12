@@ -311,9 +311,13 @@ class TestWorkflowHelpers:
         assert result[1].data.status == "pending"
 
     def test_delete_workflow_item(self, mock_table):
-        workflows.delete_workflow_item("doc-1", "wf-1")
+        # Mock query to return empty items (no related STEP/SEG items)
+        mock_table.query.return_value = {"Items": []}
+
+        result = workflows.delete_workflow_item("doc-1", "wf-1")
 
         mock_table.delete_item.assert_called_once_with(Key={"PK": "DOC#doc-1", "SK": "WF#wf-1"})
+        assert result == 1  # Only main workflow item deleted
 
 
 class TestBatchDelete:

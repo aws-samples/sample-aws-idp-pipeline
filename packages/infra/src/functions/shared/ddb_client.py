@@ -89,6 +89,7 @@ class StepName:
 
 def create_workflow(
     workflow_id: str,
+    document_id: str,
     project_id: str,
     file_uri: str,
     file_name: str,
@@ -98,9 +99,10 @@ def create_workflow(
     table = get_table()
     now = now_iso()
 
+    # Main workflow item under document
     workflow_item = {
-        'PK': f'WF#{workflow_id}',
-        'SK': 'META',
+        'PK': f'DOC#{document_id}',
+        'SK': f'WF#{workflow_id}',
         'data': {
             'project_id': project_id,
             'file_uri': file_uri,
@@ -110,18 +112,8 @@ def create_workflow(
             'status': WorkflowStatus.PENDING,
             'total_segments': 0
         },
-        'started_at': now
-    }
-
-    project_item = {
-        'PK': f'PROJ#{project_id}',
-        'SK': f'WF#{workflow_id}',
-        'data': {
-            'status': WorkflowStatus.PENDING,
-            'file_uri': file_uri,
-            'file_name': file_name
-        },
-        'started_at': now
+        'created_at': now,
+        'updated_at': now
     }
 
     # Initialize STEP row with all steps as pending
@@ -138,22 +130,22 @@ def create_workflow(
         'PK': f'WF#{workflow_id}',
         'SK': 'STEP',
         'data': steps_data,
-        'started_at': now
+        'created_at': now,
+        'updated_at': now
     }
 
     with table.batch_writer() as batch:
         batch.put_item(Item=workflow_item)
-        batch.put_item(Item=project_item)
         batch.put_item(Item=steps_item)
 
     return workflow_item
 
 
-def update_workflow_status(workflow_id: str, status: str, **kwargs) -> dict:
+def update_workflow_status(document_id: str, workflow_id: str, status: str, **kwargs) -> dict:
     table = get_table()
     now = now_iso()
 
-    workflow = get_workflow(workflow_id)
+    workflow = get_workflow(document_id, workflow_id)
     if not workflow:
         return {}
 
@@ -164,56 +156,23 @@ def update_workflow_status(workflow_id: str, status: str, **kwargs) -> dict:
 
     is_terminal = status in [WorkflowStatus.COMPLETED, WorkflowStatus.FAILED]
 
-    if is_terminal:
-        table.update_item(
-            Key={'PK': f'WF#{workflow_id}', 'SK': 'META'},
-            UpdateExpression='SET #data = :data, ended_at = :ended_at',
-            ExpressionAttributeNames={'#data': 'data'},
-            ExpressionAttributeValues={':data': data, ':ended_at': now}
-        )
-    else:
-        table.update_item(
-            Key={'PK': f'WF#{workflow_id}', 'SK': 'META'},
-            UpdateExpression='SET #data = :data',
-            ExpressionAttributeNames={'#data': 'data'},
-            ExpressionAttributeValues={':data': data}
-        )
+    update_expr = 'SET #data = :data, updated_at = :updated_at'
+    expr_values = {':data': data, ':updated_at': now}
 
-    project_id = data.get('project_id')
-    if project_id:
-        try:
-            proj_response = table.get_item(
-                Key={'PK': f'PROJ#{project_id}', 'SK': f'WF#{workflow_id}'}
-            )
-            proj_item = proj_response.get('Item')
-            if proj_item:
-                proj_data = proj_item.get('data', {})
-                proj_data['status'] = status
+    table.update_item(
+        Key={'PK': f'DOC#{document_id}', 'SK': f'WF#{workflow_id}'},
+        UpdateExpression=update_expr,
+        ExpressionAttributeNames={'#data': 'data'},
+        ExpressionAttributeValues=expr_values
+    )
 
-                if is_terminal:
-                    table.update_item(
-                        Key={'PK': f'PROJ#{project_id}', 'SK': f'WF#{workflow_id}'},
-                        UpdateExpression='SET #data = :data, ended_at = :ended_at',
-                        ExpressionAttributeNames={'#data': 'data'},
-                        ExpressionAttributeValues={':data': proj_data, ':ended_at': now}
-                    )
-                else:
-                    table.update_item(
-                        Key={'PK': f'PROJ#{project_id}', 'SK': f'WF#{workflow_id}'},
-                        UpdateExpression='SET #data = :data',
-                        ExpressionAttributeNames={'#data': 'data'},
-                        ExpressionAttributeValues={':data': proj_data}
-                    )
-        except Exception as e:
-            print(f'Error updating PROJ record: {e}')
-
-    return decimal_to_python({'data': data, 'ended_at': now if is_terminal else None})
+    return decimal_to_python({'data': data, 'updated_at': now})
 
 
-def get_workflow(workflow_id: str) -> Optional[dict]:
+def get_workflow(document_id: str, workflow_id: str) -> Optional[dict]:
     table = get_table()
     response = table.get_item(
-        Key={'PK': f'WF#{workflow_id}', 'SK': 'META'}
+        Key={'PK': f'DOC#{document_id}', 'SK': f'WF#{workflow_id}'}
     )
     item = response.get('Item')
     return decimal_to_python(item) if item else None
@@ -227,6 +186,21 @@ def get_steps(workflow_id: str) -> Optional[dict]:
     )
     item = response.get('Item')
     return decimal_to_python(item) if item else None
+
+
+def update_workflow_total_segments(document_id: str, workflow_id: str, total_segments: int) -> dict:
+    """Update workflow total_segments count"""
+    table = get_table()
+    now = now_iso()
+
+    response = table.update_item(
+        Key={'PK': f'DOC#{document_id}', 'SK': f'WF#{workflow_id}'},
+        UpdateExpression='SET #data.#ts = :ts, updated_at = :updated_at',
+        ExpressionAttributeNames={'#data': 'data', '#ts': 'total_segments'},
+        ExpressionAttributeValues={':ts': total_segments, ':updated_at': now},
+        ReturnValues='ALL_NEW'
+    )
+    return decimal_to_python(response.get('Attributes', {}))
 
 
 def record_step_start(workflow_id: str, step_name: str, **kwargs) -> dict:
@@ -269,7 +243,6 @@ def record_step_complete(workflow_id: str, step_name: str, **kwargs) -> dict:
     data = steps.get('data', {})
     step_data = data.get(step_name, {})
     step_data['status'] = WorkflowStatus.COMPLETED
-    step_data['ended_at'] = now
     for key, value in kwargs.items():
         step_data[key] = value
     data[step_name] = step_data
@@ -282,28 +255,13 @@ def record_step_complete(workflow_id: str, step_name: str, **kwargs) -> dict:
             break
     data['current_step'] = current_step
 
-    # Check if all steps are completed (last step done)
-    all_completed = all(
-        data.get(sn, {}).get('status') == WorkflowStatus.COMPLETED
-        for sn in StepName.ORDER
+    response = table.update_item(
+        Key={'PK': f'WF#{workflow_id}', 'SK': 'STEP'},
+        UpdateExpression='SET #data = :data, updated_at = :updated_at',
+        ExpressionAttributeNames={'#data': 'data'},
+        ExpressionAttributeValues={':data': data, ':updated_at': now},
+        ReturnValues='ALL_NEW'
     )
-
-    if all_completed:
-        response = table.update_item(
-            Key={'PK': f'WF#{workflow_id}', 'SK': 'STEP'},
-            UpdateExpression='SET #data = :data, ended_at = :ended_at',
-            ExpressionAttributeNames={'#data': 'data'},
-            ExpressionAttributeValues={':data': data, ':ended_at': now},
-            ReturnValues='ALL_NEW'
-        )
-    else:
-        response = table.update_item(
-            Key={'PK': f'WF#{workflow_id}', 'SK': 'STEP'},
-            UpdateExpression='SET #data = :data',
-            ExpressionAttributeNames={'#data': 'data'},
-            ExpressionAttributeValues={':data': data},
-            ReturnValues='ALL_NEW'
-        )
     return decimal_to_python(response.get('Attributes', {}))
 
 
@@ -319,16 +277,15 @@ def record_step_error(workflow_id: str, step_name: str, error: str) -> dict:
     data = steps.get('data', {})
     step_data = data.get(step_name, {})
     step_data['status'] = WorkflowStatus.FAILED
-    step_data['ended_at'] = now
     step_data['error'] = error
     data[step_name] = step_data
     data['current_step'] = ''
 
     response = table.update_item(
         Key={'PK': f'WF#{workflow_id}', 'SK': 'STEP'},
-        UpdateExpression='SET #data = :data, ended_at = :ended_at',
+        UpdateExpression='SET #data = :data, updated_at = :updated_at',
         ExpressionAttributeNames={'#data': 'data'},
-        ExpressionAttributeValues={':data': data, ':ended_at': now},
+        ExpressionAttributeValues={':data': data, ':updated_at': now},
         ReturnValues='ALL_NEW'
     )
     return decimal_to_python(response.get('Attributes', {}))
@@ -342,6 +299,7 @@ def save_segment(
 ) -> dict:
     table = get_table()
     segment_key = f'{segment_index:04d}'
+    now = now_iso()
 
     item = {
         'PK': f'WF#{workflow_id}',
@@ -353,7 +311,8 @@ def save_segment(
             'format_parser': '',
             'image_analysis': []
         },
-        'started_at': now_iso()
+        'created_at': now,
+        'updated_at': now
     }
 
     table.put_item(Item=item)
@@ -363,6 +322,7 @@ def save_segment(
 def update_segment(workflow_id: str, segment_index: int, **kwargs) -> dict:
     table = get_table()
     segment_key = f'{segment_index:04d}'
+    now = now_iso()
 
     existing = table.get_item(
         Key={'PK': f'WF#{workflow_id}', 'SK': f'SEG#{segment_key}'}
@@ -374,9 +334,9 @@ def update_segment(workflow_id: str, segment_index: int, **kwargs) -> dict:
 
     response = table.update_item(
         Key={'PK': f'WF#{workflow_id}', 'SK': f'SEG#{segment_key}'},
-        UpdateExpression='SET #data = :data',
+        UpdateExpression='SET #data = :data, updated_at = :updated_at',
         ExpressionAttributeNames={'#data': 'data'},
-        ExpressionAttributeValues={':data': data},
+        ExpressionAttributeValues={':data': data, ':updated_at': now},
         ReturnValues='ALL_NEW'
     )
     return decimal_to_python(response.get('Attributes', {}))
@@ -423,6 +383,7 @@ def add_image_analysis(
     """Add image analysis result to segment's image_analysis array"""
     table = get_table()
     segment_key = f'{segment_index:04d}'
+    now = now_iso()
 
     segment = get_segment(workflow_id, segment_index)
     if not segment:
@@ -438,9 +399,9 @@ def add_image_analysis(
 
     response = table.update_item(
         Key={'PK': f'WF#{workflow_id}', 'SK': f'SEG#{segment_key}'},
-        UpdateExpression='SET #data = :data, ended_at = :ended_at',
+        UpdateExpression='SET #data = :data, updated_at = :updated_at',
         ExpressionAttributeNames={'#data': 'data'},
-        ExpressionAttributeValues={':data': data, ':ended_at': now_iso()},
+        ExpressionAttributeValues={':data': data, ':updated_at': now},
         ReturnValues='ALL_NEW'
     )
     return decimal_to_python(response.get('Attributes', {}))
@@ -450,6 +411,7 @@ def save_connection(workflow_id: str, connection_id: str, ttl_seconds: int = 360
     table = get_table()
     now = datetime.now(timezone.utc)
     ttl = int(now.timestamp()) + ttl_seconds
+    now_str = now.isoformat()
 
     item = {
         'PK': f'WF#{workflow_id}',
@@ -457,7 +419,8 @@ def save_connection(workflow_id: str, connection_id: str, ttl_seconds: int = 360
         'data': {
             'connection_id': connection_id
         },
-        'started_at': now.isoformat(),
+        'created_at': now_str,
+        'updated_at': now_str,
         'ttl': ttl
     }
 
@@ -501,7 +464,8 @@ def batch_save_segments(workflow_id: str, segments: list) -> int:
                     'format_parser': '',
                     'image_analysis': []
                 },
-                'started_at': now
+                'created_at': now,
+                'updated_at': now
             }
             batch.put_item(Item=item)
             count += 1

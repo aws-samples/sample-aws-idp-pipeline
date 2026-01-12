@@ -113,13 +113,11 @@ class TestCreateProject:
     @patch("app.ddb.projects.get_table")
     def test_create_project_success(self, mock_get_table):
         mock_table = MagicMock()
-        mock_table.get_item.return_value = {}  # Project doesn't exist
         mock_get_table.return_value = mock_table
 
         response = client.post(
             "/projects",
             json={
-                "project_id": "new-proj",
                 "name": "New Project",
                 "description": "A new project",
             },
@@ -127,55 +125,38 @@ class TestCreateProject:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["project_id"] == "new-proj"
+        assert data["project_id"].startswith("proj_")
         assert data["name"] == "New Project"
         assert data["description"] == "A new project"
         assert data["status"] == "active"
         mock_table.put_item.assert_called_once()
 
     @patch("app.ddb.projects.get_table")
-    def test_create_project_already_exists(self, mock_get_table):
+    def test_create_project_with_created_by(self, mock_get_table):
         mock_table = MagicMock()
-        mock_table.get_item.return_value = {
-            "Item": {
-                "PK": "PROJ#existing",
-                "SK": "META",
-                "data": {
-                    "project_id": "existing",
-                    "name": "Existing",
-                    "description": "",
-                    "status": "active",
-                },
-                "created_at": "2024-01-01T00:00:00+00:00",
-                "updated_at": "2024-01-01T00:00:00+00:00",
-                "GSI1PK": "PROJECTS",
-                "GSI1SK": "2024-01-01T00:00:00+00:00",
-            }
-        }
         mock_get_table.return_value = mock_table
 
         response = client.post(
             "/projects",
             json={
-                "project_id": "existing",
-                "name": "Existing Project",
+                "name": "User Project",
                 "description": "",
+                "created_by": "test@example.com",
             },
         )
 
-        assert response.status_code == 409
-        assert response.json()["detail"] == "Project already exists"
+        assert response.status_code == 200
+        data = response.json()
+        assert data["created_by"] == "test@example.com"
 
     @patch("app.ddb.projects.get_table")
     def test_create_project_without_description(self, mock_get_table):
         mock_table = MagicMock()
-        mock_table.get_item.return_value = {}
         mock_get_table.return_value = mock_table
 
         response = client.post(
             "/projects",
             json={
-                "project_id": "no-desc",
                 "name": "No Description",
             },
         )
@@ -302,10 +283,11 @@ class TestUpdateProject:
 
 
 class TestDeleteProject:
+    @patch("app.ddb.workflows.get_table")
     @patch("app.routers.projects._get_s3_client")
     @patch("app.ddb.client.get_table")
     @patch("app.ddb.projects.get_table")
-    def test_delete_project_success(self, mock_proj_get_table, mock_client_get_table, mock_get_s3):
+    def test_delete_project_success(self, mock_proj_get_table, mock_client_get_table, mock_get_s3, mock_wf_get_table):
         mock_table = MagicMock()
         mock_table.get_item.return_value = {
             "Item": {
@@ -334,6 +316,10 @@ class TestDeleteProject:
         mock_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
         mock_proj_get_table.return_value = mock_table
         mock_client_get_table.return_value = mock_table
+
+        mock_wf_table = MagicMock()
+        mock_wf_table.query.return_value = {"Items": []}
+        mock_wf_get_table.return_value = mock_wf_table
 
         mock_s3 = MagicMock()
         mock_paginator = MagicMock()
