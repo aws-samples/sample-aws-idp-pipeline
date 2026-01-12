@@ -173,19 +173,18 @@ def delete_document(project_id: str, document_id: str) -> dict:
     workflow_id = None
     workflows = query_workflows(document_id)
     if workflows:
-        wf_item = workflows[0]
-        workflow_id = wf_item["SK"].replace("WF#", "")
+        wf = workflows[0]
+        workflow_id = wf.SK.replace("WF#", "")
 
     deleted_info = {"document_id": document_id, "workflow_id": workflow_id}
 
-    # 1. Delete from LanceDB (if workflow exists)
+    # 1. Delete from LanceDB (per-project, if workflow exists)
     if workflow_id:
         try:
             import lancedb
 
-            bucket_name = _get_ssm_parameter("/idp-v2/lancedb/storage/bucket-name")
-            lock_table_name = _get_ssm_parameter("/idp-v2/lancedb/lock/table-name")
-            db = lancedb.connect(f"s3+ddb://{bucket_name}/idp-v2?ddbTableName={lock_table_name}")
+            lancedb_bucket = _get_ssm_parameter("/idp-v2/lancedb/express/bucket-name")
+            db = lancedb.connect(f"s3://{lancedb_bucket}/{project_id}.lance")
             if "documents" in db.table_names():
                 lance_table = db.open_table("documents")
                 lance_table.delete(f"workflow_id = '{workflow_id}'")

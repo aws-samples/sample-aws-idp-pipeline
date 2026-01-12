@@ -54,12 +54,27 @@ def get_processing_type(mime_type: str) -> str:
 
 def extract_project_id(object_key: str) -> str:
     """Extract project_id from S3 object key.
-    Expected format: projects/{project_id}/documents/{file_name}
+    Expected format: projects/{project_id}/documents/{document_id}/{file_name}
     """
     parts = object_key.split('/')
     if len(parts) >= 2 and parts[0] == 'projects':
         return parts[1]
     return 'default'
+
+
+def extract_document_id(object_key: str) -> str:
+    """Extract document_id from S3 object key.
+    Expected format: projects/{project_id}/documents/{document_id}/{file_name}
+    """
+    parts = object_key.split('/')
+    # Find 'documents' index and get the next part
+    try:
+        doc_index = parts.index('documents')
+        if doc_index + 1 < len(parts):
+            return parts[doc_index + 1]
+    except ValueError:
+        pass
+    return ''
 
 
 def parse_eventbridge_s3_event(body: dict) -> dict | None:
@@ -75,9 +90,11 @@ def parse_eventbridge_s3_event(body: dict) -> dict | None:
 
     file_name = object_key.split('/')[-1]
     project_id = extract_project_id(object_key)
+    document_id = extract_document_id(object_key)
 
     return {
         'project_id': project_id,
+        'document_id': document_id,
         'file_uri': f's3://{bucket_name}/{object_key}',
         'file_name': file_name,
         'file_type': get_mime_type(file_name),
@@ -96,6 +113,7 @@ def parse_custom_event(body: dict) -> dict | None:
 
     return {
         'project_id': body.get('project_id', 'default'),
+        'document_id': body.get('document_id', ''),
         'file_uri': file_uri,
         'file_name': file_name,
         'file_type': body.get('file_type') or get_mime_type(file_name),
@@ -118,10 +136,15 @@ def handler(event, context):
                 continue
 
             project_id = parsed['project_id']
+            document_id = parsed['document_id']
             file_uri = parsed['file_uri']
             file_name = parsed['file_name']
             file_type = parsed['file_type']
             processing_type = get_processing_type(file_type)
+
+            if not document_id:
+                print(f'Skipping event: document_id not found in path')
+                continue
 
             workflow_id = generate_workflow_id()
 
@@ -130,6 +153,7 @@ def handler(event, context):
 
             sfn_input = {
                 'workflow_id': workflow_id,
+                'document_id': document_id,
                 'project_id': project_id,
                 'file_uri': file_uri,
                 'file_name': file_name,
@@ -148,6 +172,7 @@ def handler(event, context):
 
             create_workflow(
                 workflow_id=workflow_id,
+                document_id=document_id,
                 project_id=project_id,
                 file_uri=file_uri,
                 file_name=file_name,
@@ -157,10 +182,11 @@ def handler(event, context):
 
             notify_workflow_started(workflow_id, project_id, file_name)
 
-            print(f'Started workflow {workflow_id}, execution: {execution_arn}')
+            print(f'Started workflow {workflow_id}, document: {document_id}, execution: {execution_arn}')
 
             results.append({
                 'workflow_id': workflow_id,
+                'document_id': document_id,
                 'project_id': project_id,
                 'execution_arn': execution_arn,
                 'status': 'started'

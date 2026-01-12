@@ -32,11 +32,12 @@ interface DocumentUploadResponse {
 
 interface Workflow {
   workflow_id: string;
+  document_id: string;
   status: string;
   file_name: string;
   file_uri: string;
-  started_at: string;
-  ended_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 interface SegmentData {
@@ -50,14 +51,14 @@ interface SegmentData {
 
 interface WorkflowDetail {
   workflow_id: string;
-  project_id: string;
+  document_id: string;
   status: string;
   file_name: string;
   file_uri: string;
   file_type: string;
   total_segments: number;
-  started_at: string;
-  ended_at: string | null;
+  created_at: string;
+  updated_at: string;
   segments: SegmentData[];
 }
 
@@ -216,24 +217,39 @@ function ProjectDetailPage() {
 
   const loadWorkflows = useCallback(async () => {
     try {
-      const data = await fetchApi<Workflow[]>(
-        `projects/${projectId}/workflows`,
-      );
-      setWorkflows(data);
+      // Fetch workflows for each document
+      const allWorkflows: Workflow[] = [];
+      for (const doc of documents) {
+        try {
+          const docWorkflows = await fetchApi<Omit<Workflow, 'document_id'>[]>(
+            `documents/${doc.document_id}/workflows`,
+          );
+          // Add document_id to each workflow
+          allWorkflows.push(
+            ...docWorkflows.map((wf) => ({
+              ...wf,
+              document_id: doc.document_id,
+            })),
+          );
+        } catch {
+          // Skip documents with no workflows
+        }
+      }
+      setWorkflows(allWorkflows);
     } catch (error) {
       console.error('Failed to load workflows:', error);
       setWorkflows([]);
     }
-  }, [fetchApi, projectId]);
+  }, [fetchApi, documents]);
 
-  const loadWorkflowDetail = async (workflowId: string) => {
+  const loadWorkflowDetail = async (documentId: string, workflowId: string) => {
     setLoadingWorkflow(true);
     setCurrentSegmentIndex(0);
     setImageLoading(true);
     setAnalysisPopup({ type: null, content: '', title: '' });
     try {
       const data = await fetchApi<WorkflowDetail>(
-        `projects/${projectId}/workflows/${workflowId}`,
+        `documents/${documentId}/workflows/${workflowId}`,
       );
       setSelectedWorkflow(data);
     } catch (error) {
@@ -245,11 +261,18 @@ function ProjectDetailPage() {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      await Promise.all([loadProject(), loadDocuments(), loadWorkflows()]);
+      await Promise.all([loadProject(), loadDocuments()]);
       setLoading(false);
     };
     load();
-  }, [loadProject, loadDocuments, loadWorkflows]);
+  }, [loadProject, loadDocuments]);
+
+  // Load workflows after documents are loaded
+  useEffect(() => {
+    if (documents.length > 0) {
+      loadWorkflows();
+    }
+  }, [documents, loadWorkflows]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -405,11 +428,25 @@ function ProjectDetailPage() {
         const pollForWorkflow = async (retries = 10) => {
           for (let i = 0; i < retries; i++) {
             await new Promise((resolve) => setTimeout(resolve, 2000));
-            const updatedWorkflows = await fetchApi<Workflow[]>(
-              `projects/${projectId}/workflows`,
-            );
+            // Fetch workflows for each document
+            const allWorkflows: Workflow[] = [];
+            for (const doc of documents) {
+              try {
+                const docWorkflows = await fetchApi<
+                  Omit<Workflow, 'document_id'>[]
+                >(`documents/${doc.document_id}/workflows`);
+                allWorkflows.push(
+                  ...docWorkflows.map((wf) => ({
+                    ...wf,
+                    document_id: doc.document_id,
+                  })),
+                );
+              } catch {
+                // Skip documents with no workflows
+              }
+            }
             // Find workflow that matches uploaded file and is pending/in_progress
-            const newWorkflow = updatedWorkflows.find(
+            const newWorkflow = allWorkflows.find(
               (w) =>
                 uploadedFileNames.includes(w.file_name) &&
                 (w.status === 'pending' || w.status === 'in_progress'),
@@ -427,7 +464,7 @@ function ProjectDetailPage() {
                     }
                   : null,
               );
-              setWorkflows(updatedWorkflows);
+              setWorkflows(allWorkflows);
               return;
             }
           }
@@ -735,7 +772,10 @@ function ProjectDetailPage() {
                       onClick={() =>
                         workflow &&
                         !isProcessing &&
-                        loadWorkflowDetail(workflow.workflow_id)
+                        loadWorkflowDetail(
+                          workflow.document_id,
+                          workflow.workflow_id,
+                        )
                       }
                     >
                       <div className="flex items-start gap-3">
@@ -1323,7 +1363,20 @@ function ProjectDetailPage() {
                         </div>
                       ) : (
                         <div className="prose prose-slate prose-sm max-w-none prose-table:border-collapse prose-th:border prose-th:border-slate-300 prose-th:bg-slate-100 prose-th:p-2 prose-td:border prose-td:border-slate-300 prose-td:p-2">
-                          <Markdown remarkPlugins={[remarkGfm]}>
+                          <Markdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              img: ({ src, alt }) => (
+                                <img
+                                  src={src}
+                                  alt={alt || ''}
+                                  className="max-w-full h-auto rounded-lg shadow-md my-4"
+                                  loading="lazy"
+                                />
+                              ),
+                            }}
+                            urlTransform={(url) => url}
+                          >
                             {analysisPopup.content}
                           </Markdown>
                         </div>
@@ -1396,7 +1449,7 @@ function ProjectDetailPage() {
                           <p className="text-xs text-slate-500 mb-1">Created</p>
                           <p className="text-sm text-slate-800">
                             {new Date(
-                              selectedWorkflow.started_at,
+                              selectedWorkflow.created_at,
                             ).toLocaleString('ko-KR')}
                           </p>
                         </div>

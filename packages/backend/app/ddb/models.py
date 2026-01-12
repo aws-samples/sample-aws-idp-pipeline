@@ -6,6 +6,7 @@ class ProjectData(BaseModel):
     name: str
     description: str
     status: str
+    created_by: str | None = None
 
 
 class Project(BaseModel):

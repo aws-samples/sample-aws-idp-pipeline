@@ -70,6 +70,21 @@ def get_standard_output_config():
     }
 
 
+def extract_document_id(file_uri: str) -> str:
+    """Extract document_id from file_uri.
+    Expected format: s3://bucket/projects/{project_id}/documents/{document_id}/{file_name}
+    """
+    parts = file_uri.split('/')
+    # Find 'documents' index and get the next part
+    try:
+        doc_index = parts.index('documents')
+        if doc_index + 1 < len(parts):
+            return parts[doc_index + 1]
+    except ValueError:
+        pass
+    return ''
+
+
 def get_or_create_bda_project(client) -> str:
     try:
         projects = client.list_data_automation_projects()
@@ -99,19 +114,20 @@ def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
     workflow_id = event.get('workflow_id')
+    document_id = event.get('document_id')
     file_uri = event.get('file_uri')
     file_type = event.get('file_type')
     processing_type = event.get('processing_type', 'document')
 
-    if not all([workflow_id, file_uri, file_type]):
+    if not all([workflow_id, document_id, file_uri, file_type]):
         return {
             'statusCode': 400,
-            'body': 'Missing required fields: workflow_id, file_uri, file_type'
+            'body': 'Missing required fields: workflow_id, document_id, file_uri, file_type'
         }
 
     record_step_start(workflow_id, StepName.BDA_PROCESSOR)
     notify_step_start(workflow_id, 'BdaProcessor')
-    update_workflow_status(workflow_id, WorkflowStatus.IN_PROGRESS)
+    update_workflow_status(document_id, workflow_id, WorkflowStatus.IN_PROGRESS)
 
     if file_type not in SUPPORTED_MIME_TYPES:
         print(f'Unsupported file type: {file_type}, skipping BDA')
@@ -135,7 +151,17 @@ def handler(event, _context):
         runtime_client = get_bda_runtime_client()
         project_arn = get_or_create_bda_project(client)
 
-        output_prefix = f'bda-output/{workflow_id}/{datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")}'
+        # Extract project_id and document_id for output path
+        project_id = event.get('project_id', 'default')
+        document_id = extract_document_id(file_uri)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+
+        # Store BDA output in same folder as document for easy cleanup
+        if document_id:
+            output_prefix = f'projects/{project_id}/documents/{document_id}/bda-output/{timestamp}'
+        else:
+            # Fallback to old path if document_id extraction fails
+            output_prefix = f'bda-output/{workflow_id}/{timestamp}'
         output_uri = f's3://{BDA_OUTPUT_BUCKET}/{output_prefix}'
 
         session = boto3.Session()

@@ -8,6 +8,7 @@ from app.config import get_config
 from app.ddb import (
     Project,
     batch_delete_items,
+    generate_project_id,
     get_project_item,
     now_iso,
     put_project_item,
@@ -15,15 +16,15 @@ from app.ddb import (
     query_projects,
     update_project_data,
 )
-from app.ddb.workflows import query_workflows
+from app.ddb.workflows import delete_workflow_item, query_workflows
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 class ProjectCreate(BaseModel):
-    project_id: str
     name: str
     description: str | None = ""
+    created_by: str | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -36,6 +37,7 @@ class ProjectResponse(BaseModel):
     name: str
     description: str
     status: str
+    created_by: str | None = None
     created_at: str
     updated_at: str | None = None
 
@@ -46,6 +48,7 @@ class ProjectResponse(BaseModel):
             name=project.data.name,
             description=project.data.description,
             status=project.data.status,
+            created_by=project.data.created_by,
             created_at=project.created_at,
             updated_at=project.updated_at,
         )
@@ -68,25 +71,26 @@ def get_project(project_id: str) -> ProjectResponse:
 
 @router.post("")
 def create_project(request: ProjectCreate) -> ProjectResponse:
-    existing = get_project_item(request.project_id)
-    if existing:
-        raise HTTPException(status_code=409, detail="Project already exists")
+    project_id = generate_project_id()
 
     now = now_iso()
     data = {
-        "project_id": request.project_id,
+        "project_id": project_id,
         "name": request.name,
         "description": request.description or "",
         "status": "active",
     }
+    if request.created_by:
+        data["created_by"] = request.created_by
 
-    put_project_item(request.project_id, data)
+    put_project_item(project_id, data)
 
     return ProjectResponse(
-        project_id=request.project_id,
+        project_id=project_id,
         name=request.name,
         description=request.description or "",
         status="active",
+        created_by=request.created_by,
         created_at=now,
         updated_at=now,
     )
@@ -132,33 +136,29 @@ def delete_project(project_id: str) -> dict:
     workflow_items = []
     for doc_id in document_ids:
         wf_items = query_workflows(doc_id)
-        for wf_item in wf_items:
-            workflow_ids.append(wf_item["SK"].replace("WF#", ""))
-            workflow_items.append(wf_item)
+        for wf in wf_items:
+            workflow_ids.append(wf.SK.replace("WF#", ""))
+            workflow_items.append({"PK": wf.PK, "SK": wf.SK, "document_id": doc_id})
 
     deleted_info["workflow_count"] = len(workflow_ids)
 
-    # 2. Delete from LanceDB (all workflows)
-    if workflow_ids:
-        try:
-            import lancedb
+    # 2. Delete from LanceDB (per-project S3 Express bucket)
+    try:
+        lancedb_bucket = _get_ssm_parameter("/idp-v2/lancedb/express/bucket-name")
+        lancedb_prefix = f"{project_id}.lance/"
+        lancedb_deleted = _delete_s3_prefix(s3, lancedb_bucket, lancedb_prefix)
+        deleted_info["lancedb_objects_deleted"] = lancedb_deleted
+    except Exception as e:
+        deleted_info["lancedb_error"] = str(e)
 
-            bucket_name = _get_ssm_parameter("/idp-v2/lancedb/storage/bucket-name")
-            lock_table_name = _get_ssm_parameter("/idp-v2/lancedb/lock/table-name")
-            db = lancedb.connect(f"s3+ddb://{bucket_name}/idp-v2?ddbTableName={lock_table_name}")
-            if "documents" in db.table_names():
-                lance_table = db.open_table("documents")
-                for workflow_id in workflow_ids:
-                    with contextlib.suppress(Exception):
-                        lance_table.delete(f"workflow_id = '{workflow_id}'")
-                deleted_info["lancedb_deleted"] = True
-        except Exception as e:
-            deleted_info["lancedb_error"] = str(e)
-
-    # 3. Delete workflow items from DynamoDB
-    if workflow_items:
-        batch_delete_items(workflow_items)
-        deleted_info["workflow_items_deleted"] = len(workflow_items)
+    # 3. Delete workflow items from DynamoDB (including STEP, SEG#*, etc.)
+    total_wf_deleted = 0
+    for wf_info in workflow_items:
+        doc_id = wf_info["document_id"]
+        wf_id = wf_info["SK"].replace("WF#", "")
+        with contextlib.suppress(Exception):
+            total_wf_deleted += delete_workflow_item(doc_id, wf_id)
+    deleted_info["workflow_items_deleted"] = total_wf_deleted
 
     # 4. Delete from S3 - entire project folder
     project_prefix = f"projects/{project_id}/"
