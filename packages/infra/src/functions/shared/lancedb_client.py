@@ -100,3 +100,29 @@ def vector_search(query: str, limit: int = 10, db=None) -> list:
 def fts_search(keywords: str, limit: int = 10, db=None) -> list:
     table = get_or_create_table(db)
     return table.search(query=keywords, query_type='fts').limit(limit).to_list()
+
+
+def delete_by_workflow_id(workflow_id: str, db=None) -> int:
+    """Delete all records for a specific workflow_id"""
+    table = get_or_create_table(db)
+    # Get count before deletion
+    results = table.search().where(f"workflow_id = '{workflow_id}'").to_list()
+    count = len(results)
+    if count > 0:
+        table.delete(f"workflow_id = '{workflow_id}'")
+    return count
+
+
+def delete_by_workflow_ids(workflow_ids: list, db=None) -> int:
+    """Delete all records for multiple workflow_ids"""
+    if not workflow_ids:
+        return 0
+    table = get_or_create_table(db)
+    total_deleted = 0
+    for workflow_id in workflow_ids:
+        results = table.search().where(f"workflow_id = '{workflow_id}'").to_list()
+        count = len(results)
+        if count > 0:
+            table.delete(f"workflow_id = '{workflow_id}'")
+            total_deleted += count
+    return total_deleted

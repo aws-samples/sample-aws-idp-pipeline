@@ -254,11 +254,11 @@ function ProjectDetailPage() {
   }, [messages]);
 
   // Handle workflow completion/failure
+  const progressStatus = workflowProgress?.status;
   useEffect(() => {
     if (
-      !workflowProgress ||
-      (workflowProgress.status !== 'completed' &&
-        workflowProgress.status !== 'failed')
+      !progressStatus ||
+      (progressStatus !== 'completed' && progressStatus !== 'failed')
     ) {
       return;
     }
@@ -273,7 +273,7 @@ function ProjectDetailPage() {
       }, 5000);
     }, 1000);
     return () => clearTimeout(timeout);
-  }, [workflowProgress?.status, loadWorkflows]);
+  }, [progressStatus, loadWorkflows]);
 
   // Update analysis popup when segment changes
   useEffect(() => {

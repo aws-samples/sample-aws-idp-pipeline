@@ -507,3 +507,131 @@ def batch_save_segments(workflow_id: str, segments: list) -> int:
             count += 1
 
     return count
+
+
+def delete_workflow_all_items(workflow_id: str) -> int:
+    """Delete all items related to a workflow (META, STEP, SEG#*, ANALYSIS#*, CONN#*)"""
+    table = get_table()
+    deleted_count = 0
+
+    # Query all items with PK = WF#{workflow_id}
+    response = table.query(
+        KeyConditionExpression=Key('PK').eq(f'WF#{workflow_id}')
+    )
+    items = response.get('Items', [])
+
+    # Handle pagination
+    while response.get('LastEvaluatedKey'):
+        response = table.query(
+            KeyConditionExpression=Key('PK').eq(f'WF#{workflow_id}'),
+            ExclusiveStartKey=response['LastEvaluatedKey']
+        )
+        items.extend(response.get('Items', []))
+
+    # Batch delete all items
+    with table.batch_writer() as batch:
+        for item in items:
+            batch.delete_item(Key={'PK': item['PK'], 'SK': item['SK']})
+            deleted_count += 1
+
+    return deleted_count
+
+
+def get_workflows_by_project(project_id: str) -> list:
+    """Get all workflow IDs for a project"""
+    table = get_table()
+    response = table.query(
+        KeyConditionExpression=Key('PK').eq(f'PROJ#{project_id}') & Key('SK').begins_with('WF#')
+    )
+    items = response.get('Items', [])
+
+    # Handle pagination
+    while response.get('LastEvaluatedKey'):
+        response = table.query(
+            KeyConditionExpression=Key('PK').eq(f'PROJ#{project_id}') & Key('SK').begins_with('WF#'),
+            ExclusiveStartKey=response['LastEvaluatedKey']
+        )
+        items.extend(response.get('Items', []))
+
+    return [item['SK'].replace('WF#', '') for item in items]
+
+
+def get_documents_by_project(project_id: str) -> list:
+    """Get all document IDs for a project"""
+    table = get_table()
+    response = table.query(
+        KeyConditionExpression=Key('PK').eq(f'PROJ#{project_id}') & Key('SK').begins_with('DOC#')
+    )
+    items = response.get('Items', [])
+
+    # Handle pagination
+    while response.get('LastEvaluatedKey'):
+        response = table.query(
+            KeyConditionExpression=Key('PK').eq(f'PROJ#{project_id}') & Key('SK').begins_with('DOC#'),
+            ExclusiveStartKey=response['LastEvaluatedKey']
+        )
+        items.extend(response.get('Items', []))
+
+    return [{'document_id': item['SK'].replace('DOC#', ''), 'data': item.get('data', {})} for item in items]
+
+
+def delete_document_items(project_id: str, document_id: str) -> int:
+    """Delete document item from project"""
+    table = get_table()
+    table.delete_item(Key={'PK': f'PROJ#{project_id}', 'SK': f'DOC#{document_id}'})
+    return 1
+
+
+def delete_project_workflow_link(project_id: str, workflow_id: str) -> None:
+    """Delete project-workflow link"""
+    table = get_table()
+    table.delete_item(Key={'PK': f'PROJ#{project_id}', 'SK': f'WF#{workflow_id}'})
+
+
+def delete_project_item(project_id: str) -> None:
+    """Delete project item"""
+    table = get_table()
+    table.delete_item(Key={'PK': f'PROJ#{project_id}', 'SK': f'PROJ#{project_id}'})
+
+
+def delete_project_all_items(project_id: str) -> int:
+    """Delete all items related to a project (PROJ#, DOC#*, WF#* links)"""
+    table = get_table()
+    deleted_count = 0
+
+    # Query all items with PK = PROJ#{project_id}
+    response = table.query(
+        KeyConditionExpression=Key('PK').eq(f'PROJ#{project_id}')
+    )
+    items = response.get('Items', [])
+
+    # Handle pagination
+    while response.get('LastEvaluatedKey'):
+        response = table.query(
+            KeyConditionExpression=Key('PK').eq(f'PROJ#{project_id}'),
+            ExclusiveStartKey=response['LastEvaluatedKey']
+        )
+        items.extend(response.get('Items', []))
+
+    # Batch delete all items
+    with table.batch_writer() as batch:
+        for item in items:
+            batch.delete_item(Key={'PK': item['PK'], 'SK': item['SK']})
+            deleted_count += 1
+
+    return deleted_count
+
+
+def get_workflow_by_document(project_id: str, document_name: str) -> Optional[str]:
+    """Find workflow_id by document name"""
+    table = get_table()
+    response = table.query(
+        KeyConditionExpression=Key('PK').eq(f'PROJ#{project_id}') & Key('SK').begins_with('WF#')
+    )
+
+    for item in response.get('Items', []):
+        data = item.get('data', {})
+        if data.get('file_name') == document_name:
+            return item['SK'].replace('WF#', '')
+
+    return None

@@ -291,29 +291,113 @@ def get_document(project_id: str, document_id: str) -> DocumentResponse:
 
 @router.delete("/{document_id}")
 def delete_document(project_id: str, document_id: str) -> dict:
-    """Delete a document from DynamoDB and S3."""
+    """Delete a document and all related data (DynamoDB, S3, LanceDB)."""
     config = get_config()
     table = get_table()
     s3 = get_s3_client()
 
-    # Check document exists and get S3 key
+    # Check document exists and get info
     existing = table.get_item(Key={"PK": f"PROJ#{project_id}", "SK": f"DOC#{document_id}"})
     item = existing.get("Item")
 
     if not item:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    s3_key = item.get("s3_key", "")
+    data = item.get("data", {})
+    document_name = data.get("name", "")
+    s3_key = data.get("s3_key", "")
 
-    # Delete from S3
+    # Find related workflow by document name
+    workflow_id = None
+    workflow_response = table.query(
+        KeyConditionExpression=Key("PK").eq(f"PROJ#{project_id}") & Key("SK").begins_with("WF#"),
+    )
+    for wf_item in workflow_response.get("Items", []):
+        wf_data = wf_item.get("data", {})
+        if wf_data.get("file_name") == document_name:
+            workflow_id = wf_item["SK"].replace("WF#", "")
+            break
+
+    deleted_info = {"document_id": document_id, "workflow_id": workflow_id}
+
+    # 1. Delete from LanceDB (if workflow exists)
+    if workflow_id:
+        try:
+            import lancedb
+
+            bucket_name = _get_ssm_parameter("/idp-v2/lancedb/storage/bucket-name")
+            lock_table_name = _get_ssm_parameter("/idp-v2/lancedb/lock/table-name")
+            db = lancedb.connect(f"s3+ddb://{bucket_name}/idp-v2?ddbTableName={lock_table_name}")
+            if "documents" in db.table_names():
+                lance_table = db.open_table("documents")
+                lance_table.delete(f"workflow_id = '{workflow_id}'")
+                deleted_info["lancedb_deleted"] = True
+        except Exception as e:
+            deleted_info["lancedb_error"] = str(e)
+
+    # 2. Delete from S3 - document file
     if s3_key:
         with contextlib.suppress(Exception):
             s3.delete_object(Bucket=config.document_storage_bucket_name, Key=s3_key)
 
-    # Delete from DynamoDB
+    # 3. Delete from S3 - entire document folder
+    doc_prefix = f"projects/{project_id}/documents/{document_id}/"
+    with contextlib.suppress(Exception):
+        _delete_s3_prefix(s3, config.document_storage_bucket_name, doc_prefix)
+
+    # 4. Delete workflow data from DynamoDB
+    if workflow_id:
+        # Delete all WF#{workflow_id} items (META, STEP, SEG#*, ANALYSIS#*, CONN#*)
+        wf_items_response = table.query(KeyConditionExpression=Key("PK").eq(f"WF#{workflow_id}"))
+        wf_items = wf_items_response.get("Items", [])
+
+        # Handle pagination
+        while wf_items_response.get("LastEvaluatedKey"):
+            wf_items_response = table.query(
+                KeyConditionExpression=Key("PK").eq(f"WF#{workflow_id}"),
+                ExclusiveStartKey=wf_items_response["LastEvaluatedKey"],
+            )
+            wf_items.extend(wf_items_response.get("Items", []))
+
+        # Batch delete
+        with table.batch_writer() as batch:
+            for wf_item in wf_items:
+                batch.delete_item(Key={"PK": wf_item["PK"], "SK": wf_item["SK"]})
+
+        deleted_info["workflow_items_deleted"] = len(wf_items)
+
+        # Delete project-workflow link
+        with contextlib.suppress(Exception):
+            table.delete_item(Key={"PK": f"PROJ#{project_id}", "SK": f"WF#{workflow_id}"})
+
+    # 5. Delete document item from DynamoDB
     table.delete_item(Key={"PK": f"PROJ#{project_id}", "SK": f"DOC#{document_id}"})
 
-    return {"message": f"Document {document_id} deleted"}
+    return {"message": f"Document {document_id} deleted", "details": deleted_info}
+
+
+def _get_ssm_parameter(key: str) -> str:
+    """Get SSM parameter value."""
+    ssm = boto3.client("ssm")
+    response = ssm.get_parameter(Name=key)
+    return response["Parameter"]["Value"]
+
+
+def _delete_s3_prefix(s3_client, bucket: str, prefix: str) -> int:
+    """Delete all objects under a prefix."""
+    deleted_count = 0
+    paginator = s3_client.get_paginator("list_objects_v2")
+
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        objects = page.get("Contents", [])
+        if not objects:
+            continue
+
+        delete_keys = [{"Key": obj["Key"]} for obj in objects]
+        s3_client.delete_objects(Bucket=bucket, Delete={"Objects": delete_keys})
+        deleted_count += len(delete_keys)
+
+    return deleted_count
 
 
 # ============================================
