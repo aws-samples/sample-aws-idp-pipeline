@@ -25,8 +25,21 @@ interface SearchResult {
   score: number;
 }
 
+interface RerankResult {
+  workflow_id: string;
+  segment_id: string;
+  segment_index: number;
+  content: string;
+  keywords: string;
+  rerank_score: number;
+}
+
 interface SearchResponse {
   results: SearchResult[];
+}
+
+interface RerankResponse {
+  results: RerankResult[];
 }
 
 function RouteComponent() {
@@ -45,7 +58,7 @@ function RouteComponent() {
   // Rerank search states
   const [rerankQuery, setRerankQuery] = useState('');
   const [rerankType, setRerankType] = useState<'bedrock' | 'local'>('bedrock');
-  const [rerankResults, setRerankResults] = useState<SearchResult[]>([]);
+  const [rerankResults, setRerankResults] = useState<RerankResult[]>([]);
   const [reranking, setReranking] = useState(false);
   const [rerankTime, setRerankTime] = useState<number | null>(null);
   const [expandedRerankSegments, setExpandedRerankSegments] = useState<
@@ -104,7 +117,7 @@ function RouteComponent() {
     setReranking(true);
     setRerankTime(null);
     const startTime = performance.now();
-    const response = await fetchApi<SearchResponse>(
+    const response = await fetchApi<RerankResponse>(
       `projects/${selectedProject.project_id}/search/rerank?query=${encodeURIComponent(rerankQuery)}&reranker_type=${rerankType}`,
     );
     const endTime = performance.now();
@@ -371,7 +384,7 @@ function RouteComponent() {
                           {result.segment_index}
                         </span>
                         <span style={{ color: '#666', fontSize: '12px' }}>
-                          Score: {result.score.toFixed(4)}
+                          Score: {result.rerank_score.toFixed(4)}
                         </span>
                       </div>
                       {isExpanded && (
