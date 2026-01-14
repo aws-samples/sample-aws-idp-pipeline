@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Path, Query
 from lancedb.pydantic import LanceModel, Vector
@@ -24,8 +24,9 @@ class DocumentRecord(LanceModel):
 
     file_uri: str
     file_type: str
-    image_uri: Optional[str] = None
+    image_uri: str | None = None
     created_at: datetime
+
 
 router = APIRouter(prefix="/projects/{project_id}/search", tags=["search"])
 

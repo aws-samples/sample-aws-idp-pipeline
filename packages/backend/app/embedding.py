@@ -19,9 +19,7 @@ class BedrockEmbeddingFunction(TextEmbeddingFunction):
         super().__init__(**data)
         self._client = boto3.client("bedrock-runtime", region_name=self.region_name)
 
-        if "nova" in self.model_id:
-            self._ndims = 1024
-        elif "v2" in self.model_id:
+        if "nova" in self.model_id or "v2" in self.model_id:
             self._ndims = 1024
         else:
             self._ndims = 1536
@@ -34,14 +32,16 @@ class BedrockEmbeddingFunction(TextEmbeddingFunction):
         for text in texts:
             response = self._client.invoke_model(
                 modelId=self.model_id,
-                body=json.dumps({
-                    "taskType": "SINGLE_EMBEDDING",
-                    "singleEmbeddingParams": {
-                        "embeddingPurpose": "GENERIC_INDEX",
-                        "embeddingDimension": 1024,
-                        "text": {"truncationMode": "END", "value": text},
-                    },
-                }),
+                body=json.dumps(
+                    {
+                        "taskType": "SINGLE_EMBEDDING",
+                        "singleEmbeddingParams": {
+                            "embeddingPurpose": "GENERIC_INDEX",
+                            "embeddingDimension": 1024,
+                            "text": {"truncationMode": "END", "value": text},
+                        },
+                    }
+                ),
                 contentType="application/json",
             )
 

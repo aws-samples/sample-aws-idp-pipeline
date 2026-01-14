@@ -18,14 +18,13 @@ _local_reranker: CrossEncoder | None = None
 def _get_local_reranker() -> CrossEncoder:
     global _local_reranker
     if _local_reranker is None:
-        _local_reranker = CrossEncoder('BAAI/bge-reranker-v2-m3', model_kwargs={"dtype": "float16"})
+        _local_reranker = CrossEncoder("BAAI/bge-reranker-v2-m3", model_kwargs={"dtype": "float16"})
     return _local_reranker
 
 
 def rerank_bedrock(query: str, documents: list[str], num_results: int | None = None) -> list[tuple[int, float]]:
     sources = [
-        {"type": "INLINE", "inlineDocumentSource": {"type": "TEXT", "textDocument": {"text": doc}}}
-        for doc in documents
+        {"type": "INLINE", "inlineDocumentSource": {"type": "TEXT", "textDocument": {"text": doc}}} for doc in documents
     ]
 
     reranking_config = {
