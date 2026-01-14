@@ -25,11 +25,15 @@ class ProjectCreate(BaseModel):
     name: str
     description: str | None = ""
     created_by: str | None = None
+    language: str | None = None
+    color: int | None = None
 
 
 class ProjectUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    language: str | None = None
+    color: int | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -38,6 +42,8 @@ class ProjectResponse(BaseModel):
     description: str
     status: str
     created_by: str | None = None
+    language: str | None = None
+    color: int | None = None
     created_at: str
     updated_at: str | None = None
 
@@ -49,6 +55,8 @@ class ProjectResponse(BaseModel):
             description=project.data.description,
             status=project.data.status,
             created_by=project.data.created_by,
+            language=project.data.language,
+            color=project.data.color,
             created_at=project.created_at,
             updated_at=project.updated_at,
         )
@@ -82,6 +90,10 @@ def create_project(request: ProjectCreate) -> ProjectResponse:
     }
     if request.created_by:
         data["created_by"] = request.created_by
+    if request.language is not None:
+        data["language"] = request.language
+    if request.color is not None:
+        data["color"] = request.color
 
     put_project_item(project_id, data)
 
@@ -91,6 +103,8 @@ def create_project(request: ProjectCreate) -> ProjectResponse:
         description=request.description or "",
         status="active",
         created_by=request.created_by,
+        language=request.language,
+        color=request.color,
         created_at=now,
         updated_at=now,
     )
@@ -109,6 +123,12 @@ def update_project(project_id: str, request: ProjectUpdate) -> ProjectResponse:
 
     if request.description is not None:
         data["description"] = request.description
+
+    if request.language is not None:
+        data["language"] = request.language
+
+    if request.color is not None:
+        data["color"] = request.color
 
     update_project_data(project_id, data)
 

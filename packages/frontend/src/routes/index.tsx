@@ -9,9 +9,18 @@ interface Project {
   description: string;
   status: string;
   created_by: string | null;
+  language: string | null;
+  color: number | null;
   created_at: string;
   updated_at: string | null;
 }
+
+const LANGUAGES = [
+  { code: 'ko', name: 'Korean', flag: 'KR' },
+  { code: 'en', name: 'English', flag: 'EN' },
+  { code: 'ja', name: 'Japanese', flag: 'JP' },
+  { code: 'zh', name: 'Chinese', flag: 'CN' },
+];
 
 export const Route = createFileRoute('/')({
   component: ProjectsPage,
@@ -139,14 +148,27 @@ function ProjectFolder({
 
           {/* Project Info */}
           <div className="text-center w-full">
-            <h3
-              className="text-base font-bold text-slate-800 truncate px-2 transition-all duration-300"
-              style={{
-                transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
-              }}
-            >
-              {project.name}
-            </h3>
+            <div className="flex items-center justify-center gap-2">
+              <h3
+                className="text-base font-bold text-slate-800 truncate transition-all duration-300"
+                style={{
+                  transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
+                }}
+              >
+                {project.name}
+              </h3>
+              {project.language && (
+                <span
+                  className="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-600 rounded transition-all duration-300"
+                  style={{
+                    transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
+                  }}
+                >
+                  {LANGUAGES.find((l) => l.code === project.language)?.flag ||
+                    project.language.toUpperCase()}
+                </span>
+              )}
+            </div>
             <div className="flex items-center justify-center gap-2 mt-1 text-xs text-slate-500">
               <span>{formatDate(project.created_at)}</span>
               {project.created_by && (
@@ -236,6 +258,8 @@ function ProjectsPage() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+    language: 'ko',
+    color: 0,
   });
   const [saving, setSaving] = useState(false);
 
@@ -256,7 +280,7 @@ function ProjectsPage() {
 
   const openCreateModal = () => {
     setEditingProject(null);
-    setFormData({ name: '', description: '' });
+    setFormData({ name: '', description: '', language: 'ko', color: 0 });
     setShowModal(true);
   };
 
@@ -265,6 +289,8 @@ function ProjectsPage() {
     setFormData({
       name: project.name,
       description: project.description,
+      language: project.language || 'ko',
+      color: project.color ?? 0,
     });
     setShowModal(true);
   };
@@ -272,7 +298,7 @@ function ProjectsPage() {
   const closeModal = () => {
     setShowModal(false);
     setEditingProject(null);
-    setFormData({ name: '', description: '' });
+    setFormData({ name: '', description: '', language: 'ko', color: 0 });
   };
 
   const handleSave = async () => {
@@ -287,6 +313,8 @@ function ProjectsPage() {
           body: JSON.stringify({
             name: formData.name,
             description: formData.description,
+            language: formData.language,
+            color: formData.color,
           }),
         });
       } else {
@@ -294,7 +322,10 @@ function ProjectsPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            ...formData,
+            name: formData.name,
+            description: formData.description,
+            language: formData.language,
+            color: formData.color,
             created_by:
               user?.profile?.email || user?.profile?.preferred_username,
           }),
@@ -424,11 +455,11 @@ function ProjectsPage() {
             </button>
 
             {/* Project Folders */}
-            {projects.map((project, index) => (
+            {projects.map((project) => (
               <ProjectFolder
                 key={project.project_id}
                 project={project}
-                colorIndex={index}
+                colorIndex={project.color ?? 0}
                 onEdit={openEditModal}
                 onDelete={handleDeleteProject}
               />
@@ -493,6 +524,49 @@ function ProjectsPage() {
                   rows={3}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-shadow"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Language
+                </label>
+                <select
+                  value={formData.language}
+                  onChange={(e) =>
+                    setFormData({ ...formData, language: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                >
+                  {LANGUAGES.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Folder Color
+                </label>
+                <div className="flex gap-2 flex-wrap">
+                  {FOLDER_GRADIENTS.map((gradient, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, color: index })}
+                      className={`w-10 h-10 rounded-lg transition-all ${
+                        formData.color === index
+                          ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
+                          : 'hover:scale-105'
+                      }`}
+                      style={{
+                        background: `linear-gradient(135deg, ${gradient.front} 0%, ${gradient.back} 100%)`,
+                      }}
+                      title={`Color ${index + 1}`}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
 

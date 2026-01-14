@@ -7,6 +7,8 @@ class ProjectData(BaseModel):
     description: str
     status: str
     created_by: str | None = None
+    language: str | None = None
+    color: int | None = None
 
 
 class Project(BaseModel):
@@ -38,6 +40,7 @@ class WorkflowData(BaseModel):
     file_uri: str
     project_id: str
     status: str
+    language: str | None = None
     summary: str | None = None
     total_segments: int | None = None
 
@@ -56,14 +59,24 @@ class ImageAnalysis(BaseModel):
 
 
 class SegmentData(BaseModel):
+    """Segment reference stored in DynamoDB. Actual data is in S3."""
+
     segment_index: int
-    image_uri: str
-    bda_indexer: str
-    format_parser: str
-    image_analysis: list[ImageAnalysis]
+    s3_key: str = ""
+    image_uri: str = ""
 
 
 class Segment(BaseModel):
     data: SegmentData
     created_at: str
     updated_at: str
+
+
+class SegmentAnalysis(BaseModel):
+    """Full segment data stored in S3."""
+
+    segment_index: int
+    image_uri: str = ""
+    bda_indexer: str = ""
+    format_parser: str = ""
+    image_analysis: list[ImageAnalysis] = []

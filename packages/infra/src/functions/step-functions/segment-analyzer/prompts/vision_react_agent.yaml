@@ -67,6 +67,8 @@ user_query: |
   ## Recommendations (if applicable)
   [Notes, items requiring further review]
 
+  IMPORTANT: Provide ALL analysis, questions, and answers in {language}.
+
 image_analysis_prompt: |
   You are analyzing a technical document image. Provide detailed, professional analysis.
 
@@ -90,3 +92,5 @@ image_analysis_prompt: |
   3. **Issues & Recommendations**
 
   **Focus**: Provide actionable professional insights, avoid redundancy with previous analysis, use appropriate technical terminology.
+
+  IMPORTANT: Provide ALL analysis and answers in {language}.

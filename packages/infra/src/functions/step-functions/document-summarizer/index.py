@@ -4,7 +4,6 @@ import os
 import boto3
 
 from shared.ddb_client import (
-    get_all_segments,
     update_workflow_status,
     record_step_start,
     record_step_complete,
@@ -12,6 +11,7 @@ from shared.ddb_client import (
     StepName,
     WorkflowStatus,
 )
+from shared.s3_analysis import get_all_segment_analyses, save_summary
 from shared.websocket import (
     notify_step_start,
     notify_step_complete,
@@ -73,6 +73,7 @@ def handler(event, context):
 
     workflow_id = event.get('workflow_id')
     document_id = event.get('document_id')
+    file_uri = event.get('file_uri')
     segment_count = event.get('segment_count', 0)
     model_id = os.environ.get('SUMMARIZER_MODEL_ID', 'us.anthropic.claude-3-5-haiku-20241022-v1:0')
 
@@ -83,10 +84,11 @@ def handler(event, context):
     notify_step_start(workflow_id, 'DocumentSummarizer')
 
     try:
-        segments = get_all_segments(workflow_id)
+        # Get segments from S3
+        segments = get_all_segment_analyses(file_uri, segment_count)
 
         if not segments:
-            print(f'No segments found for workflow {workflow_id}')
+            print(f'No segments found in S3 for file {file_uri}')
             record_step_complete(
                 workflow_id,
                 StepName.DOCUMENT_SUMMARIZER,
@@ -127,6 +129,10 @@ def handler(event, context):
         combined_content = '\n\n'.join(all_content)
 
         summary = generate_summary(combined_content, model_id)
+
+        # Save summary to S3
+        save_summary(file_uri, summary)
+        print(f'Saved summary to S3 for file {file_uri}')
 
         record_step_complete(
             workflow_id,

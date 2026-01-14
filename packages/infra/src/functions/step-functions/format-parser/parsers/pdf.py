@@ -12,7 +12,8 @@ from urllib.parse import urlparse
 import boto3
 import fitz
 
-from shared.ddb_client import get_segment_count, update_segment
+from shared.ddb_client import get_segment_count
+from shared.s3_analysis import update_segment_analysis
 
 s3_client = None
 
@@ -54,7 +55,7 @@ def extract_text_from_pdf(pdf_path: str) -> list:
 
 def parse(event: dict) -> dict:
     """
-    Parse PDF document and update segments in DynamoDB with extracted text.
+    Parse PDF document and update segments in S3 with extracted text.
 
     Args:
         event: Contains workflow_id, file_uri
@@ -80,10 +81,11 @@ def parse(event: dict) -> dict:
         for page_index, pdf_page in enumerate(pdf_pages):
             if page_index < segment_count:
                 pdf_text = pdf_page['text']
-                update_segment(workflow_id, page_index, format_parser=pdf_text)
+                # Update segment in S3
+                update_segment_analysis(file_uri, page_index, format_parser=pdf_text)
                 updated_count += 1
 
-        print(f'PDF: Updated {updated_count} segments with extracted text')
+        print(f'PDF: Updated {updated_count} segments in S3 with extracted text')
 
         return {
             **event,

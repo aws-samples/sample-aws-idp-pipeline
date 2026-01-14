@@ -68,7 +68,8 @@ def create_image_analyzer_tool(
     previous_context_getter: Callable[[], str],
     analysis_steps: list,
     model_id: str,
-    bedrock_client
+    bedrock_client,
+    language: str = 'English'
 ):
     """Create an image analyzer tool with context.
 
@@ -78,6 +79,7 @@ def create_image_analyzer_tool(
         analysis_steps: List to append analysis steps
         model_id: Bedrock model ID
         bedrock_client: Bedrock client
+        language: Language for analysis output (e.g., 'Korean', 'English')
     """
 
     @tool
@@ -107,7 +109,8 @@ def create_image_analyzer_tool(
             if prompt_template:
                 analysis_prompt = prompt_template.format(
                     previous_context=previous_context or 'No previous analysis.',
-                    query=question
+                    query=question,
+                    language=language
                 )
             else:
                 analysis_prompt = f"""Analyze this document image and answer the following question.
@@ -117,7 +120,7 @@ Previous Analysis Context:
 
 Question: {question}
 
-Provide detailed, professional analysis in Korean."""
+Provide detailed, professional analysis in {language}."""
 
             request_body = {
                 'anthropic_version': 'bedrock-2023-05-31',
