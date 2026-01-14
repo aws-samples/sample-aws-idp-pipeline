@@ -216,13 +216,13 @@ export class WorkflowStack extends Stack {
             name: [documentBucketName],
           },
           object: {
-            // Exclude BDA output files - matches both legacy and new paths:
-            // - bda-output/... (legacy)
-            // - projects/{project_id}/documents/{document_id}/bda-output/... (new)
+            // Exclude intermediate output files:
+            // - *bda-output/* : BDA processing output
+            // - */analysis/*  : Segment analysis results (stored in S3)
             key: [
               {
                 'anything-but': {
-                  wildcard: '*bda-output/*',
+                  wildcard: ['*bda-output/*', '*/analysis/*'],
                 },
               },
             ],

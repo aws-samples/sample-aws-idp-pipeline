@@ -72,7 +72,8 @@ class VisionReactAgent:
         segment_index: int,
         image_uri: Optional[str],
         context: str,
-        file_type: str
+        file_type: str,
+        language: str = 'en'
     ) -> dict:
         self.analysis_steps = []
         self.previous_context = context
@@ -81,6 +82,15 @@ class VisionReactAgent:
             self.current_image_data = self._download_image(image_uri)
         else:
             self.current_image_data = None
+
+        # Language display names for prompts
+        language_names = {
+            'ko': 'Korean',
+            'en': 'English',
+            'ja': 'Japanese',
+            'zh': 'Chinese'
+        }
+        language_name = language_names.get(language, 'English')
 
         model = BedrockModel(
             model_id=self.model_id,
@@ -92,7 +102,8 @@ class VisionReactAgent:
             previous_context_getter=self._get_previous_context,
             analysis_steps=self.analysis_steps,
             model_id=self.model_id,
-            bedrock_client=self.bedrock_client
+            bedrock_client=self.bedrock_client,
+            language=language_name
         )
 
         rotate_image = create_image_rotator_tool(
@@ -109,27 +120,33 @@ When analyzing:
 1. First verify image orientation. If text appears rotated or upside down, use rotate_image tool.
 2. Use analyze_image tool with specific, targeted questions.
 3. Explore multiple aspects: text, visuals, layout, data.
-4. Provide comprehensive analysis in Korean."""
+4. Provide comprehensive analysis."""
+
+        # Add language instruction to system prompt
+        system_prompt = f"{system_prompt}\n\nIMPORTANT: You MUST provide all analysis, questions, and answers in {language_name}."
 
         user_query = self._load_prompt('user_query')
         if user_query:
             user_query = user_query.format(
                 segment_index=segment_index + 1,
-                context=context
+                context=context,
+                language=language_name
             )
         else:
-            user_query = f"""다음 문서 세그먼트 (페이지 {segment_index + 1})를 분석해주세요.
+            user_query = f"""Please analyze the following document segment (page {segment_index + 1}).
 
-이전 분석 컨텍스트:
+Previous analysis context:
 {context}
 
-도구를 활용하여 문서를 체계적으로 분석하고, 다음 형식으로 결과를 제공하세요:
+Use the available tools to systematically analyze the document and provide results in the following format:
 
-## 문서 개요
-## 주요 발견 사항
-## 기술적 세부 사항
-## 시각적 요소
-## 권장 사항"""
+## Document Overview
+## Key Findings
+## Technical Details
+## Visual Elements
+## Recommendations
+
+IMPORTANT: Provide all analysis in {language_name}."""
 
         agent = Agent(
             model=model,

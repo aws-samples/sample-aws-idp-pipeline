@@ -94,7 +94,8 @@ def create_workflow(
     file_uri: str,
     file_name: str,
     file_type: str,
-    execution_arn: str
+    execution_arn: str,
+    language: str = 'en'
 ) -> dict:
     table = get_table()
     now = now_iso()
@@ -110,6 +111,7 @@ def create_workflow(
             'file_type': file_type,
             'execution_arn': execution_arn,
             'status': WorkflowStatus.PENDING,
+            'language': language,
             'total_segments': 0
         },
         'created_at': now,
@@ -294,9 +296,10 @@ def record_step_error(workflow_id: str, step_name: str, error: str) -> dict:
 def save_segment(
     workflow_id: str,
     segment_index: int,
-    image_uri: str = '',
-    bda_indexer: str = ''
+    s3_key: str = '',
+    image_uri: str = ''
 ) -> dict:
+    """Save segment reference to DynamoDB. Actual data is stored in S3."""
     table = get_table()
     segment_key = f'{segment_index:04d}'
     now = now_iso()
@@ -306,10 +309,8 @@ def save_segment(
         'SK': f'SEG#{segment_key}',
         'data': {
             'segment_index': segment_index,
-            'image_uri': image_uri,
-            'bda_indexer': bda_indexer,
-            'format_parser': '',
-            'image_analysis': []
+            's3_key': s3_key,
+            'image_uri': image_uri
         },
         'created_at': now,
         'updated_at': now
@@ -445,6 +446,7 @@ def get_connections(workflow_id: str) -> list:
 
 
 def batch_save_segments(workflow_id: str, segments: list) -> int:
+    """Batch save segment references to DynamoDB. Actual data is stored in S3."""
     table = get_table()
     now = now_iso()
     count = 0
@@ -459,10 +461,8 @@ def batch_save_segments(workflow_id: str, segments: list) -> int:
                 'SK': f'SEG#{segment_key}',
                 'data': {
                     'segment_index': segment_index,
-                    'image_uri': seg.get('image_uri', ''),
-                    'bda_indexer': seg.get('bda_indexer', seg.get('content', '')),
-                    'format_parser': '',
-                    'image_analysis': []
+                    's3_key': seg.get('s3_key', ''),
+                    'image_uri': seg.get('image_uri', '')
                 },
                 'created_at': now,
                 'updated_at': now
@@ -599,3 +599,16 @@ def get_workflow_by_document(project_id: str, document_name: str) -> Optional[st
             return item['SK'].replace('WF#', '')
 
     return None
+
+
+def get_project_language(project_id: str) -> str:
+    """Get project language setting. Returns 'en' if not set."""
+    table = get_table()
+    response = table.get_item(
+        Key={'PK': f'PROJ#{project_id}', 'SK': 'META'}
+    )
+    item = response.get('Item')
+    if item:
+        data = item.get('data', {})
+        return data.get('language') or 'en'
+    return 'en'

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import boto3
 
-from shared.ddb_client import get_segment
+from shared.s3_analysis import get_segment_analysis
 
 sqs_client = None
 LANCEDB_WRITE_QUEUE_URL = os.environ.get('LANCEDB_WRITE_QUEUE_URL')
@@ -29,10 +29,11 @@ def handler(event, _context):
     if isinstance(segment_index, dict):
         segment_index = segment_index.get('segment_index', 0)
 
-    segment_data = get_segment(workflow_id, segment_index)
+    # Get segment data from S3
+    segment_data = get_segment_analysis(file_uri, segment_index)
 
     if not segment_data:
-        print(f'Segment not found for workflow {workflow_id}, segment {segment_index}')
+        print(f'Segment not found in S3 for file {file_uri}, segment {segment_index}')
         return {
             'workflow_id': workflow_id,
             'segment_index': segment_index,

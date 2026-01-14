@@ -13,6 +13,7 @@ from shared.ddb_client import (
     update_workflow_total_segments,
     StepName,
 )
+from shared.s3_analysis import save_segment_analysis, get_analysis_s3_key
 from shared.websocket import notify_step_start, notify_step_complete, notify_step_error
 
 s3_client = None
@@ -165,8 +166,30 @@ def handler(event, _context):
             'image_uri': '',
         })
 
-    saved_count = batch_save_segments(workflow_id, segments)
-    print(f'Saved {saved_count} segments to DynamoDB for workflow {workflow_id}')
+    # Save segment data to S3 and collect references for DDB
+    ddb_segments = []
+    for seg in segments:
+        segment_index = seg['segment_index']
+        segment_data = {
+            'segment_index': segment_index,
+            'image_uri': seg.get('image_uri', ''),
+            'bda_indexer': seg.get('bda_indexer', ''),
+            'format_parser': '',
+            'image_analysis': []
+        }
+
+        # Save to S3
+        s3_key = save_segment_analysis(file_uri, segment_index, segment_data)
+
+        # Prepare DDB reference
+        ddb_segments.append({
+            'segment_index': segment_index,
+            's3_key': s3_key,
+            'image_uri': seg.get('image_uri', '')
+        })
+
+    saved_count = batch_save_segments(workflow_id, ddb_segments)
+    print(f'Saved {saved_count} segments to S3 and DynamoDB for workflow {workflow_id}')
 
     record_step_complete(
         workflow_id,

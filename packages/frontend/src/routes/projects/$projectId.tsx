@@ -10,9 +10,18 @@ interface Project {
   name: string;
   description: string;
   status: string;
+  language: string | null;
+  color: number | null;
   started_at: string;
   ended_at: string | null;
 }
+
+const LANGUAGES = [
+  { code: 'ko', name: 'Korean', flag: 'KR' },
+  { code: 'en', name: 'English', flag: 'EN' },
+  { code: 'ja', name: 'Japanese', flag: 'JP' },
+  { code: 'zh', name: 'Chinese', flag: 'CN' },
+];
 
 interface Document {
   document_id: string;
@@ -36,6 +45,7 @@ interface Workflow {
   status: string;
   file_name: string;
   file_uri: string;
+  language: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -56,6 +66,7 @@ interface WorkflowDetail {
   file_name: string;
   file_uri: string;
   file_type: string;
+  language: string | null;
   total_segments: number;
   created_at: string;
   updated_at: string;
@@ -110,8 +121,10 @@ function ProjectDetailPage() {
   const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
   const [workflowProgress, setWorkflowProgress] =
     useState<WorkflowProgress | null>(null);
+  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const languageDropdownRef = useRef<HTMLDivElement>(null);
 
   const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
     setWorkflowProgress((prev) => {
@@ -352,6 +365,50 @@ function ProjectDetailPage() {
     analysisPopup.type,
     analysisPopup.title,
   ]);
+
+  // Close language dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        languageDropdownRef.current &&
+        !languageDropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowLanguageDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleLanguageChange = async (newLanguage: string) => {
+    if (!project || project.language === newLanguage) {
+      setShowLanguageDropdown(false);
+      return;
+    }
+
+    const langName =
+      LANGUAGES.find((l) => l.code === newLanguage)?.name || newLanguage;
+    const confirmed = window.confirm(
+      `Change project language to ${langName}?\n\nNote: Previously analyzed documents will not be affected. Only future document analyses will use the new language setting.`,
+    );
+
+    if (!confirmed) {
+      setShowLanguageDropdown(false);
+      return;
+    }
+
+    try {
+      await fetchApi(`projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language: newLanguage }),
+      });
+      setProject({ ...project, language: newLanguage });
+      setShowLanguageDropdown(false);
+    } catch (error) {
+      console.error('Failed to update language:', error);
+    }
+  };
 
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -650,10 +707,71 @@ function ProjectDetailPage() {
             />
           </svg>
         </Link>
-        <div>
-          <h1 className="text-xl font-bold text-slate-800">{project.name}</h1>
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold text-slate-800">{project.name}</h1>
+            {/* Language Selector */}
+            <div className="relative" ref={languageDropdownRef}>
+              <button
+                onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-sm bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                title="Project Language"
+              >
+                <span className="font-medium text-slate-600">
+                  {LANGUAGES.find((l) => l.code === (project.language || 'en'))
+                    ?.flag || 'EN'}
+                </span>
+                <svg
+                  className={`h-4 w-4 text-slate-500 transition-transform ${showLanguageDropdown ? 'rotate-180' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </button>
+              {showLanguageDropdown && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-50 min-w-[140px]">
+                  {LANGUAGES.map((lang) => (
+                    <button
+                      key={lang.code}
+                      onClick={() => handleLanguageChange(lang.code)}
+                      className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-100 flex items-center gap-2 ${
+                        project.language === lang.code
+                          ? 'bg-blue-50 text-blue-600'
+                          : 'text-slate-700'
+                      }`}
+                    >
+                      <span className="font-medium">{lang.flag}</span>
+                      <span>{lang.name}</span>
+                      {project.language === lang.code && (
+                        <svg
+                          className="h-4 w-4 ml-auto"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           {project.description && (
-            <p className="text-sm text-slate-500">{project.description}</p>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {project.description}
+            </p>
           )}
         </div>
       </div>
@@ -954,6 +1072,14 @@ function ProjectDetailPage() {
                                   />
                                 </svg>
                                 Analyzed
+                                <span className="ml-1 text-slate-500">
+                                  (
+                                  {LANGUAGES.find(
+                                    (l) =>
+                                      l.code === (workflow.language || 'en'),
+                                  )?.flag || 'EN'}
+                                  )
+                                </span>
                               </span>
                             )}
                             {workflow && (
@@ -1445,6 +1571,28 @@ function ProjectDetailPage() {
                             <p className="text-sm text-slate-800">
                               {selectedWorkflow.total_segments}
                             </p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="text-xs text-slate-500 mb-1">
+                            Analysis Language
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <span className="inline-block px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded font-medium">
+                              {LANGUAGES.find(
+                                (l) =>
+                                  l.code ===
+                                  (selectedWorkflow.language || 'en'),
+                              )?.flag || 'EN'}
+                            </span>
+                            <span className="text-sm text-slate-800">
+                              {LANGUAGES.find(
+                                (l) =>
+                                  l.code ===
+                                  (selectedWorkflow.language || 'en'),
+                              )?.name || 'English'}
+                            </span>
                           </div>
                         </div>
 

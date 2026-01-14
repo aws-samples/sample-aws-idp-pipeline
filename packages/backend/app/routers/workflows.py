@@ -1,3 +1,4 @@
+import json
 import re
 from urllib.parse import urlparse
 
@@ -15,6 +16,38 @@ def _get_s3_client():
     if _s3_client is None:
         _s3_client = boto3.client("s3")
     return _s3_client
+
+
+def _parse_s3_uri(uri: str) -> tuple:
+    """Parse S3 URI into bucket and key."""
+    parsed = urlparse(uri)
+    bucket = parsed.netloc
+    key = parsed.path.lstrip("/")
+    return bucket, key
+
+
+def _get_segment_from_s3(file_uri: str, s3_key: str) -> dict | None:
+    """Get segment analysis data from S3.
+
+    Args:
+        file_uri: Original file URI to get bucket
+        s3_key: S3 key where segment data is stored
+
+    Returns:
+        Segment data dict or None if not found
+    """
+    if not s3_key:
+        return None
+
+    try:
+        s3 = _get_s3_client()
+        bucket, _ = _parse_s3_uri(file_uri)
+
+        response = s3.get_object(Bucket=bucket, Key=s3_key)
+        return json.loads(response["Body"].read().decode("utf-8"))
+    except Exception as e:
+        print(f"Error getting segment from S3 {s3_key}: {e}")
+        return None
 
 
 def _get_content_type(key: str) -> str | None:
@@ -160,6 +193,7 @@ class WorkflowListResponse(BaseModel):
     status: str
     file_name: str
     file_uri: str
+    language: str | None = None
     created_at: str
     updated_at: str
 
@@ -180,6 +214,7 @@ class WorkflowDetailResponse(BaseModel):
     file_name: str
     file_uri: str
     file_type: str
+    language: str | None = None
     total_segments: int
     created_at: str
     updated_at: str
@@ -197,6 +232,7 @@ def list_workflows(document_id: str) -> list[WorkflowListResponse]:
             status=wf.data.status,
             file_name=wf.data.file_name,
             file_uri=wf.data.file_uri,
+            language=wf.data.language,
             created_at=wf.created_at,
             updated_at=wf.updated_at,
         )
@@ -212,36 +248,55 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
-    # Get segments
+    file_uri = wf.data.file_uri
+
+    # Get segment references from DynamoDB
     segment_items = query_workflow_segments(workflow_id)
     segments = []
+
     for seg in segment_items:
-        # Fix image_uri by adding /assets/ if missing
-        image_uri = _fix_image_uri(seg.data.image_uri)
-        bda_indexer = _transform_markdown_images(seg.data.bda_indexer, image_uri)
-        format_parser = _transform_markdown_images(seg.data.format_parser, image_uri)
+        # Get actual segment data from S3
+        s3_data = _get_segment_from_s3(file_uri, seg.data.s3_key)
 
-        # Transform image_analysis content as well
-        image_analysis = [
-            {
-                **ia.model_dump(),
-                "content": _transform_markdown_images(ia.content, image_uri)
-                if hasattr(ia, "content")
-                else ia.model_dump().get("content", ""),
-            }
-            for ia in seg.data.image_analysis
-        ]
+        if s3_data:
+            # Data from S3
+            image_uri = _fix_image_uri(s3_data.get("image_uri", ""))
+            bda_indexer = _transform_markdown_images(s3_data.get("bda_indexer", ""), image_uri)
+            format_parser = _transform_markdown_images(s3_data.get("format_parser", ""), image_uri)
 
-        segments.append(
-            SegmentData(
-                segment_index=seg.data.segment_index,
-                image_uri=image_uri,
-                image_url=_generate_presigned_url(image_uri),
-                bda_indexer=bda_indexer,
-                format_parser=format_parser,
-                image_analysis=image_analysis,
+            # Transform image_analysis content
+            raw_image_analysis = s3_data.get("image_analysis", [])
+            image_analysis = [
+                {
+                    "analysis_query": ia.get("analysis_query", ""),
+                    "content": _transform_markdown_images(ia.get("content", ""), image_uri),
+                }
+                for ia in raw_image_analysis
+            ]
+
+            segments.append(
+                SegmentData(
+                    segment_index=s3_data.get("segment_index", seg.data.segment_index),
+                    image_uri=image_uri,
+                    image_url=_generate_presigned_url(image_uri),
+                    bda_indexer=bda_indexer,
+                    format_parser=format_parser,
+                    image_analysis=image_analysis,
+                )
             )
-        )
+        else:
+            # Fallback: use DDB data (for backward compatibility)
+            image_uri = _fix_image_uri(seg.data.image_uri)
+            segments.append(
+                SegmentData(
+                    segment_index=seg.data.segment_index,
+                    image_uri=image_uri,
+                    image_url=_generate_presigned_url(image_uri),
+                    bda_indexer="",
+                    format_parser="",
+                    image_analysis=[],
+                )
+            )
 
     # Sort segments by index
     segments.sort(key=lambda s: s.segment_index)
@@ -253,6 +308,7 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
         file_name=wf.data.file_name,
         file_uri=wf.data.file_uri,
         file_type=wf.data.file_type,
+        language=wf.data.language,
         total_segments=wf.data.total_segments or len(segments),
         created_at=wf.created_at,
         updated_at=wf.updated_at,

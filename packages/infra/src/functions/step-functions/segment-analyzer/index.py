@@ -2,11 +2,11 @@ import json
 import os
 
 from shared.ddb_client import (
-    get_segment,
-    add_image_analysis,
     record_step_start,
+    get_project_language,
     StepName,
 )
+from shared.s3_analysis import get_segment_analysis, add_segment_image_analysis
 from shared.websocket import notify_segment_progress
 
 from agent import VisionReactAgent
@@ -18,6 +18,7 @@ def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
     workflow_id = event.get('workflow_id')
+    project_id = event.get('project_id', 'default')
     segment_index = event.get('segment_index', event)
     file_uri = event.get('file_uri')
     file_type = event.get('file_type')
@@ -26,14 +27,19 @@ def handler(event, _context):
     if isinstance(segment_index, dict):
         segment_index = segment_index.get('segment_index', 0)
 
+    # Get project language setting
+    language = get_project_language(project_id)
+    print(f'Project {project_id} language: {language}')
+
     if workflow_id not in is_first_segment:
         is_first_segment[workflow_id] = True
         record_step_start(workflow_id, StepName.SEGMENT_ANALYZER)
 
-    segment_data = get_segment(workflow_id, segment_index)
+    # Get segment data from S3
+    segment_data = get_segment_analysis(file_uri, segment_index)
 
     if not segment_data:
-        print(f'Segment {segment_index} not found for workflow {workflow_id}')
+        print(f'Segment {segment_index} not found in S3 for file {file_uri}')
         return {
             'workflow_id': workflow_id,
             'segment_index': segment_index,
@@ -64,7 +70,8 @@ def handler(event, _context):
             segment_index=segment_index,
             image_uri=image_uri,
             context=context,
-            file_type=file_type
+            file_type=file_type,
+            language=language
         )
 
         analysis_steps = result.get('analysis_steps', [])
@@ -73,16 +80,18 @@ def handler(event, _context):
             question = step.get('question', '')
             answer = step.get('answer', '')
             if question and answer:
-                add_image_analysis(
-                    workflow_id=workflow_id,
+                # Save to S3
+                add_segment_image_analysis(
+                    file_uri=file_uri,
                     segment_index=segment_index,
                     analysis_query=question,
                     content=answer
                 )
 
         if not analysis_steps:
-            add_image_analysis(
-                workflow_id=workflow_id,
+            # Save to S3
+            add_segment_image_analysis(
+                file_uri=file_uri,
                 segment_index=segment_index,
                 analysis_query=f'Page {segment_index + 1}',
                 content=result.get('response', '')
@@ -104,8 +113,9 @@ def handler(event, _context):
     except Exception as e:
         print(f'Error in segment analysis: {e}')
 
-        add_image_analysis(
-            workflow_id=workflow_id,
+        # Save error to S3
+        add_segment_image_analysis(
+            file_uri=file_uri,
             segment_index=segment_index,
             analysis_query='Analysis error',
             content=f'Analysis failed: {e}'
