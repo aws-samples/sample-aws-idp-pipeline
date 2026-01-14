@@ -119,6 +119,7 @@ def _transform_markdown_images(markdown: str, image_uri: str = "") -> str:
     Handles both:
     1. Relative paths like ./uuid.png (using image_uri to derive base path)
     2. Full S3 URIs like s3://bucket/key
+    3. Plain filenames like uuid.png
     """
     if not markdown:
         return markdown
@@ -141,12 +142,20 @@ def _transform_markdown_images(markdown: str, image_uri: str = "") -> str:
             if parent_dir:
                 assets_base = f"{parent_dir}/assets/"
 
+    # Fallback: try to extract assets_base from S3 URIs in the markdown itself
+    if not assets_base:
+        s3_uri_match = re.search(r"(s3://[^/]+/.+/assets/)", markdown)
+        if s3_uri_match:
+            assets_base = s3_uri_match.group(1)
+
     def transform_image(match):
         alt_text = match.group(1)
         img_url = match.group(2)
 
         # Remove newlines and extra whitespace from alt text
         alt_text = " ".join(alt_text.split())
+        # Escape brackets in alt text to prevent markdown parsing issues
+        alt_text = alt_text.replace("[", "\\[").replace("]", "\\]")
         # Truncate long alt text
         if len(alt_text) > 100:
             alt_text = alt_text[:100] + "..."
@@ -160,6 +169,16 @@ def _transform_markdown_images(markdown: str, image_uri: str = "") -> str:
                 img_url = presigned_url
         # Handle full S3 URIs
         elif img_url.startswith("s3://"):
+            pass  # Will be handled below
+        # Handle plain filenames (no ./ prefix, not s3://, not http)
+        elif assets_base and not img_url.startswith(("http://", "https://")):
+            s3_uri = f"{assets_base}{img_url}"
+            presigned_url = _generate_presigned_url(s3_uri)
+            if presigned_url:
+                img_url = presigned_url
+
+        # Handle full S3 URIs
+        if img_url.startswith("s3://"):
             # Check if the URI is missing /assets/ and add it
             if "/assets/" not in img_url:
                 parts = img_url.rsplit("/", 1)
@@ -181,8 +200,9 @@ def _transform_markdown_images(markdown: str, image_uri: str = "") -> str:
         return f"![{alt_text}]({img_url})"
 
     # Match markdown image syntax: ![alt](url)
-    pattern = r"!\[([^\]]*)\]\(([^)]+)\)"
-    return re.sub(pattern, transform_image, markdown)
+    # Use non-greedy match with DOTALL to handle multi-line alt text and nested brackets
+    pattern = r"!\[(.*?)\]\(([^)]+)\)"
+    return re.sub(pattern, transform_image, markdown, flags=re.DOTALL)
 
 
 router = APIRouter(prefix="/documents/{document_id}/workflows", tags=["workflows"])
@@ -256,9 +276,13 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
 
     for seg in segment_items:
         # Get actual segment data from S3
+        print(f"[DEBUG] segment {seg.data.segment_index}: s3_key={seg.data.s3_key}")
         s3_data = _get_segment_from_s3(file_uri, seg.data.s3_key)
+        print(f"[DEBUG] s3_data loaded: {s3_data is not None}")
 
         if s3_data:
+            print(f"[DEBUG] image_uri from S3: {s3_data.get('image_uri', '')[:100]}")
+            print(f"[DEBUG] bda_indexer preview: {s3_data.get('bda_indexer', '')[:200]}")
             # Data from S3
             image_uri = _fix_image_uri(s3_data.get("image_uri", ""))
             bda_indexer = _transform_markdown_images(s3_data.get("bda_indexer", ""), image_uri)

@@ -46,8 +46,9 @@ def download_json_from_s3(uri: str) -> dict:
 
 
 def extract_first_image_from_markdown(markdown: str, base_uri: str) -> str:
+    # Use DOTALL to handle multi-line alt text
     pattern = r'!\[.*?\]\(\./([^)]+)\)'
-    match = re.search(pattern, markdown)
+    match = re.search(pattern, markdown, re.DOTALL)
     if match:
         image_filename = match.group(1)
         return f'{base_uri}/assets/{image_filename}'
@@ -79,11 +80,16 @@ def transform_markdown_image_urls(markdown: str, base_uri: str) -> str:
         else:
             full_uri = f'{base_uri}/assets/{image_url}'
 
-        return f'![{alt_text}]({full_uri})'
+        # Clean up alt text - remove newlines for cleaner output
+        clean_alt = ' '.join(alt_text.split())
+        # Escape brackets in alt text to prevent markdown parsing issues
+        clean_alt = clean_alt.replace('[', '\\[').replace(']', '\\]')
+        return f'![{clean_alt}]({full_uri})'
 
     # Match markdown image syntax: ![alt](url)
-    pattern = r'!\[([^\]]*)\]\(([^)]+)\)'
-    return re.sub(pattern, replace_image_url, markdown)
+    # Use non-greedy match with DOTALL to handle multi-line alt text and nested brackets
+    pattern = r'!\[(.*?)\]\(([^)]+)\)'
+    return re.sub(pattern, replace_image_url, markdown, re.DOTALL)
 
 
 def handler(event, _context):

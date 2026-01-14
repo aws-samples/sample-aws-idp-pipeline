@@ -64,7 +64,11 @@ function ProjectFolder({
   };
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       <Link
         to="/projects/$projectId"
         params={{ projectId: project.project_id }}
@@ -76,8 +80,6 @@ function ProjectFolder({
             minHeight: '220px',
             perspective: '1000px',
           }}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
         >
           {/* Folder Visual */}
           <div

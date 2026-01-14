@@ -122,6 +122,8 @@ function ProjectDetailPage() {
   const [workflowProgress, setWorkflowProgress] =
     useState<WorkflowProgress | null>(null);
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
+  const [showUploadArea, setShowUploadArea] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const languageDropdownRef = useRef<HTMLDivElement>(null);
@@ -410,16 +412,53 @@ function ProjectDetailPage() {
     }
   };
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set dragging to false if we're leaving the drop zone entirely
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    await processFiles(Array.from(files));
+  };
+
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
+    await processFiles(Array.from(files));
+  };
+
+  const processFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+
     const maxSize = 500 * 1024 * 1024; // 500MB
     const uploadedFileNames: string[] = [];
 
     setUploading(true);
+    setShowUploadArea(false);
     try {
       for (const file of Array.from(files)) {
         // Check file size
@@ -780,53 +819,97 @@ function ProjectDetailPage() {
       <div className="flex-1 flex gap-4 min-h-0">
         {/* Documents Panel - 1/3 */}
         <div className="w-1/3 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden">
-          {/* Documents Header */}
-          <div className="p-4 border-b border-slate-200">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-slate-800">Documents</h2>
-              <span className="text-sm text-slate-500">
+          {/* Documents Header with Toolbar */}
+          <div className="p-3 border-b border-slate-200">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowUploadArea(!showUploadArea)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                  showUploadArea
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4v16m8-8H4"
+                  />
+                </svg>
+                Add Document
+              </button>
+              <button
+                onClick={() => loadDocuments()}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+                title="Refresh documents"
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                Refresh
+              </button>
+              <span className="ml-auto text-xs text-slate-500">
                 {documents.length} files
               </span>
             </div>
-
-            {/* Upload Button */}
-            <label
-              className={`flex items-center justify-center gap-2 w-full px-4 py-2.5 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <svg
-                className="h-5 w-5 text-slate-500"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              <span className="text-sm text-slate-600">
-                {uploading ? 'Uploading...' : 'Upload Documents'}
-              </span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.gif,.tiff,.mp4,.mov,.avi,.mp3,.wav,.flac"
-                className="hidden"
-                onChange={handleFileUpload}
-                disabled={uploading}
-              />
-            </label>
           </div>
 
-          {/* Documents List */}
-          <div className="flex-1 overflow-y-auto p-2">
-            {documents.length === 0 ? (
-              <label className="flex flex-col items-center justify-center h-full text-center p-6 border-2 border-dashed border-slate-200 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-colors">
+          {/* Collapsible Upload Area */}
+          {showUploadArea && (
+            <div
+              className={`border-b border-slate-200 relative transition-colors ${
+                isDragging ? 'bg-blue-50' : 'bg-slate-50'
+              }`}
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <button
+                onClick={() => setShowUploadArea(false)}
+                className="absolute top-3 right-3 p-1.5 hover:bg-slate-200 rounded-lg transition-colors z-10"
+                title="Close"
+              >
                 <svg
-                  className="h-12 w-12 text-slate-300 mb-3"
+                  className="h-4 w-4 text-slate-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+              <label
+                className={`flex flex-col items-center justify-center p-8 cursor-pointer transition-colors ${
+                  isDragging ? 'bg-blue-100' : 'hover:bg-slate-100'
+                } ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <svg
+                  className={`h-12 w-12 mb-3 transition-colors ${
+                    isDragging ? 'text-blue-500' : 'text-slate-400'
+                  }`}
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -838,15 +921,26 @@ function ProjectDetailPage() {
                     d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
                   />
                 </svg>
-                <p className="text-sm font-medium text-slate-600 mb-2">
-                  Drag and drop files or click to upload
+                <p
+                  className={`text-sm font-medium mb-1 transition-colors ${
+                    isDragging ? 'text-blue-700' : 'text-slate-700'
+                  }`}
+                >
+                  {uploading
+                    ? 'Uploading...'
+                    : isDragging
+                      ? 'Drop files here'
+                      : 'Drag and drop files or click to upload'}
                 </p>
-                <p className="text-xs text-slate-400 leading-relaxed">
+                <p className="text-xs text-slate-500 text-center leading-relaxed">
                   Supports documents (PDF, DOC, TXT), images (PNG, JPG, GIF,
-                  TIFF), videos (MP4, MOV, AVI), and audio files (MP3, WAV,
-                  FLAC) up to 500MB
+                  TIFF),
+                  <br />
+                  videos (MP4, MOV, AVI), and audio files (MP3, WAV, FLAC) up to
+                  500MB
                 </p>
                 <input
+                  ref={fileInputRef}
                   type="file"
                   multiple
                   accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.gif,.tiff,.mp4,.mov,.avi,.mp3,.wav,.flac"
@@ -855,6 +949,33 @@ function ProjectDetailPage() {
                   disabled={uploading}
                 />
               </label>
+            </div>
+          )}
+
+          {/* Documents List */}
+          <div className="flex-1 overflow-y-auto p-3">
+            {documents.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center p-6">
+                <svg
+                  className="h-16 w-16 text-slate-200 mb-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                <p className="text-sm font-medium text-slate-500 mb-1">
+                  No documents yet
+                </p>
+                <p className="text-xs text-slate-400">
+                  Click "Add Document" to upload files
+                </p>
+              </div>
             ) : (
               <div className="space-y-2">
                 {documents.map((doc) => {
@@ -885,20 +1006,19 @@ function ProjectDetailPage() {
                             ? 'border-green-300 bg-green-50/30'
                             : processingFailed
                               ? 'border-red-300 bg-red-50/30'
-                              : 'border-slate-200'
-                      } ${workflow && !isProcessing ? 'hover:border-blue-300 hover:shadow-sm cursor-pointer' : ''}`}
-                      onClick={() =>
-                        workflow &&
-                        !isProcessing &&
-                        loadWorkflowDetail(
-                          workflow.document_id,
-                          workflow.workflow_id,
-                        )
-                      }
+                              : 'border-slate-200 hover:border-slate-300'
+                      }`}
                     >
-                      <div className="flex items-start gap-3">
+                      {/* Document Info Row */}
+                      <div className="flex items-center gap-3">
                         <div
-                          className={`flex-shrink-0 p-2 rounded-lg ${isProcessing ? 'bg-blue-100' : 'bg-slate-100'}`}
+                          className={`flex-shrink-0 p-2 rounded-lg ${
+                            isProcessing
+                              ? 'bg-blue-100'
+                              : doc.file_type.includes('image')
+                                ? 'bg-purple-100'
+                                : 'bg-slate-100'
+                          }`}
                         >
                           {getFileIcon(doc.file_type)}
                         </div>
@@ -906,33 +1026,77 @@ function ProjectDetailPage() {
                           <p className="text-sm font-medium text-slate-800 truncate">
                             {doc.name}
                           </p>
-                          <p className="text-xs text-slate-400 mt-0.5">
-                            {(doc.file_size / 1024).toFixed(1)} KB
-                          </p>
-                        </div>
-                        {!isProcessing && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteDocument(doc.document_id);
-                            }}
-                            className="p-1.5 opacity-0 group-hover:opacity-100 hover:bg-red-50 rounded-lg transition-all"
-                            title="Delete document"
-                          >
-                            <svg
-                              className="h-4 w-4 text-red-400 hover:text-red-500"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span
+                              className={`text-xs px-1.5 py-0.5 rounded font-medium ${getStatusBadge(doc.status)}`}
                             >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                              />
-                            </svg>
-                          </button>
+                              {doc.status}
+                            </span>
+                            <span className="text-xs text-slate-400">
+                              {(doc.file_size / 1024).toFixed(1)} KB
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        {!isProcessing && (
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {workflow && (
+                              <button
+                                onClick={() =>
+                                  loadWorkflowDetail(
+                                    workflow.document_id,
+                                    workflow.workflow_id,
+                                  )
+                                }
+                                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                                title="View analysis"
+                              >
+                                <svg
+                                  className="h-3.5 w-3.5"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                  />
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                  />
+                                </svg>
+                                View
+                              </button>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteDocument(doc.document_id);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete document"
+                            >
+                              <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
+                            </button>
+                          </div>
                         )}
                       </div>
 
@@ -1045,58 +1209,6 @@ function ProjectDetailPage() {
                                   </div>
                                 </div>
                               )}
-                          </div>
-                        )}
-
-                      {/* Normal Status */}
-                      {!isProcessing &&
-                        !processingComplete &&
-                        !processingFailed && (
-                          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100">
-                            <span
-                              className={`text-xs px-2 py-0.5 rounded-full font-medium ${getStatusBadge(doc.status)}`}
-                            >
-                              {doc.status}
-                            </span>
-                            {workflow && (
-                              <span className="flex items-center gap-1 text-xs text-blue-600 font-medium">
-                                <svg
-                                  className="h-3 w-3"
-                                  fill="currentColor"
-                                  viewBox="0 0 20 20"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                                Analyzed
-                                <span className="ml-1 text-slate-500">
-                                  (
-                                  {LANGUAGES.find(
-                                    (l) =>
-                                      l.code === (workflow.language || 'en'),
-                                  )?.flag || 'EN'}
-                                  )
-                                </span>
-                              </span>
-                            )}
-                            {workflow && (
-                              <svg
-                                className="h-4 w-4 text-slate-400 ml-auto"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M9 5l7 7-7 7"
-                                />
-                              </svg>
-                            )}
                           </div>
                         )}
                     </div>
