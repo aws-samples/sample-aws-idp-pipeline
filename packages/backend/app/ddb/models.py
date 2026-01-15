@@ -1,4 +1,11 @@
+from typing import TypedDict
+
 from pydantic import BaseModel
+
+
+class DdbKey(TypedDict):
+    PK: str
+    SK: str
 
 
 class ProjectData(BaseModel):
@@ -9,6 +16,7 @@ class ProjectData(BaseModel):
     created_by: str | None = None
     language: str | None = None
     color: int | None = None
+    document_prompt: str | None = None
 
 
 class Project(BaseModel):

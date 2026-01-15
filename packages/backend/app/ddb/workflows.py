@@ -1,10 +1,10 @@
 from boto3.dynamodb.conditions import Key
 
 from app.ddb.client import get_table
-from app.ddb.models import Segment, Workflow
+from app.ddb.models import DdbKey, Segment, Workflow
 
 
-def make_workflow_key(document_id: str, workflow_id: str) -> dict:
+def make_workflow_key(document_id: str, workflow_id: str) -> DdbKey:
     return {"PK": f"DOC#{document_id}", "SK": f"WF#{workflow_id}"}
 
 

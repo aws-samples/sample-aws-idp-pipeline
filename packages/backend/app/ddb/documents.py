@@ -1,10 +1,10 @@
 from boto3.dynamodb.conditions import Key
 
 from app.ddb.client import get_table, now_iso
-from app.ddb.models import Document
+from app.ddb.models import DdbKey, Document
 
 
-def make_document_key(project_id: str, document_id: str) -> dict:
+def make_document_key(project_id: str, document_id: str) -> DdbKey:
     return {"PK": f"PROJ#{project_id}", "SK": f"DOC#{document_id}"}
 
 

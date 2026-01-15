@@ -1,10 +1,10 @@
 from boto3.dynamodb.conditions import Key
 
 from app.ddb.client import get_table, now_iso
-from app.ddb.models import Project
+from app.ddb.models import DdbKey, Project, ProjectData
 
 
-def make_project_key(project_id: str) -> dict:
+def make_project_key(project_id: str) -> DdbKey:
     return {"PK": f"PROJ#{project_id}", "SK": "META"}
 
 
@@ -26,12 +26,12 @@ def get_project_item(project_id: str) -> Project | None:
     return Project(**item) if item else None
 
 
-def put_project_item(project_id: str, data: dict) -> None:
+def put_project_item(project_id: str, data: ProjectData) -> None:
     table = get_table()
     now = now_iso()
     item = {
         **make_project_key(project_id),
-        "data": data,
+        "data": data.model_dump(),
         "created_at": now,
         "updated_at": now,
         "GSI1PK": "PROJECTS",
@@ -40,14 +40,14 @@ def put_project_item(project_id: str, data: dict) -> None:
     table.put_item(Item=item)
 
 
-def update_project_data(project_id: str, data: dict) -> None:
+def update_project_data(project_id: str, data: ProjectData) -> None:
     table = get_table()
     now = now_iso()
     table.update_item(
         Key=make_project_key(project_id),
         UpdateExpression="SET #data = :data, updated_at = :updated_at, GSI1SK = :gsi1sk",
         ExpressionAttributeNames={"#data": "data"},
-        ExpressionAttributeValues={":data": data, ":updated_at": now, ":gsi1sk": now},
+        ExpressionAttributeValues={":data": data.model_dump(), ":updated_at": now, ":gsi1sk": now},
     )
 
 

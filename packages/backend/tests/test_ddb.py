@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.ddb import client, documents, projects, workflows
+from app.ddb.models import ProjectData
 
 
 class TestMakeKeys:
@@ -56,7 +57,7 @@ class TestProjectHelpers:
 
     @patch("app.ddb.projects.now_iso", return_value="2024-01-01T00:00:00+00:00")
     def test_put_project_item(self, mock_now, mock_table):
-        data = {"project_id": "new-proj", "name": "New Project", "description": "", "status": "active"}
+        data = ProjectData(project_id="new-proj", name="New Project", description="", status="active")
 
         projects.put_project_item("new-proj", data)
 
@@ -64,7 +65,7 @@ class TestProjectHelpers:
             Item={
                 "PK": "PROJ#new-proj",
                 "SK": "META",
-                "data": data,
+                "data": data.model_dump(),
                 "created_at": "2024-01-01T00:00:00+00:00",
                 "updated_at": "2024-01-01T00:00:00+00:00",
                 "GSI1PK": "PROJECTS",
@@ -74,7 +75,7 @@ class TestProjectHelpers:
 
     @patch("app.ddb.projects.now_iso", return_value="2024-01-01T00:00:00+00:00")
     def test_update_project_data(self, mock_now, mock_table):
-        data = {"project_id": "test-id", "name": "Updated Name", "description": "", "status": "active"}
+        data = ProjectData(project_id="test-id", name="Updated Name", description="", status="active")
 
         projects.update_project_data("test-id", data)
 
@@ -83,7 +84,7 @@ class TestProjectHelpers:
             UpdateExpression="SET #data = :data, updated_at = :updated_at, GSI1SK = :gsi1sk",
             ExpressionAttributeNames={"#data": "data"},
             ExpressionAttributeValues={
-                ":data": data,
+                ":data": data.model_dump(),
                 ":updated_at": "2024-01-01T00:00:00+00:00",
                 ":gsi1sk": "2024-01-01T00:00:00+00:00",
             },

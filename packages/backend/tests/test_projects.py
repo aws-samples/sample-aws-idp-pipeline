@@ -281,6 +281,57 @@ class TestUpdateProject:
         assert data["name"] == "Only Name Updated"
         assert data["description"] == "Keep this"
 
+    @patch("app.ddb.projects.get_table")
+    def test_update_project_document_prompt(self, mock_get_table):
+        mock_table = MagicMock()
+        mock_table.get_item.side_effect = [
+            {
+                "Item": {
+                    "PK": "PROJ#proj-1",
+                    "SK": "META",
+                    "data": {
+                        "project_id": "proj-1",
+                        "name": "Test Project",
+                        "description": "Test desc",
+                        "status": "active",
+                        "document_prompt": None,
+                    },
+                    "created_at": "2024-01-01T00:00:00+00:00",
+                    "updated_at": "2024-01-01T00:00:00+00:00",
+                    "GSI1PK": "PROJECTS",
+                    "GSI1SK": "2024-01-01T00:00:00+00:00",
+                }
+            },
+            {
+                "Item": {
+                    "PK": "PROJ#proj-1",
+                    "SK": "META",
+                    "data": {
+                        "project_id": "proj-1",
+                        "name": "Test Project",
+                        "description": "Test desc",
+                        "status": "active",
+                        "document_prompt": "Extract all invoice data",
+                    },
+                    "created_at": "2024-01-01T00:00:00+00:00",
+                    "updated_at": "2024-01-02T00:00:00+00:00",
+                    "GSI1PK": "PROJECTS",
+                    "GSI1SK": "2024-01-02T00:00:00+00:00",
+                }
+            },
+        ]
+        mock_get_table.return_value = mock_table
+
+        response = client.put(
+            "/projects/proj-1",
+            json={"document_prompt": "Extract all invoice data"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["document_prompt"] == "Extract all invoice data"
+        mock_table.update_item.assert_called_once()
+
 
 class TestDeleteProject:
     @patch("app.ddb.workflows.get_table")

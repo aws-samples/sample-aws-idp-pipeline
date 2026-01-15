@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from app.config import get_config
 from app.ddb import (
     Project,
+    ProjectData,
     batch_delete_items,
     generate_project_id,
     get_project_item,
@@ -34,6 +35,7 @@ class ProjectUpdate(BaseModel):
     description: str | None = None
     language: str | None = None
     color: int | None = None
+    document_prompt: str | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -44,6 +46,7 @@ class ProjectResponse(BaseModel):
     created_by: str | None = None
     language: str | None = None
     color: int | None = None
+    document_prompt: str | None = None
     created_at: str
     updated_at: str | None = None
 
@@ -57,6 +60,7 @@ class ProjectResponse(BaseModel):
             created_by=project.data.created_by,
             language=project.data.language,
             color=project.data.color,
+            document_prompt=project.data.document_prompt,
             created_at=project.created_at,
             updated_at=project.updated_at,
         )
@@ -82,18 +86,15 @@ def create_project(request: ProjectCreate) -> ProjectResponse:
     project_id = generate_project_id()
 
     now = now_iso()
-    data = {
-        "project_id": project_id,
-        "name": request.name,
-        "description": request.description or "",
-        "status": "active",
-    }
-    if request.created_by:
-        data["created_by"] = request.created_by
-    if request.language is not None:
-        data["language"] = request.language
-    if request.color is not None:
-        data["color"] = request.color
+    data = ProjectData(
+        project_id=project_id,
+        name=request.name,
+        description=request.description or "",
+        status="active",
+        created_by=request.created_by,
+        language=request.language,
+        color=request.color,
+    )
 
     put_project_item(project_id, data)
 
@@ -116,19 +117,13 @@ def update_project(project_id: str, request: ProjectUpdate) -> ProjectResponse:
     if not existing:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    data = existing.data.model_dump()
-
-    if request.name is not None:
-        data["name"] = request.name
-
-    if request.description is not None:
-        data["description"] = request.description
-
-    if request.language is not None:
-        data["language"] = request.language
-
-    if request.color is not None:
-        data["color"] = request.color
+    data = existing.data.model_copy(
+        update={
+            k: v
+            for k, v in request.model_dump().items()
+            if v is not None
+        }
+    )
 
     update_project_data(project_id, data)
 
