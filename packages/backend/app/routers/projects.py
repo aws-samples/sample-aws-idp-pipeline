@@ -16,7 +16,7 @@ from app.ddb import (
     update_project_data,
 )
 from app.ddb.workflows import delete_workflow_item, query_workflows
-from app.s3 import delete_s3_prefix, get_s3_client
+from app.s3 import delete_s3_prefix
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -139,7 +139,6 @@ def update_project(project_id: str, request: ProjectUpdate) -> ProjectResponse:
 def delete_project(project_id: str) -> dict:
     """Delete a project and all related data (documents, workflows, S3, LanceDB)."""
     config = get_config()
-    s3 = get_s3_client()
 
     existing = get_project_item(project_id)
     if not existing:

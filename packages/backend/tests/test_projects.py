@@ -284,10 +284,12 @@ class TestUpdateProject:
 
 class TestDeleteProject:
     @patch("app.ddb.workflows.get_table")
-    @patch("app.routers.projects.get_s3_client")
+    @patch("app.s3.delete_s3_prefix")
     @patch("app.ddb.client.get_table")
     @patch("app.ddb.projects.get_table")
-    def test_delete_project_success(self, mock_proj_get_table, mock_client_get_table, mock_get_s3, mock_wf_get_table):
+    def test_delete_project_success(
+        self, mock_proj_get_table, mock_client_get_table, mock_delete_s3_prefix, mock_wf_get_table
+    ):
         mock_table = MagicMock()
         mock_table.get_item.return_value = {
             "Item": {
@@ -321,11 +323,7 @@ class TestDeleteProject:
         mock_wf_table.query.return_value = {"Items": []}
         mock_wf_get_table.return_value = mock_wf_table
 
-        mock_s3 = MagicMock()
-        mock_paginator = MagicMock()
-        mock_paginator.paginate.return_value = []
-        mock_s3.get_paginator.return_value = mock_paginator
-        mock_get_s3.return_value = mock_s3
+        mock_delete_s3_prefix.return_value = 0
 
         response = client.delete("/projects/proj-1")
 

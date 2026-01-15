@@ -93,4 +93,4 @@ def get_chat_history(session_id: str) -> ChatHistoryResponse:
     except Exception as e:
         if "NoSuchKey" in str(e) or "NoSuchBucket" in str(e):
             return ChatHistoryResponse(session_id=session_id, messages=[])
-        raise HTTPException(status_code=500, detail=f"Failed to get chat history: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get chat history: {str(e)}") from e

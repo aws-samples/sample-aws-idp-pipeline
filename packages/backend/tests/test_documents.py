@@ -268,9 +268,7 @@ class TestDeleteDocument:
     @patch("app.ddb.client.get_table")
     @patch("app.ddb.workflows.get_table")
     @patch("app.ddb.documents.get_table")
-    def test_delete_document_success(
-        self, mock_doc_get_table, mock_wf_get_table, mock_client_get_table, mock_get_s3
-    ):
+    def test_delete_document_success(self, mock_doc_get_table, mock_wf_get_table, mock_client_get_table, mock_get_s3):
         mock_table = MagicMock()
         mock_table.get_item.return_value = {
             "Item": {
