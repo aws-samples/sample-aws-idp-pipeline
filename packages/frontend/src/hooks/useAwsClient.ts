@@ -47,6 +47,7 @@ export function useAwsClient() {
     useRuntimeConfig();
   const { user } = useAuth();
   const credentialsRef = useRef<Credentials | null>(null);
+  const pendingRef = useRef<Promise<Credentials> | null>(null);
 
   /** Cognito Identity Pool에서 AWS 자격 증명 획득 */
   const getCredentials = useCallback(async (): Promise<Credentials> => {
@@ -61,17 +62,25 @@ export function useAwsClient() {
 
     if (isValid) return cached;
 
-    const credentials = await fromCognitoIdentityPool({
+    if (pendingRef.current) return pendingRef.current;
+
+    pendingRef.current = fromCognitoIdentityPool({
       clientConfig: { region: cognitoProps.region },
       identityPoolId: cognitoProps.identityPoolId,
       logins: {
         [`cognito-idp.${cognitoProps.region}.amazonaws.com/${cognitoProps.userPoolId}`]:
           user.id_token,
       },
-    })();
+    })()
+      .then((credentials) => {
+        credentialsRef.current = credentials;
+        return credentials;
+      })
+      .finally(() => {
+        pendingRef.current = null;
+      });
 
-    credentialsRef.current = credentials;
-    return credentials;
+    return pendingRef.current;
   }, [cognitoProps, user]);
 
   /** SigV4 서명된 AWS 클라이언트 생성 */
