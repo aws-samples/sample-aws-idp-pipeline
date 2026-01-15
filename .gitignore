@@ -44,6 +44,7 @@ Thumbs.db
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 CLAUDE.md
+.env
 .env.local
 vitest.config.*.timestamp*
 /reports

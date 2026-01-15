@@ -1,6 +1,7 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Platform } from 'aws-cdk-lib/aws-ecr-assets';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import * as path from 'path';
@@ -17,6 +18,18 @@ export class AgentStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
+    // Get session storage bucket name from SSM
+    const sessionStorageBucketName = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.SESSION_STORAGE_BUCKET_NAME,
+    );
+
+    const sessionStorageBucket = Bucket.fromBucketName(
+      this,
+      'SessionStorageBucket',
+      sessionStorageBucketName,
+    );
+
     const dockerImage = AgentRuntimeArtifact.fromAsset(
       path.resolve(process.cwd(), '../../packages/agents/idp-agent'),
       { platform: Platform.LINUX_ARM64 },
@@ -26,7 +39,13 @@ export class AgentStack extends Stack {
       runtimeName: 'idp_agent_runtime',
       protocolConfiguration: ProtocolType.HTTP,
       agentRuntimeArtifact: dockerImage,
+      environmentVariables: {
+        SESSION_STORAGE_BUCKET_NAME: sessionStorageBucketName,
+      },
     });
+
+    // Grant S3 read/write access for session storage
+    sessionStorageBucket.grantReadWrite(this.agentCoreRuntime.role);
 
     // Add Bedrock model invocation permissions
     this.agentCoreRuntime.addToRolePolicy(

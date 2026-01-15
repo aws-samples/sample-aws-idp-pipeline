@@ -63,6 +63,16 @@ export class StorageStack extends Stack {
       stringValue: documentStorage.bucket.bucketName,
     });
 
+    // Session Storage Bucket (for agent conversation history)
+    const sessionStorage = new S3Bucket(this, 'SessionStorage', {
+      bucketPrefix: 'session-storage',
+    });
+
+    new StringParameter(this, 'SessionStorageBucketNameParam', {
+      parameterName: SSM_KEYS.SESSION_STORAGE_BUCKET_NAME,
+      stringValue: sessionStorage.bucket.bucketName,
+    });
+
     // Backend Table (One Table Design)
     const backendTable = new TableV2(this, 'BackendTable', {
       partitionKey: { name: 'PK', type: AttributeType.STRING },

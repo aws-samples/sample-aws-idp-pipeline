@@ -98,6 +98,11 @@ export class Backend extends Construct {
       this,
       SSM_KEYS.WEBSOCKET_ENDPOINT,
     );
+    const sessionStorage = getBucketFromSsm(
+      this,
+      'SessionStorageBucket',
+      SSM_KEYS.SESSION_STORAGE_BUCKET_NAME,
+    );
 
     this.service = new ApplicationLoadBalancedFargateService(this, 'Service', {
       cluster,
@@ -117,6 +122,7 @@ export class Backend extends Construct {
           BACKEND_TABLE_NAME: backendTable.tableName,
           LANCEDB_EXPRESS_BUCKET_NAME: lancedbExpressBucketName,
           WEBSOCKET_ENDPOINT: websocketEndpoint,
+          SESSION_STORAGE_BUCKET_NAME: sessionStorage.bucketName,
         },
       },
       runtimePlatform: {
@@ -132,6 +138,7 @@ export class Backend extends Construct {
     const taskRole = this.service.taskDefinition.taskRole;
     lancedbStorage.bucket.grantReadWrite(taskRole);
     documentStorage.bucket.grantReadWrite(taskRole);
+    sessionStorage.bucket.grantRead(taskRole);
     lancedbLockTable.table.grantReadWriteData(taskRole);
     backendTable.table.grantReadWriteData(taskRole);
 

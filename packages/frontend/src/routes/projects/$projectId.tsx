@@ -97,8 +97,10 @@ export const Route = createFileRoute('/projects/$projectId')({
 function ProjectDetailPage() {
   const { projectId } = Route.useParams();
   const { fetchApi, invokeAgent } = useAwsClient();
-  const [agentSessionId] = useState(() => crypto.randomUUID());
+  // AgentCore requires session ID >= 33 chars, so add prefix to projectId
+  const agentSessionId = `idp-agent-session-for-project-id-${projectId}`;
   const [project, setProject] = useState<Project | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -257,6 +259,31 @@ function ProjectDetailPage() {
     }
   }, [fetchApi, documents]);
 
+  const loadChatHistory = useCallback(async () => {
+    if (historyLoaded) return;
+    try {
+      const response = await fetchApi<{
+        session_id: string;
+        messages: { role: string; content: string }[];
+      }>(`chat/sessions/${agentSessionId}/history`);
+      if (response.messages.length > 0) {
+        const loadedMessages: ChatMessage[] = response.messages.map(
+          (msg, idx) => ({
+            id: `history-${idx}`,
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+            timestamp: new Date(),
+          }),
+        );
+        setMessages(loadedMessages);
+      }
+      setHistoryLoaded(true);
+    } catch (error) {
+      console.error('Failed to load chat history:', error);
+      setHistoryLoaded(true);
+    }
+  }, [fetchApi, agentSessionId, historyLoaded]);
+
   const loadWorkflowDetail = async (documentId: string, workflowId: string) => {
     setLoadingWorkflow(true);
     setCurrentSegmentIndex(0);
@@ -288,6 +315,11 @@ function ProjectDetailPage() {
       loadWorkflows();
     }
   }, [documents, loadWorkflows]);
+
+  // Load chat history when page loads
+  useEffect(() => {
+    loadChatHistory();
+  }, [loadChatHistory]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
