@@ -1,5 +1,6 @@
 import { ApplicationStack } from './stacks/application-stack.js';
 import { AgentStack } from './stacks/agent-stack.js';
+import { McpStack } from './stacks/mcp-stack.js';
 import { App } from ':idp-v2/common-constructs';
 import { StorageStack } from './stacks/storage-stack.js';
 import { WorkflowStack } from './stacks/workflow-stack.js';
@@ -24,13 +25,17 @@ new WorkflowStack(app, 'IDP-V2-Workflow', {
   env,
 });
 
-new ApplicationStack(app, 'IDP-V2-Application', {
+new McpStack(app, 'IDP-V2-Mcp', {
   env,
-  crossRegionReferences: true,
 });
 
 new AgentStack(app, 'IDP-V2-Agent', {
   env,
+});
+
+new ApplicationStack(app, 'IDP-V2-Application', {
+  env,
+  crossRegionReferences: true,
 });
 
 app.synth();

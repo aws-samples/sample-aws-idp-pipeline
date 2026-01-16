@@ -142,7 +142,8 @@ def rerank_search(
 
     # Step 2: 리랭킹
     doc_contents = [row["content"] for row in candidates]
-    ranked_results = rerank(query, doc_contents, num_results=limit, reranker_type=reranker_type)
+    actual_limit = min(limit, len(doc_contents))
+    ranked_results = rerank(query, doc_contents, num_results=actual_limit, reranker_type=reranker_type)
 
     # Step 3: 인덱스로 원본 문서 매핑
     return RerankedSearchResponse(

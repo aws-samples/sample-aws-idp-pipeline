@@ -6,7 +6,7 @@ import {
   SSM_KEYS,
 } from ':idp-v2/common-constructs';
 import { Stack, StackProps } from 'aws-cdk-lib';
-import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { PolicyStatement, Role } from 'aws-cdk-lib/aws-iam';
 import { Vpc } from 'aws-cdk-lib/aws-ec2';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
@@ -43,6 +43,24 @@ export class ApplicationStack extends Stack {
     const backend = new Backend(this, 'Backend', { vpc });
 
     const frontend = new Frontend(this, 'Frontend');
+
+    new StringParameter(this, 'BackendUrlParam', {
+      parameterName: SSM_KEYS.BACKEND_URL,
+      stringValue: backend.api.url ?? '',
+      description: 'Backend API URL',
+    });
+
+    // Grant SearchMcp Lambda access to Backend API
+    const searchMcpRoleArn = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.SEARCH_MCP_ROLE_ARN,
+    );
+    const searchMcpRole = Role.fromRoleArn(
+      this,
+      'SearchMcpRole',
+      searchMcpRoleArn,
+    );
+    backend.grantInvokeAccess(searchMcpRole);
 
     backend.restrictCorsTo(frontend);
     backend.grantInvokeAccess(userIdentity.identityPool.authenticatedRole);
