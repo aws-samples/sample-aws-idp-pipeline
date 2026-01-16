@@ -643,6 +643,7 @@ function ProjectDetailPage() {
       const response = await invokeAgent(
         userMessage.content,
         agentSessionId,
+        projectId,
         (chunk) => {
           setStreamingContent((prev) => prev + chunk);
         },

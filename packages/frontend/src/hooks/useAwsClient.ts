@@ -153,6 +153,7 @@ export function useAwsClient() {
     async (
       prompt: string,
       sessionId: string,
+      projectId: string,
       onChunk?: (chunk: string) => void,
     ): Promise<string> => {
       if (!agentRuntimeArn) throw new Error('Agent runtime ARN not available');
@@ -168,7 +169,11 @@ export function useAwsClient() {
             'Content-Type': 'application/json',
             'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id': sessionId,
           },
-          body: JSON.stringify({ prompt, session_id: sessionId }),
+          body: JSON.stringify({
+            prompt,
+            session_id: sessionId,
+            project_id: projectId,
+          }),
         },
       );
 
