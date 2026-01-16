@@ -1,65 +1,67 @@
-{
-  "name": "search_documents",
-  "description": "Search documents in a project to find relevant information. Use this tool when the user asks questions about documents, wants to find specific information, or needs context from their uploaded files.",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "project_id": {
-        "type": "string",
-        "description": "The unique identifier of the project to search in"
-      },
-      "query": {
-        "type": "string",
-        "description": "Natural language search query. Be specific and include key terms for better results."
-      },
-      "document_id": {
-        "type": "string",
-        "description": "Optional. Restrict search to a specific document by its ID. Omit to search across all documents in the project."
-      },
-      "limit": {
-        "type": "integer",
-        "description": "Number of top results to return after reranking. Use smaller values (1-3) for precise answers, larger values (5-10) for broader context.",
-        "default": 3
-      },
-      "candidate_limit": {
-        "type": "integer",
-        "description": "Number of candidate documents to consider before reranking. Higher values may improve result quality but increase latency.",
-        "default": 20
-      }
-    },
-    "required": ["project_id", "query"]
-  },
-  "outputSchema": {
-    "type": "array",
-    "description": "Array of search results sorted by relevance (highest rerank_score first)",
-    "items": {
+[
+  {
+    "name": "search_documents",
+    "description": "Search documents in a project to find relevant information. Use this tool when the user asks questions about documents, wants to find specific information, or needs context from their uploaded files.",
+    "inputSchema": {
       "type": "object",
       "properties": {
-        "workflow_id": {
+        "project_id": {
           "type": "string",
-          "description": "Identifier of the document processing workflow"
+          "description": "The unique identifier of the project to search in"
         },
-        "segment_id": {
+        "query": {
           "type": "string",
-          "description": "Unique identifier of the document segment"
+          "description": "Natural language search query. Be specific and include key terms for better results."
         },
-        "segment_index": {
+        "document_id": {
+          "type": "string",
+          "description": "Optional. Restrict search to a specific document by its ID. Omit to search across all documents in the project."
+        },
+        "limit": {
           "type": "integer",
-          "description": "Position of this segment within the original document (0-indexed)"
+          "description": "Number of top results to return after reranking. Use smaller values (1-3) for precise answers, larger values (5-10) for broader context.",
+          "default": 3
         },
-        "content": {
-          "type": "string",
-          "description": "The actual text content of the segment. Use this to answer user questions."
-        },
-        "keywords": {
-          "type": "string",
-          "description": "Extracted keywords from the segment for reference"
-        },
-        "rerank_score": {
-          "type": "number",
-          "description": "Relevance score from the reranker (higher is more relevant)"
+        "candidate_limit": {
+          "type": "integer",
+          "description": "Number of candidate documents to consider before reranking. Higher values may improve result quality but increase latency.",
+          "default": 20
+        }
+      },
+      "required": ["project_id", "query"]
+    },
+    "outputSchema": {
+      "type": "array",
+      "description": "Array of search results sorted by relevance (highest rerank_score first)",
+      "items": {
+        "type": "object",
+        "properties": {
+          "workflow_id": {
+            "type": "string",
+            "description": "Identifier of the document processing workflow"
+          },
+          "segment_id": {
+            "type": "string",
+            "description": "Unique identifier of the document segment"
+          },
+          "segment_index": {
+            "type": "integer",
+            "description": "Position of this segment within the original document (0-indexed)"
+          },
+          "content": {
+            "type": "string",
+            "description": "The actual text content of the segment. Use this to answer user questions."
+          },
+          "keywords": {
+            "type": "string",
+            "description": "Extracted keywords from the segment for reference"
+          },
+          "rerank_score": {
+            "type": "number",
+            "description": "Relevance score from the reranker (higher is more relevant)"
+          }
         }
       }
     }
   }
-}
+]

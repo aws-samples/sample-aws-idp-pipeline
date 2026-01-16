@@ -4,14 +4,20 @@ import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import * as path from 'path';
-import { Runtime } from '@aws-cdk/aws-bedrock-agentcore-alpha';
+import { Gateway, Runtime } from '@aws-cdk/aws-bedrock-agentcore-alpha';
 import { IdpAgent, SSM_KEYS } from ':idp-v2/common-constructs';
+
+export interface AgentStackProps extends StackProps {
+  gateway: Gateway;
+}
 
 export class AgentStack extends Stack {
   public readonly agentCoreRuntime: Runtime;
 
-  constructor(scope: Construct, id: string, props?: StackProps) {
+  constructor(scope: Construct, id: string, props: AgentStackProps) {
     super(scope, id, props);
+
+    const { gateway } = props;
 
     // Get session storage bucket name from SSM
     const sessionStorageBucketName = StringParameter.valueForStringParameter(
@@ -49,6 +55,7 @@ export class AgentStack extends Stack {
       sessionStorageBucket,
       lancedbLockTable,
       lancedbExpressBucketName,
+      gateway,
     });
 
     const bidiAgent = new IdpAgent(this, 'BidiAgent', {
@@ -60,6 +67,7 @@ export class AgentStack extends Stack {
       sessionStorageBucket,
       lancedbLockTable,
       lancedbExpressBucketName,
+      gateway,
     });
 
     this.agentCoreRuntime = idpAgent.runtime;
