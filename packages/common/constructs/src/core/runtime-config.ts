@@ -4,6 +4,7 @@ import { Construct } from 'constructs';
 const RuntimeConfigKey = '__RuntimeConfig__';
 
 export class RuntimeConfig extends Construct {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private readonly _runtimeConfig: any = {};
 
   static ensure(scope: Construct): RuntimeConfig {
@@ -24,6 +25,7 @@ export class RuntimeConfig extends Construct {
     super(scope, id);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   get config(): any {
     return this._runtimeConfig;
   }

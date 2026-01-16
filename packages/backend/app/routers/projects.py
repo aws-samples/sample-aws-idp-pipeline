@@ -117,13 +117,7 @@ def update_project(project_id: str, request: ProjectUpdate) -> ProjectResponse:
     if not existing:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    data = existing.data.model_copy(
-        update={
-            k: v
-            for k, v in request.model_dump().items()
-            if v is not None
-        }
-    )
+    data = existing.data.model_copy(update={k: v for k, v in request.model_dump().items() if v is not None})
 
     update_project_data(project_id, data)
 

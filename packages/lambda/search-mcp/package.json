@@ -1,0 +1,26 @@
+{
+  "name": "@idp-v2/search-mcp",
+  "version": "1.0.0",
+  "description": "Search MCP Lambda handler for AgentCore Gateway",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-ssm": "^3.958.0",
+    "aws4fetch": "^1.0.20"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^22.19.1",
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "packageManager": "pnpm@10.12.4"
+}

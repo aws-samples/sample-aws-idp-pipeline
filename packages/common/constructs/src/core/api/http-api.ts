@@ -114,13 +114,14 @@ export class HttpApi<
     );
 
     new CfnOutput(this, `${apiName}Url`, {
-      value: this.defaultStage.url!,
+      value: this.defaultStage.url ?? '',
     });
 
     // Register the API URL in runtime configuration for client discovery
-    RuntimeConfig.ensure(this).config.apis = {
-      ...RuntimeConfig.ensure(this).config.apis!,
-      [apiName]: this.defaultStage.url!,
+    const runtimeConfig = RuntimeConfig.ensure(this);
+    runtimeConfig.config.apis = {
+      ...runtimeConfig.config.apis,
+      [apiName]: this.defaultStage.url ?? '',
     };
   }
 
