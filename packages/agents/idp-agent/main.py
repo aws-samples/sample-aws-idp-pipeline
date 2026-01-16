@@ -30,14 +30,36 @@ with get_agent(session_id="init") as agent:
         print(f"  - {name}")
 
 
+def filter_stream_event(event: dict) -> dict | None:
+    """Filter and transform stream events for client consumption."""
+    # 텍스트 스트리밍
+    if "data" in event:
+        return {"type": "text", "content": event["data"]}
+
+    # 도구 사용 시작
+    if "current_tool_use" in event:
+        tool_use = event["current_tool_use"]
+        if tool_use.get("name"):
+            return {"type": "tool_use", "name": tool_use["name"]}
+
+    # 완료
+    if event.get("complete"):
+        return {"type": "complete"}
+
+    return None
+
+
 @app.entrypoint
-def invoke(request: dict):
+async def invoke(request: dict):
     """Entry point for agent invocation"""
     req = InvokeRequest(**request)
 
     with get_agent(session_id=req.session_id, project_id=req.project_id) as agent:
-        result = agent(req.prompt)
-        return {"result": result.message}
+        stream = agent.stream_async(req.prompt)
+        async for event in stream:
+            filtered = filter_stream_event(event)
+            if filtered:
+                yield filtered
 
 
 if __name__ == "__main__":
