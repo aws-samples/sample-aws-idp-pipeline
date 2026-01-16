@@ -25,12 +25,13 @@ new WorkflowStack(app, 'IDP-V2-Workflow', {
   env,
 });
 
-new McpStack(app, 'IDP-V2-Mcp', {
+const mcpStack = new McpStack(app, 'IDP-V2-Mcp', {
   env,
 });
 
 new AgentStack(app, 'IDP-V2-Agent', {
   env,
+  gateway: mcpStack.gateway,
 });
 
 new ApplicationStack(app, 'IDP-V2-Application', {

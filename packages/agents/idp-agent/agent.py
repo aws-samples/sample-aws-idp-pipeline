@@ -1,48 +1,81 @@
-import os
 from contextlib import contextmanager
 
+import boto3
 from strands import Agent, tool
 from strands.session import S3SessionManager
-from strands_tools import current_time
+from strands_tools import calculator, current_time, generate_image, http_request
 
-
-# Define a custom tool
-@tool
-def add(a: int, b: int) -> int:
-    return a + b
+from agentcore_mcp_client import AgentCoreGatewayMCPClient
+from config import get_config
 
 
 def get_session_manager(session_id: str) -> S3SessionManager:
     """Get S3SessionManager instance for a session."""
-    bucket_name = os.environ.get("SESSION_STORAGE_BUCKET_NAME")
-    if not bucket_name:
-        raise ValueError("SESSION_STORAGE_BUCKET_NAME environment variable is required")
+    config = get_config()
 
     return S3SessionManager(
         session_id=session_id,
-        bucket=bucket_name,
+        bucket=config.session_storage_bucket_name,
         prefix="sessions",
     )
 
 
+def get_mcp_client():
+    """Get MCP client for AgentCore Gateway."""
+    config = get_config()
+    if not config.mcp_gateway_url:
+        return None
+
+    session = boto3.Session()
+    credentials = session.get_credentials()
+
+    return AgentCoreGatewayMCPClient.with_iam_auth(
+        gateway_url=config.mcp_gateway_url,
+        credentials=credentials,
+        region=config.aws_region,
+    )
+
+
 @contextmanager
-def get_agent(session_id: str):
+def get_agent(session_id: str, project_id: str | None = None):
     """Get an agent instance with S3-based session management.
 
     Args:
-        session_id: Unique identifier for the session (e.g., project_id)
+        session_id: Unique identifier for the session
+        project_id: Project ID for document search (optional for init)
 
     Yields:
         Agent instance with session management configured
     """
     session_manager = get_session_manager(session_id)
+    mcp_client = get_mcp_client()
 
-    yield Agent(
-        system_prompt="""
-You are an addition wizard.
-Use the 'add' tool for addition tasks.
-Refer to tools as your 'spellbook'.
-""",
-        tools=[add, current_time],
+    tools = [calculator, current_time, generate_image, http_request]
+
+    # Add code_interpreter only in AgentCore environment
+    config = get_config()
+    if config.is_agentcore:
+        from strands_tools import code_interpreter
+        tools.append(code_interpreter)
+
+    system_prompt = """
+You are an Intelligent Document Processing (IDP) assistant.
+Your role is to help users find and understand information from their uploaded documents.
+Provide accurate answers based on the search results and cite the source when answering.
+"""
+
+    if project_id:
+        if mcp_client:
+            tools.append(mcp_client)
+        system_prompt += f"""
+Current project_id: {project_id}
+When using the search_documents tool, always use this project_id.
+"""
+
+    agent = Agent(
+        system_prompt=system_prompt,
+        tools=tools,
         session_manager=session_manager,
     )
+
+    yield agent

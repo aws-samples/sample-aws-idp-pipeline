@@ -1,41 +1,47 @@
-import uvicorn
-from bedrock_agentcore.runtime.models import PingStatus
-from fastapi.responses import PlainTextResponse, StreamingResponse
+import sys
+
+from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from pydantic import BaseModel
 
 from agent import get_agent
-from app import app
+from config import get_config
 
 
-class InvokeInput(BaseModel):
+class InvokeRequest(BaseModel):
     prompt: str
     session_id: str
+    project_id: str
 
 
-async def handle_invoke(input: InvokeInput):
-    """Streaming handler for agent invocation"""
-    with get_agent(session_id=input.session_id) as agent:
-        stream = agent.stream_async(input.prompt)
-        async for event in stream:
-            print(event)
-            content = event.get("event", {}).get("contentBlockDelta", {}).get("delta", {}).get("text")
-            if content is not None:
-                yield content
-            elif event.get("event", {}).get("messageStop") is not None:
-                yield "\n"
+app = BedrockAgentCoreApp()
+
+config = get_config()
+if not config.session_storage_bucket_name:
+    print("ERROR: SESSION_STORAGE_BUCKET_NAME environment variable is required")
+    sys.exit(1)
+if not config.mcp_gateway_url:
+    print("ERROR: MCP_GATEWAY_URL environment variable is required")
+    sys.exit(1)
+
+with get_agent(session_id="init") as agent:
+    tool_names = [tool['name'] for tool in agent.tool_registry.get_all_tool_specs()]
+    print(f"Loaded {len(tool_names)} tools:")
+    for name in tool_names:
+        print(f"  - {name}")
 
 
-@app.post("/invocations", openapi_extra={"x-streaming": True}, response_class=PlainTextResponse)
-async def invoke(input: InvokeInput) -> str:
+@app.entrypoint
+def invoke(request: dict):
     """Entry point for agent invocation"""
-    return StreamingResponse(handle_invoke(input), media_type="text/event-stream")
+    req = InvokeRequest(**request)
 
-
-@app.get("/ping")
-def ping() -> str:
-    # TODO: if running an async task, return PingStatus.HEALTHY_BUSY
-    return PingStatus.HEALTHY
+    with get_agent(session_id=req.session_id, project_id=req.project_id) as agent:
+        result = agent(req.prompt)
+        return {"result": result.message}
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", port=8080)
+    import logging
+
+    logging.basicConfig(level=logging.INFO)
+    app.run(port=8080)

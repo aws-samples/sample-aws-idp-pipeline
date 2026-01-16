@@ -43,57 +43,19 @@ class SigV4HTTPXAuth(httpx.Auth):
         yield request
 
 
-class AgentCoreMCPClient:
-    """Factory for clients to call MCP servers hosted on Bedrock AgentCore Runtime"""
-
-    @staticmethod
-    def _create(
-        agent_runtime_arn: str,
-        region: str,
-        session_id: str,
-        headers: dict = None,
-        auth_handler: httpx.Auth = None,
-    ):
-        # Build the URL
-        encoded_arn = agent_runtime_arn.replace(":", "%3A").replace("/", "%2F")
-        url = f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT"
-
-        # Create and return the MCP client
-        return MCPClient(
-            lambda: streamablehttp_client(
-                url,
-                auth=auth_handler,
-                timeout=120,
-                terminate_on_close=False,
-                headers={
-                    "X-Amzn-Bedrock-AgentCore-Runtime-Session-Id": session_id,
-                    **(headers if headers is not None else {}),
-                },
-            )
-        )
+class AgentCoreGatewayMCPClient:
+    """Factory for clients to call MCP Gateway hosted on Bedrock AgentCore"""
 
     @staticmethod
     def with_iam_auth(
-        agent_runtime_arn: str, credentials: Any, region: str, session_id: str
+        gateway_url: str, credentials: Any, region: str
     ) -> MCPClient:
         """Create an MCP client with IAM (SigV4) authentication."""
-        return AgentCoreMCPClient._create(
-            agent_runtime_arn=agent_runtime_arn,
-            region=region,
-            session_id=session_id,
-            auth_handler=SigV4HTTPXAuth(credentials, region),
-        )
-
-    @staticmethod
-    def with_jwt_auth(
-        agent_runtime_arn: str, access_token: str, region: str, session_id: str
-    ) -> MCPClient:
-        """Create an MCP client with JWT authentication."""
-        return AgentCoreMCPClient._create(
-            agent_runtime_arn=agent_runtime_arn,
-            region=region,
-            session_id=session_id,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-            },
+        return MCPClient(
+            lambda: streamablehttp_client(
+                gateway_url,
+                auth=SigV4HTTPXAuth(credentials, region),
+                timeout=120,
+                terminate_on_close=False,
+            )
         )

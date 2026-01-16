@@ -5,6 +5,7 @@ import { IBucket } from 'aws-cdk-lib/aws-s3';
 import { ITable } from 'aws-cdk-lib/aws-dynamodb';
 import {
   AgentRuntimeArtifact,
+  Gateway,
   ProtocolType,
   Runtime,
 } from '@aws-cdk/aws-bedrock-agentcore-alpha';
@@ -15,6 +16,7 @@ export interface IdpAgentProps {
   sessionStorageBucket: IBucket;
   lancedbLockTable: ITable;
   lancedbExpressBucketName: string;
+  gateway?: Gateway;
 }
 
 export class IdpAgent extends Construct {
@@ -29,6 +31,7 @@ export class IdpAgent extends Construct {
       sessionStorageBucket,
       lancedbLockTable,
       lancedbExpressBucketName,
+      gateway,
     } = props;
 
     const dockerImage = AgentRuntimeArtifact.fromAsset(agentPath, {
@@ -43,8 +46,13 @@ export class IdpAgent extends Construct {
         SESSION_STORAGE_BUCKET_NAME: sessionStorageBucket.bucketName,
         LANCEDB_LOCK_TABLE_NAME: lancedbLockTable.tableName,
         LANCEDB_EXPRESS_BUCKET_NAME: lancedbExpressBucketName,
+        ...(gateway?.gatewayUrl && { MCP_GATEWAY_URL: gateway.gatewayUrl }),
       },
     });
+
+    if (gateway) {
+      gateway.grantInvoke(this.runtime.role);
+    }
 
     // Grant S3 read/write access for session storage
     sessionStorageBucket.grantReadWrite(this.runtime.role);
