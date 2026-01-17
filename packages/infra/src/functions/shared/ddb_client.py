@@ -65,6 +65,7 @@ class StepName:
     BDA_STATUS_CHECKER = 'bda_status_checker'
     DOCUMENT_INDEXER = 'document_indexer'
     FORMAT_PARSER = 'format_parser'
+    PADDLEOCR_PROCESSOR = 'paddleocr_processor'
     SEGMENT_ANALYZER = 'segment_analyzer'
     DOCUMENT_SUMMARIZER = 'document_summarizer'
 
@@ -73,6 +74,7 @@ class StepName:
         'bda_status_checker',
         'document_indexer',
         'format_parser',
+        'paddleocr_processor',
         'segment_analyzer',
         'document_summarizer'
     ]
@@ -82,6 +84,7 @@ class StepName:
         'bda_status_checker': 'BDA Status Check',
         'document_indexer': 'Document Indexing',
         'format_parser': 'Format Parsing',
+        'paddleocr_processor': 'PaddleOCR Processing',
         'segment_analyzer': 'Segment Analysis',
         'document_summarizer': 'Document Summary'
     }
@@ -612,3 +615,23 @@ def get_project_language(project_id: str) -> str:
         data = item.get('data', {})
         return data.get('language') or 'en'
     return 'en'
+
+
+def get_project_ocr_settings(project_id: str) -> dict:
+    """Get project OCR settings. Returns default if not set."""
+    table = get_table()
+    response = table.get_item(
+        Key={'PK': f'PROJ#{project_id}', 'SK': 'META'}
+    )
+    item = response.get('Item')
+    defaults = {
+        'ocr_model': 'paddleocr-vl',
+        'ocr_options': {}
+    }
+    if item:
+        data = item.get('data', {})
+        return {
+            'ocr_model': data.get('ocr_model') or defaults['ocr_model'],
+            'ocr_options': data.get('ocr_options') or defaults['ocr_options']
+        }
+    return defaults

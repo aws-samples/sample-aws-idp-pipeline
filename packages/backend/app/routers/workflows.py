@@ -214,6 +214,7 @@ class SegmentData(BaseModel):
     image_uri: str
     image_url: str | None = None
     bda_indexer: str
+    paddleocr: str
     format_parser: str
     image_analysis: list[dict]
 
@@ -277,6 +278,7 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
             # Data from S3
             image_uri = _fix_image_uri(s3_data.get("image_uri", ""))
             bda_indexer = _transform_markdown_images(s3_data.get("bda_indexer", ""), image_uri)
+            paddleocr = s3_data.get("paddleocr", "")
             format_parser = _transform_markdown_images(s3_data.get("format_parser", ""), image_uri)
 
             # Transform image_analysis content
@@ -295,6 +297,7 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
                     image_uri=image_uri,
                     image_url=_generate_presigned_url(image_uri),
                     bda_indexer=bda_indexer,
+                    paddleocr=paddleocr,
                     format_parser=format_parser,
                     image_analysis=image_analysis,
                 )
@@ -308,6 +311,7 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
                     image_uri=image_uri,
                     image_url=_generate_presigned_url(image_uri),
                     bda_indexer="",
+                    paddleocr="",
                     format_parser="",
                     image_analysis=[],
                 )

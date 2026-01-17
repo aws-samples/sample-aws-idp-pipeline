@@ -49,12 +49,15 @@ def handler(event, _context):
     image_uri = segment_data.get('image_uri', '')
     bda_content = segment_data.get('bda_indexer', '')
     pdf_text = segment_data.get('format_parser', '')
+    ocr_text = segment_data.get('paddleocr', '')
 
     context_parts = []
     if bda_content:
         context_parts.append(f'## BDA Indexer:\n{bda_content}')
     if pdf_text:
         context_parts.append(f'## Format Parser:\n{pdf_text}')
+    if ocr_text:
+        context_parts.append(f'## PaddleOCR:\n{ocr_text}')
 
     context = '\n\n'.join(context_parts) if context_parts else 'No prior analysis available.'
 

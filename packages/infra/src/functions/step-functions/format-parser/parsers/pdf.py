@@ -5,31 +5,12 @@ Supports:
 - Digital PDF: Direct text extraction
 - Scanned PDF: OCR (future)
 """
-import os
 import tempfile
-from urllib.parse import urlparse
 
-import boto3
 import fitz
 
 from shared.ddb_client import get_segment_count
-from shared.s3_analysis import update_segment_analysis
-
-s3_client = None
-
-
-def get_s3_client():
-    global s3_client
-    if s3_client is None:
-        s3_client = boto3.client('s3')
-    return s3_client
-
-
-def parse_s3_uri(uri: str) -> tuple:
-    parsed = urlparse(uri)
-    bucket = parsed.netloc
-    key = parsed.path.lstrip('/')
-    return bucket, key
+from shared.s3_analysis import update_segment_analysis, get_s3_client, parse_s3_uri
 
 
 def download_file_from_s3(uri: str, local_path: str):

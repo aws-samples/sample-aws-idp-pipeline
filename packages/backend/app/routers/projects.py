@@ -28,6 +28,8 @@ class ProjectCreate(BaseModel):
     created_by: str | None = None
     language: str | None = None
     color: int | None = None
+    ocr_model: str | None = None
+    ocr_options: dict | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -36,6 +38,8 @@ class ProjectUpdate(BaseModel):
     language: str | None = None
     color: int | None = None
     document_prompt: str | None = None
+    ocr_model: str | None = None
+    ocr_options: dict | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -47,6 +51,8 @@ class ProjectResponse(BaseModel):
     language: str | None = None
     color: int | None = None
     document_prompt: str | None = None
+    ocr_model: str | None = None
+    ocr_options: dict | None = None
     created_at: str
     updated_at: str | None = None
 
@@ -61,6 +67,8 @@ class ProjectResponse(BaseModel):
             language=project.data.language,
             color=project.data.color,
             document_prompt=project.data.document_prompt,
+            ocr_model=project.data.ocr_model,
+            ocr_options=project.data.ocr_options,
             created_at=project.created_at,
             updated_at=project.updated_at,
         )
@@ -94,6 +102,8 @@ def create_project(request: ProjectCreate) -> ProjectResponse:
         created_by=request.created_by,
         language=request.language,
         color=request.color,
+        ocr_model=request.ocr_model,
+        ocr_options=request.ocr_options,
     )
 
     put_project_item(project_id, data)
@@ -106,6 +116,8 @@ def create_project(request: ProjectCreate) -> ProjectResponse:
         created_by=request.created_by,
         language=request.language,
         color=request.color,
+        ocr_model=request.ocr_model,
+        ocr_options=request.ocr_options,
         created_at=now,
         updated_at=now,
     )

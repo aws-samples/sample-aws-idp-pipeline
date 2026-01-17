@@ -186,7 +186,7 @@ def handler(event, context):
                 language=language
             )
 
-            notify_workflow_started(workflow_id, project_id, file_name)
+            notify_workflow_started(workflow_id, project_id, document_id, file_name)
 
             print(f'Started workflow {workflow_id}, document: {document_id}, execution: {execution_arn}')
 

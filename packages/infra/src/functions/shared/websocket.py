@@ -130,12 +130,14 @@ def notify_segment_progress(
 def notify_workflow_started(
     workflow_id: str,
     project_id: str,
+    document_id: str,
     file_name: str
 ) -> int:
     data = {
         'event': EventType.WORKFLOW_STARTED,
         'workflow_id': workflow_id,
         'project_id': project_id,
+        'document_id': document_id,
         'file_name': file_name,
         'timestamp': datetime.now(timezone.utc).isoformat()
     }

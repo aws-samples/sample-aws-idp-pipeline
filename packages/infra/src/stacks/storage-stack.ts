@@ -73,6 +73,16 @@ export class StorageStack extends Stack {
       stringValue: sessionStorage.bucket.bucketName,
     });
 
+    // Model Artifacts Bucket (for ML models like PaddleOCR)
+    const modelArtifacts = new S3Bucket(this, 'ModelArtifacts', {
+      bucketPrefix: 'model-artifacts',
+    });
+
+    new StringParameter(this, 'ModelArtifactsBucketNameParam', {
+      parameterName: SSM_KEYS.MODEL_ARTIFACTS_BUCKET_NAME,
+      stringValue: modelArtifacts.bucket.bucketName,
+    });
+
     // Backend Table (One Table Design)
     const backendTable = new TableV2(this, 'BackendTable', {
       partitionKey: { name: 'PK', type: AttributeType.STRING },

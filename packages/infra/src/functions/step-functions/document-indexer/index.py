@@ -1,9 +1,6 @@
 import json
 import os
 import re
-from urllib.parse import urlparse
-
-import boto3
 
 from shared.ddb_client import (
     record_step_start,
@@ -13,24 +10,13 @@ from shared.ddb_client import (
     update_workflow_total_segments,
     StepName,
 )
-from shared.s3_analysis import save_segment_analysis, get_analysis_s3_key
+from shared.s3_analysis import (
+    save_segment_analysis,
+    get_analysis_s3_key,
+    get_s3_client,
+    parse_s3_uri,
+)
 from shared.websocket import notify_step_start, notify_step_complete, notify_step_error
-
-s3_client = None
-
-
-def get_s3_client():
-    global s3_client
-    if s3_client is None:
-        s3_client = boto3.client('s3', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
-    return s3_client
-
-
-def parse_s3_uri(uri: str) -> tuple:
-    parsed = urlparse(uri)
-    bucket = parsed.netloc
-    key = parsed.path.lstrip('/')
-    return bucket, key
 
 
 def download_json_from_s3(uri: str) -> dict:

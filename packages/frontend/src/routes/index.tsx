@@ -11,9 +11,113 @@ interface Project {
   created_by: string | null;
   language: string | null;
   color: number | null;
+  ocr_model: string | null;
+  ocr_options: Record<string, unknown> | null;
   created_at: string;
   updated_at: string | null;
 }
+
+const OCR_MODELS = [
+  {
+    value: 'paddleocr-vl',
+    name: 'PaddleOCR-VL',
+    description: 'Vision-Language model for complex documents',
+    hasLangOption: false,
+    hasOptions: false,
+  },
+  {
+    value: 'pp-ocrv5',
+    name: 'PP-OCRv5',
+    description: 'General-purpose OCR with high accuracy',
+    hasLangOption: true,
+    hasOptions: true,
+  },
+  {
+    value: 'pp-structurev3',
+    name: 'PP-StructureV3',
+    description: 'Document structure analysis with table detection',
+    hasLangOption: true,
+    hasOptions: true,
+  },
+];
+
+const OCR_LANGUAGES = [
+  { code: '', name: 'Default (Not specified)' },
+  // Primary languages
+  { code: 'ch', name: 'Chinese & English' },
+  { code: 'en', name: 'English' },
+  { code: 'korean', name: 'Korean' },
+  { code: 'japan', name: 'Japanese' },
+  { code: 'chinese_cht', name: 'Chinese Traditional' },
+  // Major world languages
+  { code: 'french', name: 'French' },
+  { code: 'german', name: 'German' },
+  { code: 'it', name: 'Italian' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'hi', name: 'Hindi' },
+  { code: 'vi', name: 'Vietnamese' },
+  { code: 'th', name: 'Thai' },
+  { code: 'ms', name: 'Malay' },
+  { code: 'id', name: 'Indonesian' },
+  { code: 'tr', name: 'Turkish' },
+  { code: 'pl', name: 'Polish' },
+  { code: 'nl', name: 'Dutch' },
+  // Multi-script support
+  { code: 'latin', name: 'Latin (Multi-language)' },
+  { code: 'arabic', name: 'Arabic Script (Multi-language)' },
+  { code: 'cyrillic', name: 'Cyrillic Script (Multi-language)' },
+  { code: 'devanagari', name: 'Devanagari Script (Multi-language)' },
+  // South Asian languages
+  { code: 'ta', name: 'Tamil' },
+  { code: 'te', name: 'Telugu' },
+  { code: 'ml', name: 'Malayalam' },
+  { code: 'mr', name: 'Marathi' },
+  { code: 'ne', name: 'Nepali' },
+  { code: 'bn', name: 'Bengali' },
+  { code: 'gu', name: 'Gujarati' },
+  { code: 'pa', name: 'Punjabi' },
+  // Middle Eastern & Central Asian
+  { code: 'fa', name: 'Persian' },
+  { code: 'ur', name: 'Urdu' },
+  { code: 'he', name: 'Hebrew' },
+  { code: 'az', name: 'Azerbaijani' },
+  { code: 'uz', name: 'Uzbek' },
+  // European languages
+  { code: 'uk', name: 'Ukrainian' },
+  { code: 'bg', name: 'Bulgarian' },
+  { code: 'sr', name: 'Serbian' },
+  { code: 'hr', name: 'Croatian' },
+  { code: 'cs', name: 'Czech' },
+  { code: 'hu', name: 'Hungarian' },
+  { code: 'ro', name: 'Romanian' },
+  { code: 'fi', name: 'Finnish' },
+  { code: 'sv', name: 'Swedish' },
+  { code: 'no', name: 'Norwegian' },
+  { code: 'da', name: 'Danish' },
+  // Southeast Asian & Pacific
+  { code: 'tl', name: 'Tagalog' },
+  { code: 'mn', name: 'Mongolian' },
+  // African languages
+  { code: 'sw', name: 'Swahili' },
+];
+
+const OCR_OPTIONS_INFO = {
+  use_doc_orientation_classify: {
+    title: 'Document Orientation',
+    description: 'Auto-detect and correct document orientation',
+  },
+  use_doc_unwarping: {
+    title: 'Document Unwarping',
+    description: 'Correct perspective distortion and warping',
+  },
+  use_textline_orientation: {
+    title: 'Textline Orientation',
+    description: 'Detect and handle rotated text lines (PP-OCRv5 only)',
+  },
+};
 
 const LANGUAGES = [
   { code: 'ko', name: 'Korean', flag: 'KR' },
@@ -256,12 +360,20 @@ function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showAdvancedModal, setShowAdvancedModal] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     language: 'ko',
     color: 0,
+  });
+  const [advancedSettings, setAdvancedSettings] = useState({
+    ocr_model: 'paddleocr-vl',
+    ocr_lang: '',
+    use_doc_orientation_classify: false,
+    use_doc_unwarping: false,
+    use_textline_orientation: false,
   });
   const [saving, setSaving] = useState(false);
 
@@ -283,6 +395,13 @@ function ProjectsPage() {
   const openCreateModal = () => {
     setEditingProject(null);
     setFormData({ name: '', description: '', language: 'ko', color: 0 });
+    setAdvancedSettings({
+      ocr_model: 'paddleocr-vl',
+      ocr_lang: '',
+      use_doc_orientation_classify: false,
+      use_doc_unwarping: false,
+      use_textline_orientation: false,
+    });
     setShowModal(true);
   };
 
@@ -294,6 +413,16 @@ function ProjectsPage() {
       language: project.language || 'ko',
       color: project.color ?? 0,
     });
+    const ocrOptions = project.ocr_options as Record<string, unknown> | null;
+    setAdvancedSettings({
+      ocr_model: project.ocr_model || 'paddleocr-vl',
+      ocr_lang: (ocrOptions?.lang as string) || '',
+      use_doc_orientation_classify:
+        (ocrOptions?.use_doc_orientation_classify as boolean) || false,
+      use_doc_unwarping: (ocrOptions?.use_doc_unwarping as boolean) || false,
+      use_textline_orientation:
+        (ocrOptions?.use_textline_orientation as boolean) || false,
+    });
     setShowModal(true);
   };
 
@@ -301,6 +430,13 @@ function ProjectsPage() {
     setShowModal(false);
     setEditingProject(null);
     setFormData({ name: '', description: '', language: 'ko', color: 0 });
+    setAdvancedSettings({
+      ocr_model: 'paddleocr-vl',
+      ocr_lang: '',
+      use_doc_orientation_classify: false,
+      use_doc_unwarping: false,
+      use_textline_orientation: false,
+    });
   };
 
   const handleSave = async () => {
@@ -308,6 +444,26 @@ function ProjectsPage() {
 
     setSaving(true);
     try {
+      // Build ocr_options based on selected model
+      const selectedModel = OCR_MODELS.find(
+        (m) => m.value === advancedSettings.ocr_model,
+      );
+      let ocrOptions: Record<string, unknown> | null = null;
+
+      if (selectedModel?.hasOptions) {
+        ocrOptions = {
+          lang: advancedSettings.ocr_lang || undefined,
+          use_doc_orientation_classify:
+            advancedSettings.use_doc_orientation_classify,
+          use_doc_unwarping: advancedSettings.use_doc_unwarping,
+        };
+        // use_textline_orientation is only for pp-ocrv5
+        if (advancedSettings.ocr_model === 'pp-ocrv5') {
+          ocrOptions.use_textline_orientation =
+            advancedSettings.use_textline_orientation;
+        }
+      }
+
       if (editingProject) {
         await fetchApi<Project>(`projects/${editingProject.project_id}`, {
           method: 'PUT',
@@ -317,6 +473,8 @@ function ProjectsPage() {
             description: formData.description,
             language: formData.language,
             color: formData.color,
+            ocr_model: advancedSettings.ocr_model,
+            ocr_options: ocrOptions,
           }),
         });
       } else {
@@ -328,6 +486,8 @@ function ProjectsPage() {
             description: formData.description,
             language: formData.language,
             color: formData.color,
+            ocr_model: advancedSettings.ocr_model,
+            ocr_options: ocrOptions,
             created_by:
               user?.profile?.email || user?.profile?.preferred_username,
           }),
@@ -572,19 +732,240 @@ function ProjectsPage() {
               </div>
             </div>
 
+            <div className="flex justify-between items-center mt-6">
+              <button
+                type="button"
+                onClick={() => setShowAdvancedModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                </svg>
+                Advanced Settings
+              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={closeModal}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={!formData.name.trim() || saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                >
+                  {saving ? 'Saving...' : editingProject ? 'Save' : 'Create'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Advanced Settings Modal */}
+      {showAdvancedModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60]">
+          <div
+            className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl max-h-[90vh] overflow-y-auto"
+            style={{ animation: 'modalIn 0.3s ease-out' }}
+          >
+            <h2 className="text-lg font-bold text-slate-800 mb-4">
+              Advanced Settings
+            </h2>
+
+            <div className="space-y-5">
+              {/* OCR Model Selection */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  OCR Model
+                </label>
+                <div className="space-y-2">
+                  {OCR_MODELS.map((model) => (
+                    <label
+                      key={model.value}
+                      className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-all ${
+                        advancedSettings.ocr_model === model.value
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="ocr_model"
+                        value={model.value}
+                        checked={advancedSettings.ocr_model === model.value}
+                        onChange={(e) =>
+                          setAdvancedSettings({
+                            ...advancedSettings,
+                            ocr_model: e.target.value,
+                            // Reset options when switching to VL model
+                            ...(e.target.value === 'paddleocr-vl'
+                              ? {
+                                  ocr_lang: '',
+                                  use_doc_orientation_classify: false,
+                                  use_doc_unwarping: false,
+                                  use_textline_orientation: false,
+                                }
+                              : {}),
+                          })
+                        }
+                        className="mt-1"
+                      />
+                      <div>
+                        <div className="font-medium text-slate-800">
+                          {model.name}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {model.description}
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Language Selection - only for pp-ocrv5 and pp-structurev3 */}
+              {OCR_MODELS.find((m) => m.value === advancedSettings.ocr_model)
+                ?.hasLangOption && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    OCR Language
+                  </label>
+                  <select
+                    value={advancedSettings.ocr_lang}
+                    onChange={(e) =>
+                      setAdvancedSettings({
+                        ...advancedSettings,
+                        ocr_lang: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                  >
+                    {OCR_LANGUAGES.map((lang) => (
+                      <option key={lang.code} value={lang.code}>
+                        {lang.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Select the primary language of documents in this project
+                  </p>
+                </div>
+              )}
+
+              {/* Processing Options - only for pp-ocrv5 and pp-structurev3 */}
+              {OCR_MODELS.find((m) => m.value === advancedSettings.ocr_model)
+                ?.hasOptions && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Processing Options
+                  </label>
+                  <div className="space-y-3">
+                    {/* Document Orientation */}
+                    <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition-all">
+                      <input
+                        type="checkbox"
+                        checked={advancedSettings.use_doc_orientation_classify}
+                        onChange={(e) =>
+                          setAdvancedSettings({
+                            ...advancedSettings,
+                            use_doc_orientation_classify: e.target.checked,
+                          })
+                        }
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <div className="font-medium text-slate-800 text-sm">
+                          {OCR_OPTIONS_INFO.use_doc_orientation_classify.title}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {
+                            OCR_OPTIONS_INFO.use_doc_orientation_classify
+                              .description
+                          }
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* Document Unwarping */}
+                    <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition-all">
+                      <input
+                        type="checkbox"
+                        checked={advancedSettings.use_doc_unwarping}
+                        onChange={(e) =>
+                          setAdvancedSettings({
+                            ...advancedSettings,
+                            use_doc_unwarping: e.target.checked,
+                          })
+                        }
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <div className="font-medium text-slate-800 text-sm">
+                          {OCR_OPTIONS_INFO.use_doc_unwarping.title}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {OCR_OPTIONS_INFO.use_doc_unwarping.description}
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* Textline Orientation - only for pp-ocrv5 */}
+                    {advancedSettings.ocr_model === 'pp-ocrv5' && (
+                      <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition-all">
+                        <input
+                          type="checkbox"
+                          checked={advancedSettings.use_textline_orientation}
+                          onChange={(e) =>
+                            setAdvancedSettings({
+                              ...advancedSettings,
+                              use_textline_orientation: e.target.checked,
+                            })
+                          }
+                          className="mt-0.5"
+                        />
+                        <div>
+                          <div className="font-medium text-slate-800 text-sm">
+                            {OCR_OPTIONS_INFO.use_textline_orientation.title}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {
+                              OCR_OPTIONS_INFO.use_textline_orientation
+                                .description
+                            }
+                          </div>
+                        </div>
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex justify-end gap-3 mt-6">
               <button
-                onClick={closeModal}
-                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                onClick={() => setShowAdvancedModal(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={!formData.name.trim() || saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
-              >
-                {saving ? 'Saving...' : editingProject ? 'Save' : 'Create'}
+                Done
               </button>
             </div>
           </div>

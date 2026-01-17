@@ -86,6 +86,24 @@ export class WorkflowStack extends Stack {
       documentBucketName,
     );
 
+    // PaddleOCR Endpoint Name (from PaddleOcrStack)
+    const paddleOcrEndpointName = ssm.StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.PADDLEOCR_ENDPOINT_NAME,
+    );
+
+    // Model Artifacts Bucket (for PaddleOCR async inference output)
+    const modelArtifactsBucketName =
+      ssm.StringParameter.valueForStringParameter(
+        this,
+        SSM_KEYS.MODEL_ARTIFACTS_BUCKET_NAME,
+      );
+    const modelArtifactsBucket = s3.Bucket.fromBucketName(
+      this,
+      'ModelArtifactsBucket',
+      modelArtifactsBucketName,
+    );
+
     // Enable EventBridge notifications on existing S3 bucket
     new cr.AwsCustomResource(this, 'EnableS3EventBridge', {
       onCreate: {
@@ -217,12 +235,13 @@ export class WorkflowStack extends Stack {
           },
           object: {
             // Exclude intermediate output files:
-            // - *bda-output/* : BDA processing output
-            // - */analysis/*  : Segment analysis results (stored in S3)
+            // - *bda-output/*  : BDA processing output
+            // - */analysis/*   : Segment analysis results (stored in S3)
+            // - */paddleocr/*  : PaddleOCR processing output
             key: [
               {
                 'anything-but': {
-                  wildcard: ['*bda-output/*', '*/analysis/*'],
+                  wildcard: ['*bda-output/*', '*/analysis/*', '*/paddleocr/*'],
                 },
               },
             ],
@@ -463,6 +482,23 @@ export class WorkflowStack extends Stack {
       },
     });
 
+    const paddleocrProcessor = new lambda.Function(this, 'PaddleOcrProcessor', {
+      ...commonLambdaProps,
+      functionName: 'idp-v2-paddleocr-processor',
+      handler: 'index.handler',
+      timeout: Duration.minutes(10),
+      memorySize: 1024,
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, '../functions/step-functions/paddleocr-processor'),
+      ),
+      layers: [coreLayer, sharedLayer],
+      environment: {
+        ...commonLambdaProps.environment,
+        PADDLEOCR_ENDPOINT_NAME: paddleOcrEndpointName,
+        DOCUMENT_BUCKET_NAME: this.documentBucket.bucketName,
+      },
+    });
+
     // LanceDB Writer Lambda (consumes from SQS, concurrency=1)
     const lancedbWriter = new lambda.Function(this, 'LanceDBWriter', {
       ...commonLambdaProps,
@@ -534,6 +570,15 @@ export class WorkflowStack extends Stack {
       },
     );
 
+    const paddleocrProcessorTask = new tasks.LambdaInvoke(
+      this,
+      'ProcessPaddleOcr',
+      {
+        lambdaFunction: paddleocrProcessor,
+        outputPath: '$.Payload',
+      },
+    );
+
     const documentSummarizerTask = new tasks.LambdaInvoke(
       this,
       'SummarizeDocument',
@@ -565,7 +610,7 @@ export class WorkflowStack extends Stack {
       )
       .otherwise(documentIndexerTask);
 
-    // Segment processing chain
+    // Segment processing chain: Analyze → Finalize (PaddleOCR moved before parallel)
     const segmentProcessing = segmentAnalyzerTask.next(analysisFinalizerTask);
 
     // Distributed Map for parallel segment processing
@@ -588,10 +633,31 @@ export class WorkflowStack extends Stack {
     );
     parallelSegmentProcessing.itemProcessor(segmentProcessing);
 
+    // Choice state for PaddleOCR (only for image/PDF MIME types)
+    const needsOcrChoice = new sfn.Choice(this, 'NeedsOcrChoice')
+      .when(
+        sfn.Condition.stringEquals('$.file_type', 'application/pdf'),
+        paddleocrProcessorTask,
+      )
+      .when(
+        sfn.Condition.stringEquals('$.file_type', 'image/png'),
+        paddleocrProcessorTask,
+      )
+      .when(
+        sfn.Condition.stringEquals('$.file_type', 'image/jpeg'),
+        paddleocrProcessorTask,
+      )
+      .when(
+        sfn.Condition.stringEquals('$.file_type', 'image/tiff'),
+        paddleocrProcessorTask,
+      )
+      .otherwise(formatParserTask);
+
     // Build the state machine
     waitForBda.next(checkBdaStatusTask);
     checkBdaStatusTask.next(bdaStatusChoice);
-    documentIndexerTask.next(formatParserTask);
+    documentIndexerTask.next(needsOcrChoice);
+    paddleocrProcessorTask.next(formatParserTask);
     formatParserTask.next(getDocumentSegmentsTask);
     getDocumentSegmentsTask.next(parallelSegmentProcessing);
     parallelSegmentProcessing.next(documentSummarizerTask);
@@ -642,6 +708,7 @@ export class WorkflowStack extends Stack {
       segmentAnalyzer,
       analysisFinalizer,
       documentSummarizer,
+      paddleocrProcessor,
       triggerFunction,
       lancedbService,
       lancedbWriter,
@@ -654,6 +721,19 @@ export class WorkflowStack extends Stack {
     // SQS permissions
     lancedbWriteQueue.grantSendMessages(analysisFinalizer);
     lancedbWriteQueue.grantConsumeMessages(lancedbWriter);
+
+    // SageMaker permissions for PaddleOCR Processor
+    paddleocrProcessor.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['sagemaker:InvokeEndpoint', 'sagemaker:InvokeEndpointAsync'],
+        resources: [
+          `arn:aws:sagemaker:${this.region}:${this.account}:endpoint/${paddleOcrEndpointName}`,
+        ],
+      }),
+    );
+
+    // Model Artifacts Bucket permissions for PaddleOCR (async inference output cleanup)
+    modelArtifactsBucket.grantReadWrite(paddleocrProcessor);
 
     for (const fn of allFunctions) {
       // S3 permissions (Document bucket)

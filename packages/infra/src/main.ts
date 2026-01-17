@@ -3,6 +3,7 @@ import { AgentStack } from './stacks/agent-stack.js';
 import { McpStack } from './stacks/mcp-stack.js';
 import { App } from ':idp-v2/common-constructs';
 import { StorageStack } from './stacks/storage-stack.js';
+import { PaddleOcrStack } from './stacks/paddleocr-stack.js';
 import { WorkflowStack } from './stacks/workflow-stack.js';
 import { VpcStack } from './stacks/vpc-stack.js';
 
@@ -18,6 +19,10 @@ new VpcStack(app, 'IDP-V2-Vpc', {
 });
 
 new StorageStack(app, 'IDP-V2-Storage', {
+  env,
+});
+
+new PaddleOcrStack(app, 'IDP-V2-PaddleOcr', {
   env,
 });
 

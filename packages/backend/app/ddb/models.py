@@ -17,6 +17,8 @@ class ProjectData(BaseModel):
     language: str | None = None
     color: int | None = None
     document_prompt: str | None = None
+    ocr_model: str | None = None
+    ocr_options: dict | None = None
 
 
 class Project(BaseModel):
@@ -86,5 +88,6 @@ class SegmentAnalysis(BaseModel):
     segment_index: int
     image_uri: str = ""
     bda_indexer: str = ""
+    paddleocr: str = ""
     format_parser: str = ""
     image_analysis: list[ImageAnalysis] = []

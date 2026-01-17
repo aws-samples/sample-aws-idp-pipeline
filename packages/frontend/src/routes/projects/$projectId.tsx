@@ -55,6 +55,7 @@ interface SegmentData {
   image_uri: string;
   image_url: string | null;
   bda_indexer: string;
+  paddleocr: string;
   format_parser: string;
   image_analysis: { analysis_query: string; content: string }[];
 }
@@ -82,6 +83,7 @@ interface ChatMessage {
 
 interface WorkflowProgress {
   workflowId: string;
+  documentId: string;
   fileName: string;
   status: 'pending' | 'in_progress' | 'completed' | 'failed';
   currentStep: string;
@@ -135,6 +137,7 @@ function ProjectDetailPage() {
     setWorkflowProgress((prev) => {
       const base = prev || {
         workflowId: message.workflow_id,
+        documentId: message.document_id || '',
         fileName: message.file_name || '',
         status: 'in_progress' as const,
         currentStep: '',
@@ -148,6 +151,7 @@ function ProjectDetailPage() {
           return {
             ...base,
             workflowId: message.workflow_id,
+            documentId: message.document_id || base.documentId,
             fileName: message.file_name || base.fileName,
             status: 'in_progress',
             currentStep: 'Starting...',
@@ -359,12 +363,18 @@ function ProjectDetailPage() {
     }
 
     if (analysisPopup.type === 'bda') {
-      // Check if it was BDA or PDF based on title
+      // Check if it was BDA, OCR, or PDF based on title
       if (analysisPopup.title.includes('PDF')) {
         setAnalysisPopup({
           type: 'bda',
           content: segment.format_parser || '',
           title: `PDF Content - Segment ${currentSegmentIndex + 1}`,
+        });
+      } else if (analysisPopup.title.includes('OCR')) {
+        setAnalysisPopup({
+          type: 'bda',
+          content: segment.paddleocr || '',
+          title: `OCR Content - Segment ${currentSegmentIndex + 1}`,
         });
       } else {
         setAnalysisPopup({
@@ -488,7 +498,7 @@ function ProjectDetailPage() {
     if (files.length === 0) return;
 
     const maxSize = 500 * 1024 * 1024; // 500MB
-    const uploadedFileNames: string[] = [];
+    const uploadedDocuments: { documentId: string; fileName: string }[] = [];
 
     setUploading(true);
     setShowUploadArea(false);
@@ -499,8 +509,6 @@ function ProjectDetailPage() {
           console.error(`File ${file.name} exceeds 500MB limit`);
           continue;
         }
-
-        uploadedFileNames.push(file.name);
 
         // Step 1: Request presigned URL from backend
         const uploadInfo = await fetchApi<DocumentUploadResponse>(
@@ -515,6 +523,11 @@ function ProjectDetailPage() {
             }),
           },
         );
+
+        uploadedDocuments.push({
+          documentId: uploadInfo.document_id,
+          fileName: file.name,
+        });
 
         // Step 2: Upload file directly to S3 using presigned URL
         const uploadResponse = await fetch(uploadInfo.upload_url, {
@@ -542,10 +555,12 @@ function ProjectDetailPage() {
       await loadDocuments();
 
       // Initialize progress state for uploaded files
-      if (uploadedFileNames.length > 0) {
+      if (uploadedDocuments.length > 0) {
+        const uploadedDocIds = uploadedDocuments.map((d) => d.documentId);
         setWorkflowProgress({
           workflowId: '',
-          fileName: uploadedFileNames.join(', '),
+          documentId: uploadedDocuments[0].documentId,
+          fileName: uploadedDocuments.map((d) => d.fileName).join(', '),
           status: 'pending',
           currentStep: 'Waiting for workflow...',
           stepMessage: 'Upload complete. Starting analysis...',
@@ -557,27 +572,27 @@ function ProjectDetailPage() {
         const pollForWorkflow = async (retries = 10) => {
           for (let i = 0; i < retries; i++) {
             await new Promise((resolve) => setTimeout(resolve, 2000));
-            // Fetch workflows for each document
+            // Fetch workflows for uploaded documents
             const allWorkflows: Workflow[] = [];
-            for (const doc of documents) {
+            for (const uploaded of uploadedDocuments) {
               try {
                 const docWorkflows = await fetchApi<
                   Omit<Workflow, 'document_id'>[]
-                >(`documents/${doc.document_id}/workflows`);
+                >(`documents/${uploaded.documentId}/workflows`);
                 allWorkflows.push(
                   ...docWorkflows.map((wf) => ({
                     ...wf,
-                    document_id: doc.document_id,
+                    document_id: uploaded.documentId,
                   })),
                 );
               } catch {
-                // Skip documents with no workflows
+                // Skip documents with no workflows yet
               }
             }
-            // Find workflow that matches uploaded file and is pending/in_progress
+            // Find workflow that matches uploaded document and is pending/in_progress
             const newWorkflow = allWorkflows.find(
               (w) =>
-                uploadedFileNames.includes(w.file_name) &&
+                uploadedDocIds.includes(w.document_id) &&
                 (w.status === 'pending' || w.status === 'in_progress'),
             );
             if (newWorkflow) {
@@ -587,13 +602,22 @@ function ProjectDetailPage() {
                   ? {
                       ...prev,
                       workflowId: newWorkflow.workflow_id,
+                      documentId: newWorkflow.document_id,
                       status: 'in_progress',
                       currentStep: 'Connected',
                       stepMessage: 'Workflow started',
                     }
                   : null,
               );
-              setWorkflows(allWorkflows);
+              setWorkflows((prevWorkflows) => {
+                const existingIds = new Set(
+                  prevWorkflows.map((w) => w.workflow_id),
+                );
+                const newWorkflows = allWorkflows.filter(
+                  (w) => !existingIds.has(w.workflow_id),
+                );
+                return [...prevWorkflows, ...newWorkflows];
+              });
               return;
             }
           }
@@ -1030,20 +1054,20 @@ function ProjectDetailPage() {
               <div className="space-y-2">
                 {documents.map((doc) => {
                   const workflow = workflows.find(
-                    (wf) => wf.file_name === doc.name,
+                    (wf) => wf.document_id === doc.document_id,
                   );
                   const isProcessing =
                     workflowProgress &&
-                    workflowProgress.fileName.includes(doc.name) &&
+                    workflowProgress.documentId === doc.document_id &&
                     workflowProgress.status !== 'completed' &&
                     workflowProgress.status !== 'failed';
                   const processingComplete =
                     workflowProgress &&
-                    workflowProgress.fileName.includes(doc.name) &&
+                    workflowProgress.documentId === doc.document_id &&
                     workflowProgress.status === 'completed';
                   const processingFailed =
                     workflowProgress &&
-                    workflowProgress.fileName.includes(doc.name) &&
+                    workflowProgress.documentId === doc.document_id &&
                     workflowProgress.status === 'failed';
 
                   return (
@@ -1537,6 +1561,24 @@ function ProjectDetailPage() {
                               selectedWorkflow?.segments[currentSegmentIndex];
                             setAnalysisPopup({
                               type: 'bda',
+                              content: segment?.paddleocr || '',
+                              title: `OCR Content - Segment ${currentSegmentIndex + 1}`,
+                            });
+                          }}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                            analysisPopup.title.includes('OCR')
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                        >
+                          OCR
+                        </button>
+                        <button
+                          onClick={() => {
+                            const segment =
+                              selectedWorkflow?.segments[currentSegmentIndex];
+                            setAnalysisPopup({
+                              type: 'bda',
                               content: segment?.format_parser || '',
                               title: `PDF Content - Segment ${currentSegmentIndex + 1}`,
                             });
@@ -1837,6 +1879,32 @@ function ProjectDetailPage() {
                             <p className="text-lg font-semibold text-slate-800">
                               {selectedWorkflow.segments[currentSegmentIndex]
                                 ?.bda_indexer
+                                ? 1
+                                : 0}
+                            </p>
+                          </button>
+                          <button
+                            onClick={() => {
+                              const segment =
+                                selectedWorkflow.segments[currentSegmentIndex];
+                              if (segment?.paddleocr) {
+                                setAnalysisPopup({
+                                  type: 'bda',
+                                  content: segment.paddleocr,
+                                  title: `OCR Content - Segment ${currentSegmentIndex + 1}`,
+                                });
+                              }
+                            }}
+                            disabled={
+                              !selectedWorkflow.segments[currentSegmentIndex]
+                                ?.paddleocr
+                            }
+                            className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-center hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <p className="text-xs text-slate-500">OCR</p>
+                            <p className="text-lg font-semibold text-slate-800">
+                              {selectedWorkflow.segments[currentSegmentIndex]
+                                ?.paddleocr
                                 ? 1
                                 : 0}
                             </p>

@@ -46,6 +46,10 @@ def handler(event, _context):
     if bda_indexer:
         parts.append(f'## BDA Indexer\n{bda_indexer}')
 
+    paddleocr = segment_data.get('paddleocr', '')
+    if paddleocr:
+        parts.append(f'## PaddleOCR\n{paddleocr}')
+
     format_parser = segment_data.get('format_parser', '')
     if format_parser:
         parts.append(f'## Format Parser\n{format_parser}')

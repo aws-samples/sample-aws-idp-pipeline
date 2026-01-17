@@ -19,6 +19,7 @@ export interface WebSocketMessage {
   completed?: number;
   total?: number;
   project_id?: string;
+  document_id?: string;
   file_name?: string;
   summary?: string;
   segment_count?: number;
