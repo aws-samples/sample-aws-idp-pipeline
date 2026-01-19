@@ -47,12 +47,16 @@ class WorkflowListResponse(BaseModel):
 
 class SegmentData(BaseModel):
     segment_index: int
+    segment_type: str | None = "PAGE"
     image_uri: str
     image_url: str | None = None
+    file_uri: str | None = None
+    start_timecode_smpte: str | None = None
+    end_timecode_smpte: str | None = None
     bda_indexer: str
     paddleocr: str
     format_parser: str
-    image_analysis: list[dict]
+    ai_analysis: list[dict]
 
 
 class WorkflowDetailResponse(BaseModel):
@@ -117,25 +121,29 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
             paddleocr = s3_data.get("paddleocr", "")
             format_parser = transform_markdown_images(s3_data.get("format_parser", ""), image_uri)
 
-            # Transform image_analysis content
-            raw_image_analysis = s3_data.get("image_analysis", [])
-            image_analysis = [
+            # Transform ai_analysis content
+            raw_ai_analysis = s3_data.get("ai_analysis", [])
+            ai_analysis = [
                 {
                     "analysis_query": ia.get("analysis_query", ""),
                     "content": transform_markdown_images(ia.get("content", ""), image_uri),
                 }
-                for ia in raw_image_analysis
+                for ia in raw_ai_analysis
             ]
 
             segments.append(
                 SegmentData(
                     segment_index=s3_data.get("segment_index", seg.data.segment_index),
+                    segment_type=s3_data.get("segment_type", "PAGE"),
                     image_uri=image_uri,
                     image_url=generate_presigned_url(image_uri),
+                    file_uri=s3_data.get("file_uri"),
+                    start_timecode_smpte=s3_data.get("start_timecode_smpte"),
+                    end_timecode_smpte=s3_data.get("end_timecode_smpte"),
                     bda_indexer=bda_indexer,
                     paddleocr=paddleocr,
                     format_parser=format_parser,
-                    image_analysis=image_analysis,
+                    ai_analysis=ai_analysis,
                 )
             )
         else:
@@ -149,7 +157,7 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
                     bda_indexer="",
                     paddleocr="",
                     format_parser="",
-                    image_analysis=[],
+                    ai_analysis=[],
                 )
             )
 

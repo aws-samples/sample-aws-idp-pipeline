@@ -617,6 +617,19 @@ def get_project_language(project_id: str) -> str:
     return 'en'
 
 
+def get_project_document_prompt(project_id: str) -> str:
+    """Get project document analysis prompt. Returns empty string if not set."""
+    table = get_table()
+    response = table.get_item(
+        Key={'PK': f'PROJ#{project_id}', 'SK': 'META'}
+    )
+    item = response.get('Item')
+    if item:
+        data = item.get('data', {})
+        return data.get('document_prompt') or ''
+    return ''
+
+
 def get_project_ocr_settings(project_id: str) -> dict:
     """Get project OCR settings. Returns default if not set."""
     table = get_table()

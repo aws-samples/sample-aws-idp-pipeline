@@ -78,6 +78,102 @@ def transform_markdown_image_urls(markdown: str, base_uri: str) -> str:
     return re.sub(pattern, replace_image_url, markdown, re.DOTALL)
 
 
+def is_video_file(file_type: str) -> bool:
+    """Check if file type is video (MIME type or extension)."""
+    if not file_type:
+        return False
+    file_type_lower = file_type.lower()
+    # Check MIME types
+    if file_type_lower.startswith('video/'):
+        return True
+    # Fallback: check extensions (supported: MP4, MOV, AVI, MKV, WEBM)
+    video_extensions = ['mp4', 'mov', 'avi', 'mkv', 'webm']
+    return file_type_lower in video_extensions
+
+
+def process_video_segments(standard_output: dict, file_uri: str) -> list:
+    """Process video BDA output and extract chapter segments."""
+    segments = []
+
+    # Video BDA output has 'video' and 'chapters' structure
+    video_data = standard_output.get('video', {})
+    chapters = standard_output.get('chapters', []) or video_data.get('chapters', [])
+
+    if not chapters:
+        print('No chapters found in video BDA output')
+        # Create single segment for entire video
+        video_summary = video_data.get('summary', '')
+        segments.append({
+            'segment_index': 0,
+            'segment_type': 'VIDEO',
+            'bda_indexer': video_summary,
+            'image_uri': '',
+            'file_uri': file_uri,
+            'start_timecode_smpte': '00:00:00:00',
+            'end_timecode_smpte': '',
+        })
+        return segments
+
+    print(f'Found {len(chapters)} video chapters')
+
+    for idx, chapter in enumerate(chapters):
+        chapter_summary = chapter.get('summary', '')
+        start_timecode = chapter.get('start_timecode_smpte', '')
+        end_timecode = chapter.get('end_timecode_smpte', '')
+
+        segments.append({
+            'segment_index': idx,
+            'segment_type': 'CHAPTER',
+            'bda_indexer': chapter_summary,
+            'image_uri': '',
+            'file_uri': file_uri,
+            'start_timecode_smpte': start_timecode,
+            'end_timecode_smpte': end_timecode,
+        })
+
+    return segments
+
+
+def process_document_segments(standard_output: dict, standard_output_base: str) -> list:
+    """Process document BDA output and extract page segments."""
+    segments = []
+
+    pages = standard_output.get('pages', [])
+    for page in pages:
+        page_index = page.get('page_index', 0)
+        representation = page.get('representation', {})
+        markdown = representation.get('markdown', '')
+        asset_metadata = page.get('asset_metadata', {})
+        image_uri = asset_metadata.get('rectified_image', '')
+
+        # Handle relative path in rectified_image
+        # BDA stores images in assets/ subdirectory
+        if image_uri and not image_uri.startswith('s3://'):
+            if image_uri.startswith('./'):
+                image_uri = f'{standard_output_base}/assets/{image_uri[2:]}'
+            else:
+                image_uri = f'{standard_output_base}/assets/{image_uri}'
+
+        if not image_uri and markdown:
+            image_uri = extract_first_image_from_markdown(
+                markdown, standard_output_base
+            )
+
+        # Transform relative image paths in markdown to full S3 URIs
+        transformed_markdown = transform_markdown_image_urls(
+            markdown, standard_output_base
+        )
+
+        segments.append({
+            'segment_index': page_index,
+            'segment_type': 'PAGE',
+            'bda_indexer': transformed_markdown,
+            'image_uri': image_uri,
+        })
+
+    return segments
+
+
 def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
@@ -92,6 +188,8 @@ def handler(event, _context):
     notify_step_start(workflow_id, 'DocumentIndexer')
 
     segments = []
+    is_video = is_video_file(file_type)
+    print(f'Processing file_type={file_type}, is_video={is_video}')
 
     if bda_metadata_uri:
         try:
@@ -113,37 +211,14 @@ def handler(event, _context):
                         # Get base directory of standard_output.json for relative image paths
                         standard_output_base = standard_output_uri.rsplit('/', 1)[0]
 
-                        pages = standard_output.get('pages', [])
-                        for page in pages:
-                            page_index = page.get('page_index', 0)
-                            representation = page.get('representation', {})
-                            markdown = representation.get('markdown', '')
-                            asset_metadata = page.get('asset_metadata', {})
-                            image_uri = asset_metadata.get('rectified_image', '')
-
-                            # Handle relative path in rectified_image
-                            # BDA stores images in assets/ subdirectory
-                            if image_uri and not image_uri.startswith('s3://'):
-                                if image_uri.startswith('./'):
-                                    image_uri = f'{standard_output_base}/assets/{image_uri[2:]}'
-                                else:
-                                    image_uri = f'{standard_output_base}/assets/{image_uri}'
-
-                            if not image_uri and markdown:
-                                image_uri = extract_first_image_from_markdown(
-                                    markdown, standard_output_base
-                                )
-
-                            # Transform relative image paths in markdown to full S3 URIs
-                            transformed_markdown = transform_markdown_image_urls(
-                                markdown, standard_output_base
+                        if is_video:
+                            # Process video chapters
+                            segments = process_video_segments(standard_output, file_uri)
+                        else:
+                            # Process document pages
+                            segments = process_document_segments(
+                                standard_output, standard_output_base
                             )
-
-                            segments.append({
-                                'segment_index': page_index,
-                                'bda_indexer': transformed_markdown,
-                                'image_uri': image_uri,
-                            })
 
         except Exception as e:
             print(f'Error processing BDA metadata: {e}')
@@ -154,6 +229,7 @@ def handler(event, _context):
     if not segments:
         segments.append({
             'segment_index': 0,
+            'segment_type': 'VIDEO' if is_video else 'PAGE',
             'bda_indexer': '',
             'image_uri': '',
         })
@@ -164,11 +240,18 @@ def handler(event, _context):
         segment_index = seg['segment_index']
         segment_data = {
             'segment_index': segment_index,
+            'segment_type': seg.get('segment_type', 'PAGE'),
             'image_uri': seg.get('image_uri', ''),
             'bda_indexer': seg.get('bda_indexer', ''),
             'format_parser': '',
-            'image_analysis': []
+            'ai_analysis': [],
         }
+
+        # Add video-specific fields if present
+        if seg.get('segment_type') in ['VIDEO', 'CHAPTER']:
+            segment_data['file_uri'] = seg.get('file_uri', file_uri)
+            segment_data['start_timecode_smpte'] = seg.get('start_timecode_smpte', '')
+            segment_data['end_timecode_smpte'] = seg.get('end_timecode_smpte', '')
 
         # Save to S3
         s3_key = save_segment_analysis(file_uri, segment_index, segment_data)

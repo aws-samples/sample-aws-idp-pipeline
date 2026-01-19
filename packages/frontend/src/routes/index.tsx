@@ -11,6 +11,7 @@ interface Project {
   created_by: string | null;
   language: string | null;
   color: number | null;
+  document_prompt: string | null;
   ocr_model: string | null;
   ocr_options: Record<string, unknown> | null;
   created_at: string;
@@ -374,6 +375,7 @@ function ProjectsPage() {
     use_doc_orientation_classify: false,
     use_doc_unwarping: false,
     use_textline_orientation: false,
+    document_prompt: '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -401,6 +403,7 @@ function ProjectsPage() {
       use_doc_orientation_classify: false,
       use_doc_unwarping: false,
       use_textline_orientation: false,
+      document_prompt: '',
     });
     setShowModal(true);
   };
@@ -422,6 +425,7 @@ function ProjectsPage() {
       use_doc_unwarping: (ocrOptions?.use_doc_unwarping as boolean) || false,
       use_textline_orientation:
         (ocrOptions?.use_textline_orientation as boolean) || false,
+      document_prompt: project.document_prompt || '',
     });
     setShowModal(true);
   };
@@ -436,6 +440,7 @@ function ProjectsPage() {
       use_doc_orientation_classify: false,
       use_doc_unwarping: false,
       use_textline_orientation: false,
+      document_prompt: '',
     });
   };
 
@@ -475,6 +480,7 @@ function ProjectsPage() {
             color: formData.color,
             ocr_model: advancedSettings.ocr_model,
             ocr_options: ocrOptions,
+            document_prompt: advancedSettings.document_prompt || undefined,
           }),
         });
       } else {
@@ -488,6 +494,7 @@ function ProjectsPage() {
             color: formData.color,
             ocr_model: advancedSettings.ocr_model,
             ocr_options: ocrOptions,
+            document_prompt: advancedSettings.document_prompt || undefined,
             created_by:
               user?.profile?.email || user?.profile?.preferred_username,
           }),
@@ -634,340 +641,394 @@ function ProjectsPage() {
       {showModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div
-            className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl"
+            className="bg-white rounded-2xl shadow-2xl flex overflow-hidden mx-4 max-h-[90vh]"
             style={{
               animation: 'modalIn 0.3s ease-out',
+              width: showAdvancedModal ? '1000px' : '500px',
+              transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             }}
           >
-            <h2 className="text-xl font-bold text-slate-800 mb-4">
-              {editingProject ? 'Edit Project' : 'Create New Project'}
-            </h2>
+            {/* Main Panel */}
+            <div
+              className={`p-6 flex flex-col flex-shrink-0 ${
+                showAdvancedModal
+                  ? 'w-[500px] border-r border-slate-200'
+                  : 'w-full'
+              }`}
+            >
+              <h2 className="text-xl font-bold text-slate-800 mb-4">
+                {editingProject ? 'Edit Project' : 'Create New Project'}
+              </h2>
 
-            <div className="space-y-4">
-              {editingProject && (
+              <div className="space-y-4">
+                {editingProject && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Project ID
+                    </label>
+                    <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-600 text-sm font-mono">
+                      {editingProject.project_id}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Project ID
+                    Project Name
                   </label>
-                  <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-600 text-sm font-mono">
-                    {editingProject.project_id}
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Project Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  placeholder="My Project"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      description: e.target.value,
-                    })
-                  }
-                  placeholder="Project description..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-shadow"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Language
-                </label>
-                <select
-                  value={formData.language}
-                  onChange={(e) =>
-                    setFormData({ ...formData, language: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                >
-                  {LANGUAGES.map((lang) => (
-                    <option key={lang.code} value={lang.code}>
-                      {lang.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Folder Color
-                </label>
-                <div className="flex gap-2 flex-wrap">
-                  {FOLDER_GRADIENTS.map((gradient, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, color: index })}
-                      className={`w-10 h-10 rounded-lg transition-all ${
-                        formData.color === index
-                          ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
-                          : 'hover:scale-105'
-                      }`}
-                      style={{
-                        background: `linear-gradient(135deg, ${gradient.front} 0%, ${gradient.back} 100%)`,
-                      }}
-                      title={`Color ${index + 1}`}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-between items-center mt-6">
-              <button
-                type="button"
-                onClick={() => setShowAdvancedModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) =>
+                      setFormData({ ...formData, name: e.target.value })
+                    }
+                    placeholder="My Project"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
                   />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-                Advanced Settings
-              </button>
-              <div className="flex gap-3">
-                <button
-                  onClick={closeModal}
-                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={!formData.name.trim() || saving}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
-                >
-                  {saving ? 'Saving...' : editingProject ? 'Save' : 'Create'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Advanced Settings Modal */}
-      {showAdvancedModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60]">
-          <div
-            className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl max-h-[90vh] overflow-y-auto"
-            style={{ animation: 'modalIn 0.3s ease-out' }}
-          >
-            <h2 className="text-lg font-bold text-slate-800 mb-4">
-              Advanced Settings
-            </h2>
-
-            <div className="space-y-5">
-              {/* OCR Model Selection */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  OCR Model
-                </label>
-                <div className="space-y-2">
-                  {OCR_MODELS.map((model) => (
-                    <label
-                      key={model.value}
-                      className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-all ${
-                        advancedSettings.ocr_model === model.value
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="ocr_model"
-                        value={model.value}
-                        checked={advancedSettings.ocr_model === model.value}
-                        onChange={(e) =>
-                          setAdvancedSettings({
-                            ...advancedSettings,
-                            ocr_model: e.target.value,
-                            // Reset options when switching to VL model
-                            ...(e.target.value === 'paddleocr-vl'
-                              ? {
-                                  ocr_lang: '',
-                                  use_doc_orientation_classify: false,
-                                  use_doc_unwarping: false,
-                                  use_textline_orientation: false,
-                                }
-                              : {}),
-                          })
-                        }
-                        className="mt-1"
-                      />
-                      <div>
-                        <div className="font-medium text-slate-800">
-                          {model.name}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {model.description}
-                        </div>
-                      </div>
-                    </label>
-                  ))}
                 </div>
-              </div>
 
-              {/* Language Selection - only for pp-ocrv5 and pp-structurev3 */}
-              {OCR_MODELS.find((m) => m.value === advancedSettings.ocr_model)
-                ?.hasLangOption && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    OCR Language
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        description: e.target.value,
+                      })
+                    }
+                    placeholder="Project description..."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-shadow"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Language
                   </label>
                   <select
-                    value={advancedSettings.ocr_lang}
+                    value={formData.language}
                     onChange={(e) =>
-                      setAdvancedSettings({
-                        ...advancedSettings,
-                        ocr_lang: e.target.value,
-                      })
+                      setFormData({ ...formData, language: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
                   >
-                    {OCR_LANGUAGES.map((lang) => (
+                    {LANGUAGES.map((lang) => (
                       <option key={lang.code} value={lang.code}>
                         {lang.name}
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Select the primary language of documents in this project
-                  </p>
                 </div>
-              )}
 
-              {/* Processing Options - only for pp-ocrv5 and pp-structurev3 */}
-              {OCR_MODELS.find((m) => m.value === advancedSettings.ocr_model)
-                ?.hasOptions && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Processing Options
+                    Folder Color
                   </label>
-                  <div className="space-y-3">
-                    {/* Document Orientation */}
-                    <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition-all">
-                      <input
-                        type="checkbox"
-                        checked={advancedSettings.use_doc_orientation_classify}
-                        onChange={(e) =>
-                          setAdvancedSettings({
-                            ...advancedSettings,
-                            use_doc_orientation_classify: e.target.checked,
-                          })
+                  <div className="flex gap-2 flex-wrap">
+                    {FOLDER_GRADIENTS.map((gradient, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() =>
+                          setFormData({ ...formData, color: index })
                         }
-                        className="mt-0.5"
+                        className={`w-10 h-10 rounded-lg transition-all ${
+                          formData.color === index
+                            ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
+                            : 'hover:scale-105'
+                        }`}
+                        style={{
+                          background: `linear-gradient(135deg, ${gradient.front} 0%, ${gradient.back} 100%)`,
+                        }}
+                        title={`Color ${index + 1}`}
                       />
-                      <div>
-                        <div className="font-medium text-slate-800 text-sm">
-                          {OCR_OPTIONS_INFO.use_doc_orientation_classify.title}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {
-                            OCR_OPTIONS_INFO.use_doc_orientation_classify
-                              .description
-                          }
-                        </div>
-                      </div>
-                    </label>
-
-                    {/* Document Unwarping */}
-                    <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition-all">
-                      <input
-                        type="checkbox"
-                        checked={advancedSettings.use_doc_unwarping}
-                        onChange={(e) =>
-                          setAdvancedSettings({
-                            ...advancedSettings,
-                            use_doc_unwarping: e.target.checked,
-                          })
-                        }
-                        className="mt-0.5"
-                      />
-                      <div>
-                        <div className="font-medium text-slate-800 text-sm">
-                          {OCR_OPTIONS_INFO.use_doc_unwarping.title}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {OCR_OPTIONS_INFO.use_doc_unwarping.description}
-                        </div>
-                      </div>
-                    </label>
-
-                    {/* Textline Orientation - only for pp-ocrv5 */}
-                    {advancedSettings.ocr_model === 'pp-ocrv5' && (
-                      <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition-all">
-                        <input
-                          type="checkbox"
-                          checked={advancedSettings.use_textline_orientation}
-                          onChange={(e) =>
-                            setAdvancedSettings({
-                              ...advancedSettings,
-                              use_textline_orientation: e.target.checked,
-                            })
-                          }
-                          className="mt-0.5"
-                        />
-                        <div>
-                          <div className="font-medium text-slate-800 text-sm">
-                            {OCR_OPTIONS_INFO.use_textline_orientation.title}
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            {
-                              OCR_OPTIONS_INFO.use_textline_orientation
-                                .description
-                            }
-                          </div>
-                        </div>
-                      </label>
-                    )}
+                    ))}
                   </div>
                 </div>
-              )}
+              </div>
+
+              <div className="flex justify-between items-center mt-6 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedModal(!showAdvancedModal)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    showAdvancedModal
+                      ? 'text-blue-600 bg-blue-50 hover:bg-blue-100'
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                  </svg>
+                  Advanced Settings
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className={`h-4 w-4 transition-transform duration-300 ${
+                      showAdvancedModal ? 'rotate-180' : ''
+                    }`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={closeModal}
+                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={!formData.name.trim() || saving}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {saving ? 'Saving...' : editingProject ? 'Save' : 'Create'}
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setShowAdvancedModal(false)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            {/* Advanced Settings Panel */}
+            {showAdvancedModal && (
+              <div
+                className="w-[500px] flex-shrink-0 p-6 bg-slate-50 overflow-y-auto"
+                style={{ animation: 'slideIn 0.2s ease-out' }}
               >
-                Done
-              </button>
-            </div>
+                <h3 className="text-lg font-bold text-slate-800 mb-4">
+                  Advanced Settings
+                </h3>
+
+                <div className="space-y-5">
+                  {/* OCR Model Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      OCR Model
+                    </label>
+                    <div className="space-y-2">
+                      {OCR_MODELS.map((model) => (
+                        <label
+                          key={model.value}
+                          className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-all bg-white ${
+                            advancedSettings.ocr_model === model.value
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="ocr_model"
+                            value={model.value}
+                            checked={advancedSettings.ocr_model === model.value}
+                            onChange={(e) =>
+                              setAdvancedSettings({
+                                ...advancedSettings,
+                                ocr_model: e.target.value,
+                                ...(e.target.value === 'paddleocr-vl'
+                                  ? {
+                                      ocr_lang: '',
+                                      use_doc_orientation_classify: false,
+                                      use_doc_unwarping: false,
+                                      use_textline_orientation: false,
+                                    }
+                                  : {}),
+                              })
+                            }
+                            className="mt-1"
+                          />
+                          <div>
+                            <div className="font-medium text-slate-800">
+                              {model.name}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {model.description}
+                            </div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Language Selection */}
+                  {OCR_MODELS.find(
+                    (m) => m.value === advancedSettings.ocr_model,
+                  )?.hasLangOption && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        OCR Language
+                      </label>
+                      <select
+                        value={advancedSettings.ocr_lang}
+                        onChange={(e) =>
+                          setAdvancedSettings({
+                            ...advancedSettings,
+                            ocr_lang: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow bg-white"
+                      >
+                        {OCR_LANGUAGES.map((lang) => (
+                          <option key={lang.code} value={lang.code}>
+                            {lang.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Select the primary language of documents in this project
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Processing Options */}
+                  {OCR_MODELS.find(
+                    (m) => m.value === advancedSettings.ocr_model,
+                  )?.hasOptions && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Processing Options
+                      </label>
+                      <div className="space-y-3">
+                        <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition-all bg-white">
+                          <input
+                            type="checkbox"
+                            checked={
+                              advancedSettings.use_doc_orientation_classify
+                            }
+                            onChange={(e) =>
+                              setAdvancedSettings({
+                                ...advancedSettings,
+                                use_doc_orientation_classify: e.target.checked,
+                              })
+                            }
+                            className="mt-0.5"
+                          />
+                          <div>
+                            <div className="font-medium text-slate-800 text-sm">
+                              {
+                                OCR_OPTIONS_INFO.use_doc_orientation_classify
+                                  .title
+                              }
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {
+                                OCR_OPTIONS_INFO.use_doc_orientation_classify
+                                  .description
+                              }
+                            </div>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition-all bg-white">
+                          <input
+                            type="checkbox"
+                            checked={advancedSettings.use_doc_unwarping}
+                            onChange={(e) =>
+                              setAdvancedSettings({
+                                ...advancedSettings,
+                                use_doc_unwarping: e.target.checked,
+                              })
+                            }
+                            className="mt-0.5"
+                          />
+                          <div>
+                            <div className="font-medium text-slate-800 text-sm">
+                              {OCR_OPTIONS_INFO.use_doc_unwarping.title}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {OCR_OPTIONS_INFO.use_doc_unwarping.description}
+                            </div>
+                          </div>
+                        </label>
+
+                        {advancedSettings.ocr_model === 'pp-ocrv5' && (
+                          <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition-all bg-white">
+                            <input
+                              type="checkbox"
+                              checked={
+                                advancedSettings.use_textline_orientation
+                              }
+                              onChange={(e) =>
+                                setAdvancedSettings({
+                                  ...advancedSettings,
+                                  use_textline_orientation: e.target.checked,
+                                })
+                              }
+                              className="mt-0.5"
+                            />
+                            <div>
+                              <div className="font-medium text-slate-800 text-sm">
+                                {
+                                  OCR_OPTIONS_INFO.use_textline_orientation
+                                    .title
+                                }
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                {
+                                  OCR_OPTIONS_INFO.use_textline_orientation
+                                    .description
+                                }
+                              </div>
+                            </div>
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Document Analysis Instructions */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Document Analysis Instructions
+                    </label>
+                    <textarea
+                      value={advancedSettings.document_prompt}
+                      onChange={(e) =>
+                        setAdvancedSettings({
+                          ...advancedSettings,
+                          document_prompt: e.target.value,
+                        })
+                      }
+                      placeholder="Enter custom instructions for document analysis (optional)&#10;&#10;Example:&#10;- Focus on extracting financial data and dates&#10;- Pay special attention to signature blocks&#10;- Extract all table data in structured format"
+                      rows={8}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow resize-y text-sm bg-white"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      Custom instructions to guide document analysis. These
+                      instructions will be applied when analyzing documents in
+                      this project.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -981,6 +1042,16 @@ function ProjectsPage() {
           to {
             opacity: 1;
             transform: scale(1) translateY(0);
+          }
+        }
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
           }
         }
       `}</style>

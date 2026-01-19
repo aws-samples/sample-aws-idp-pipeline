@@ -18,14 +18,31 @@ BDA_PROJECT_NAME = os.environ.get('BDA_PROJECT_NAME', 'idp-v2-bda-project')
 BDA_OUTPUT_BUCKET = os.environ.get('BDA_OUTPUT_BUCKET')
 
 SUPPORTED_MIME_TYPES = {
+    # Documents
     'application/pdf',
-    'image/jpeg',
-    'image/png',
-    'image/tiff',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/msword',
     'text/plain',
     'text/csv',
+    # Images
+    'image/jpeg',
+    'image/png',
+    'image/tiff',
+    'image/gif',
+    'image/bmp',
+    'image/webp',
+    # Videos (MP4, MOV, AVI, MKV, WEBM with H.264/H.265/VP8/VP9/AV1)
+    'video/mp4',
+    'video/quicktime',
+    'video/x-msvideo',
+    'video/x-matroska',
+    'video/webm',
+    # Audio
+    'audio/mp4',
+    'audio/mpeg',
+    'audio/flac',
+    'audio/ogg',
+    'audio/wav',
 }
 
 bda_client = None
@@ -53,6 +70,9 @@ def get_bda_runtime_client():
 
 
 def get_standard_output_config():
+    """Standard output configuration for BDA project.
+    BDA automatically handles different file types (document, video, audio).
+    """
     return {
         'document': {
             'extraction': {
@@ -84,18 +104,18 @@ def extract_document_id(file_uri: str) -> str:
 
 
 def get_or_create_bda_project(client) -> str:
+    """Get existing or create new BDA project.
+    Single project handles all file types (document, video, audio).
+    """
     try:
         projects = client.list_data_automation_projects()
         for project in projects.get('projects', []):
             if project['projectName'] == BDA_PROJECT_NAME:
                 project_arn = project['projectArn']
-                print(f'Updating existing BDA project: {project_arn}')
-                client.update_data_automation_project(
-                    projectArn=project_arn,
-                    standardOutputConfiguration=get_standard_output_config()
-                )
+                print(f'Using existing BDA project: {project_arn}')
                 return project_arn
 
+        print(f'Creating new BDA project: {BDA_PROJECT_NAME}')
         response = client.create_data_automation_project(
             projectName=BDA_PROJECT_NAME,
             projectDescription='IDP-v2 document analysis project',
