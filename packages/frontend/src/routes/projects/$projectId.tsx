@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { nanoid } from 'nanoid';
 import { useAwsClient, StreamEvent } from '../../hooks/useAwsClient';
 import { useWebSocket, WebSocketMessage } from '../../hooks/useWebSocket';
 
@@ -68,12 +69,19 @@ interface DocumentWorkflows {
 
 interface SegmentData {
   segment_index: number;
+  segment_type?: 'PAGE' | 'VIDEO' | 'CHAPTER';
   image_uri: string;
   image_url: string | null;
+  file_uri?: string;
+  start_timecode_smpte?: string;
+  end_timecode_smpte?: string;
   bda_indexer: string;
   paddleocr: string;
   format_parser: string;
-  image_analysis: { analysis_query: string; content: string }[];
+  ai_analysis: {
+    analysis_query: string;
+    content: string;
+  }[];
 }
 
 interface WorkflowDetail {
@@ -115,8 +123,7 @@ export const Route = createFileRoute('/projects/$projectId')({
 function ProjectDetailPage() {
   const { projectId } = Route.useParams();
   const { fetchApi, invokeAgent } = useAwsClient();
-  // AgentCore requires session ID >= 33 chars, so add prefix to projectId
-  const agentSessionId = `idp-agent-session-for-project-id-${projectId}`;
+  const agentSessionId = useMemo(() => nanoid(), []);
   const [project, setProject] = useState<Project | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -384,8 +391,8 @@ function ProjectDetailPage() {
         });
       }
     } else if (analysisPopup.type === 'ai') {
-      if (segment.image_analysis?.length > 0) {
-        const qaItems = segment.image_analysis.map((a) => ({
+      if (segment.ai_analysis?.length > 0) {
+        const qaItems = segment.ai_analysis.map((a) => ({
           question: a.analysis_query,
           answer: a.content,
         }));
@@ -1596,7 +1603,7 @@ function ProjectDetailPage() {
                             const segment =
                               selectedWorkflow?.segments[currentSegmentIndex];
                             const qaItems =
-                              segment?.image_analysis?.map((a) => ({
+                              segment?.ai_analysis?.map((a) => ({
                                 question: a.analysis_query,
                                 answer: a.content,
                               })) || [];
@@ -1939,8 +1946,8 @@ function ProjectDetailPage() {
                             onClick={() => {
                               const segment =
                                 selectedWorkflow.segments[currentSegmentIndex];
-                              if (segment?.image_analysis?.length > 0) {
-                                const qaItems = segment.image_analysis.map(
+                              if (segment?.ai_analysis?.length > 0) {
+                                const qaItems = segment.ai_analysis.map(
                                   (a) => ({
                                     question: a.analysis_query,
                                     answer: a.content,
@@ -1956,14 +1963,14 @@ function ProjectDetailPage() {
                             }}
                             disabled={
                               !selectedWorkflow.segments[currentSegmentIndex]
-                                ?.image_analysis?.length
+                                ?.ai_analysis?.length
                             }
                             className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-center hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             <p className="text-xs text-slate-500">AI</p>
                             <p className="text-lg font-semibold text-slate-800">
                               {selectedWorkflow.segments[currentSegmentIndex]
-                                ?.image_analysis?.length || 0}
+                                ?.ai_analysis?.length || 0}
                             </p>
                           </button>
                         </div>

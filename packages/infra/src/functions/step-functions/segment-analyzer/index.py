@@ -4,9 +4,10 @@ import os
 from shared.ddb_client import (
     record_step_start,
     get_project_language,
+    get_project_document_prompt,
     StepName,
 )
-from shared.s3_analysis import get_segment_analysis, add_segment_image_analysis
+from shared.s3_analysis import get_segment_analysis, add_segment_ai_analysis
 from shared.websocket import notify_segment_progress
 
 from agent import VisionReactAgent
@@ -27,9 +28,12 @@ def handler(event, _context):
     if isinstance(segment_index, dict):
         segment_index = segment_index.get('segment_index', 0)
 
-    # Get project language setting
+    # Get project settings
     language = get_project_language(project_id)
+    document_prompt = get_project_document_prompt(project_id)
     print(f'Project {project_id} language: {language}')
+    if document_prompt:
+        print(f'Project {project_id} has custom document prompt ({len(document_prompt)} chars)')
 
     if workflow_id not in is_first_segment:
         is_first_segment[workflow_id] = True
@@ -50,6 +54,10 @@ def handler(event, _context):
     bda_content = segment_data.get('bda_indexer', '')
     pdf_text = segment_data.get('format_parser', '')
     ocr_text = segment_data.get('paddleocr', '')
+    segment_type = segment_data.get('segment_type', 'PAGE')
+    video_uri = segment_data.get('file_uri', file_uri)
+    start_timecode = segment_data.get('start_timecode_smpte', '')
+    end_timecode = segment_data.get('end_timecode_smpte', '')
 
     context_parts = []
     if bda_content:
@@ -64,7 +72,9 @@ def handler(event, _context):
     try:
         agent = VisionReactAgent(
             model_id=os.environ.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-3-7-sonnet-20250219-v1:0'),
-            region=os.environ.get('AWS_REGION', 'us-east-1')
+            region=os.environ.get('AWS_REGION', 'us-east-1'),
+            video_model_id=os.environ.get('BEDROCK_VIDEO_MODEL_ID', 'us.twelvelabs.pegasus-1-2-v1:0'),
+            bucket_owner_account_id=os.environ.get('BUCKET_OWNER_ACCOUNT_ID', '')
         )
 
         result = agent.analyze(
@@ -74,17 +84,22 @@ def handler(event, _context):
             image_uri=image_uri,
             context=context,
             file_type=file_type,
-            language=language
+            language=language,
+            user_instructions=document_prompt,
+            segment_type=segment_type,
+            video_uri=video_uri,
+            start_timecode=start_timecode,
+            end_timecode=end_timecode
         )
 
         analysis_steps = result.get('analysis_steps', [])
+        is_video = segment_type in ('VIDEO', 'CHAPTER')
 
         for step in analysis_steps:
             question = step.get('question', '')
             answer = step.get('answer', '')
             if question and answer:
-                # Save to S3
-                add_segment_image_analysis(
+                add_segment_ai_analysis(
                     file_uri=file_uri,
                     segment_index=segment_index,
                     analysis_query=question,
@@ -92,11 +107,10 @@ def handler(event, _context):
                 )
 
         if not analysis_steps:
-            # Save to S3
-            add_segment_image_analysis(
+            add_segment_ai_analysis(
                 file_uri=file_uri,
                 segment_index=segment_index,
-                analysis_query=f'Page {segment_index + 1}',
+                analysis_query=f'Chapter {segment_index + 1}' if is_video else f'Page {segment_index + 1}',
                 content=result.get('response', '')
             )
 
@@ -115,9 +129,10 @@ def handler(event, _context):
 
     except Exception as e:
         print(f'Error in segment analysis: {e}')
+        is_video = segment_type in ('VIDEO', 'CHAPTER')
 
         # Save error to S3
-        add_segment_image_analysis(
+        add_segment_ai_analysis(
             file_uri=file_uri,
             segment_index=segment_index,
             analysis_query='Analysis error',

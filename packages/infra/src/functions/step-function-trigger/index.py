@@ -11,7 +11,13 @@ sfn_client = None
 STEP_FUNCTION_ARN = os.environ.get('STEP_FUNCTION_ARN')
 
 MIME_TYPE_MAP = {
+    # Documents
     'pdf': 'application/pdf',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'doc': 'application/msword',
+    'txt': 'text/plain',
+    'csv': 'text/csv',
+    # Images
     'png': 'image/png',
     'jpg': 'image/jpeg',
     'jpeg': 'image/jpeg',
@@ -19,10 +25,12 @@ MIME_TYPE_MAP = {
     'tiff': 'image/tiff',
     'tif': 'image/tiff',
     'webp': 'image/webp',
-    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'doc': 'application/msword',
-    'txt': 'text/plain',
-    'csv': 'text/csv',
+    # Videos (supported: MP4, MOV, AVI, MKV, WEBM with H.264/H.265/VP8/VP9/AV1/MPEG-4)
+    'mp4': 'video/mp4',
+    'mov': 'video/quicktime',
+    'avi': 'video/x-msvideo',
+    'mkv': 'video/x-matroska',
+    'webm': 'video/webm',
 }
 
 

@@ -63,7 +63,7 @@ class Workflow(BaseModel):
     updated_at: str
 
 
-class ImageAnalysis(BaseModel):
+class AIAnalysis(BaseModel):
     analysis_query: str
     content: str
 
@@ -86,8 +86,12 @@ class SegmentAnalysis(BaseModel):
     """Full segment data stored in S3."""
 
     segment_index: int
+    segment_type: str = "PAGE"
     image_uri: str = ""
+    file_uri: str = ""
+    start_timecode_smpte: str = ""
+    end_timecode_smpte: str = ""
     bda_indexer: str = ""
     paddleocr: str = ""
     format_parser: str = ""
-    image_analysis: list[ImageAnalysis] = []
+    ai_analysis: list[AIAnalysis] = []

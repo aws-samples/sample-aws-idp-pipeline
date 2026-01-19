@@ -153,10 +153,11 @@ def update_segment_analysis(
     if data is None:
         data = {
             'segment_index': segment_index,
+            'segment_type': 'PAGE',
             'image_uri': '',
             'bda_indexer': '',
             'format_parser': '',
-            'image_analysis': []
+            'ai_analysis': []
         }
 
     data.update(updates)
@@ -164,20 +165,21 @@ def update_segment_analysis(
     return data
 
 
-def add_segment_image_analysis(
+def add_segment_ai_analysis(
     file_uri: str,
     segment_index: int,
     analysis_query: str,
     content: str
 ) -> Optional[dict]:
     """
-    Add image analysis result to segment's image_analysis array.
+    Add AI analysis result to segment's ai_analysis array.
+    Unified for all content types (document, image, video, audio).
 
     Args:
         file_uri: Original file URI
         segment_index: Segment index
-        analysis_query: Analysis question
-        content: Analysis answer
+        analysis_query: Analysis question/title
+        content: Analysis answer/content
 
     Returns:
         Updated data dict or None if failed
@@ -186,18 +188,20 @@ def add_segment_image_analysis(
     if data is None:
         data = {
             'segment_index': segment_index,
+            'segment_type': 'PAGE',
             'image_uri': '',
             'bda_indexer': '',
             'format_parser': '',
-            'image_analysis': []
+            'ai_analysis': []
         }
 
-    image_analysis = data.get('image_analysis', [])
-    image_analysis.append({
+    ai_analysis = data.get('ai_analysis', [])
+    analysis_entry = {
         'analysis_query': analysis_query,
         'content': content
-    })
-    data['image_analysis'] = image_analysis
+    }
+    ai_analysis.append(analysis_entry)
+    data['ai_analysis'] = ai_analysis
 
     save_segment_analysis(file_uri, segment_index, data)
     return data

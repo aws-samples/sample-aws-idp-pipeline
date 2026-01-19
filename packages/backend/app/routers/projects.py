@@ -45,6 +45,7 @@ class ProjectCreate(BaseModel):
     created_by: str | None = None
     language: str | None = None
     color: int | None = None
+    document_prompt: str | None = None
     ocr_model: str | None = None
     ocr_options: dict | None = None
 
@@ -157,6 +158,7 @@ def create_project(request: ProjectCreate) -> ProjectResponse:
         created_by=request.created_by,
         language=request.language,
         color=request.color,
+        document_prompt=request.document_prompt,
         ocr_model=request.ocr_model,
         ocr_options=request.ocr_options,
     )
@@ -171,6 +173,7 @@ def create_project(request: ProjectCreate) -> ProjectResponse:
         created_by=request.created_by,
         language=request.language,
         color=request.color,
+        document_prompt=request.document_prompt,
         ocr_model=request.ocr_model,
         ocr_options=request.ocr_options,
         created_at=now,

@@ -446,6 +446,8 @@ export class WorkflowStack extends Stack {
       environment: {
         ...commonLambdaProps.environment,
         BEDROCK_MODEL_ID: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
+        BEDROCK_VIDEO_MODEL_ID: 'us.twelvelabs.pegasus-1-2-v1:0',
+        BUCKET_OWNER_ACCOUNT_ID: this.account,
       },
     });
 
