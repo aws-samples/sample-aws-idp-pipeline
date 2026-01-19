@@ -337,9 +337,7 @@ class TestListProjectWorkflows:
     @patch("app.ddb.workflows.get_table")
     @patch("app.ddb.documents.get_table")
     @patch("app.ddb.projects.get_table")
-    def test_list_project_workflows_success(
-        self, mock_proj_get_table, mock_doc_get_table, mock_wf_get_table
-    ):
+    def test_list_project_workflows_success(self, mock_proj_get_table, mock_doc_get_table, mock_wf_get_table):
         # Mock project exists
         mock_proj_table = MagicMock()
         mock_proj_table.get_item.return_value = {
@@ -479,9 +477,7 @@ class TestListProjectWorkflows:
 
     @patch("app.ddb.documents.get_table")
     @patch("app.ddb.projects.get_table")
-    def test_list_project_workflows_no_documents(
-        self, mock_proj_get_table, mock_doc_get_table
-    ):
+    def test_list_project_workflows_no_documents(self, mock_proj_get_table, mock_doc_get_table):
         mock_proj_table = MagicMock()
         mock_proj_table.get_item.return_value = {
             "Item": {
