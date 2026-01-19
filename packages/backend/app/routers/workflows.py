@@ -51,6 +51,7 @@ class SegmentData(BaseModel):
     image_uri: str
     image_url: str | None = None
     file_uri: str | None = None
+    video_url: str | None = None
     start_timecode_smpte: str | None = None
     end_timecode_smpte: str | None = None
     bda_indexer: str
@@ -131,13 +132,22 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
                 for ia in raw_ai_analysis
             ]
 
+            segment_type = s3_data.get("segment_type", "PAGE")
+            segment_file_uri = s3_data.get("file_uri")
+
+            # Generate video_url for VIDEO/CHAPTER segments
+            video_url = None
+            if segment_type in ("VIDEO", "CHAPTER") and segment_file_uri:
+                video_url = generate_presigned_url(segment_file_uri)
+
             segments.append(
                 SegmentData(
                     segment_index=s3_data.get("segment_index", seg.data.segment_index),
-                    segment_type=s3_data.get("segment_type", "PAGE"),
+                    segment_type=segment_type,
                     image_uri=image_uri,
                     image_url=generate_presigned_url(image_uri),
-                    file_uri=s3_data.get("file_uri"),
+                    file_uri=segment_file_uri,
+                    video_url=video_url,
                     start_timecode_smpte=s3_data.get("start_timecode_smpte"),
                     end_timecode_smpte=s3_data.get("end_timecode_smpte"),
                     bda_indexer=bda_indexer,

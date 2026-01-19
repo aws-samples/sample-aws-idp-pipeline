@@ -28,9 +28,7 @@ class ChatHistoryResponse(BaseModel):
 
 
 @router.get("/projects/{project_id}/sessions")
-def get_project_sessions(
-    project_id: str, x_user_id: str = Header(alias="x-user-id")
-) -> list[Session]:
+def get_project_sessions(project_id: str, x_user_id: str = Header(alias="x-user-id")) -> list[Session]:
     """Get sessions for a project from S3 using DuckDB."""
     config = get_config()
     bucket_name = config.session_storage_bucket_name
@@ -89,8 +87,5 @@ def get_chat_history(
 
     return ChatHistoryResponse(
         session_id=session_id,
-        messages=[
-            ChatMessage(role=row[0], content=row[1], created_at=row[2], updated_at=row[3])
-            for row in result
-        ],
+        messages=[ChatMessage(role=row[0], content=row[1], created_at=row[2], updated_at=row[3]) for row in result],
     )

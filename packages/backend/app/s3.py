@@ -29,6 +29,11 @@ def _get_content_type(key: str) -> str | None:
         "webp": "image/webp",
         "svg": "image/svg+xml",
         "pdf": "application/pdf",
+        "mp4": "video/mp4",
+        "mov": "video/quicktime",
+        "avi": "video/x-msvideo",
+        "mkv": "video/x-matroska",
+        "webm": "video/webm",
     }
     return content_types.get(ext)
 
