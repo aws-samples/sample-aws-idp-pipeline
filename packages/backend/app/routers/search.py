@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Path, Query
 from lancedb.pydantic import LanceModel, Vector
@@ -109,16 +108,14 @@ def rerank_search(
     document_id: str | None = Query(None, description="특정 문서 내에서만 검색"),
     limit: int = Query(3, description="최종 반환할 결과 수"),
     candidate_limit: int = Query(20, description="리랭킹 전 후보 수"),
-    reranker_type: Literal["bedrock", "local"] = Query("bedrock", description="리랭커 타입"),
 ) -> RerankedSearchResponse:
     """
-    리랭크 검색: 하이브리드 검색 후 리랭킹
+    리랭크 검색: 하이브리드 검색 후 Bedrock Cohere Rerank로 리랭킹
 
     - query: 검색 쿼리 텍스트
     - document_id: 특정 문서 내에서만 검색 (선택)
     - limit: 최종 반환할 결과 수
     - candidate_limit: 리랭킹 전 후보 수 (보통 limit의 5~10배)
-    - reranker_type: "bedrock" (Cohere Rerank) 또는 "local" (bge-reranker-v2-m3)
     """
     db = get_db()
     table_name = project_id
@@ -143,7 +140,7 @@ def rerank_search(
     # Step 2: 리랭킹
     doc_contents = [row["content"] for row in candidates]
     actual_limit = min(limit, len(doc_contents))
-    ranked_results = rerank(query, doc_contents, num_results=actual_limit, reranker_type=reranker_type)
+    ranked_results = rerank(query, doc_contents, num_results=actual_limit)
 
     # Step 3: 인덱스로 원본 문서 매핑
     return RerankedSearchResponse(
