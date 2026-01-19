@@ -138,9 +138,16 @@ export function useAwsClient() {
   const fetchApi = useCallback(
     async <T>(path: string, options?: RequestInit): Promise<T> => {
       if (!apis?.Backend) throw new Error('Backend API URL not available');
+      if (!user?.id_token) throw new Error('User token not available');
 
       const client = await createAwsClient('execute-api');
-      const response = await client.fetch(`${apis.Backend}${path}`, options);
+      const headers = new Headers(options?.headers);
+      headers.set('X-Id-Token', user.id_token);
+
+      const response = await client.fetch(`${apis.Backend}${path}`, {
+        ...options,
+        headers,
+      });
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -148,7 +155,7 @@ export function useAwsClient() {
 
       return response.json();
     },
-    [apis, createAwsClient],
+    [apis, createAwsClient, user],
   );
 
   /** S3 파일 업로드 */
@@ -191,6 +198,7 @@ export function useAwsClient() {
       onEvent?: (event: StreamEvent) => void,
     ): Promise<string> => {
       if (!agentRuntimeArn) throw new Error('Agent runtime ARN not available');
+      if (!user?.id_token) throw new Error('User token not available');
 
       const region = extractRegionFromArn(agentRuntimeArn);
       const client = await createAwsClient('bedrock-agentcore', region);
@@ -202,6 +210,7 @@ export function useAwsClient() {
           headers: {
             'Content-Type': 'application/json',
             'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id': sessionId,
+            'X-Id-Token': user.id_token,
           },
           body: JSON.stringify({
             prompt,
@@ -226,7 +235,7 @@ export function useAwsClient() {
 
       return JSON.stringify(await response.json());
     },
-    [agentRuntimeArn, createAwsClient],
+    [agentRuntimeArn, createAwsClient, user],
   );
 
   return { fetchApi, uploadToS3, invokeAgent };

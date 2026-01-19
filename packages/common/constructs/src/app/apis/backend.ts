@@ -203,6 +203,7 @@ export class Backend extends Construct {
           'x-amz-content-sha256',
           'x-amz-date',
           'x-amz-security-token',
+          'x-id-token',
         ],
       },
     });
