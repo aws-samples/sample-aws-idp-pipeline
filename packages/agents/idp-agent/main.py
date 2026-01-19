@@ -1,6 +1,6 @@
 import sys
 
-from bedrock_agentcore.runtime import BedrockAgentCoreApp
+from bedrock_agentcore.runtime import BedrockAgentCoreApp, BedrockAgentCoreContext
 from pydantic import BaseModel
 
 from agent import get_agent
@@ -22,13 +22,6 @@ if not config.session_storage_bucket_name:
 if not config.mcp_gateway_url:
     print("ERROR: MCP_GATEWAY_URL environment variable is required")
     sys.exit(1)
-
-with get_agent(session_id="init") as agent:
-    tool_names = [tool['name'] for tool in agent.tool_registry.get_all_tool_specs()]
-    print(f"Loaded {len(tool_names)} tools:")
-    for name in tool_names:
-        print(f"  - {name}")
-
 
 def filter_stream_event(event: dict) -> dict | None:
     """Filter and transform stream events for client consumption."""
@@ -54,7 +47,10 @@ async def invoke(request: dict):
     """Entry point for agent invocation"""
     req = InvokeRequest(**request)
 
-    with get_agent(session_id=req.session_id, project_id=req.project_id) as agent:
+    headers = BedrockAgentCoreContext.get_request_headers()
+    user_id = headers.get("x-user-id") if headers else None
+
+    with get_agent(session_id=req.session_id, project_id=req.project_id, user_id=user_id) as agent:
         stream = agent.stream_async(req.prompt)
         async for event in stream:
             filtered = filter_stream_event(event)

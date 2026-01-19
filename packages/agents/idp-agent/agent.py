@@ -9,14 +9,24 @@ from agentcore_mcp_client import AgentCoreGatewayMCPClient
 from config import get_config
 
 
-def get_session_manager(session_id: str) -> S3SessionManager:
+def get_session_manager(
+    session_id: str,
+    user_id: str | None = None,
+    project_id: str | None = None,
+) -> S3SessionManager:
     """Get S3SessionManager instance for a session."""
     config = get_config()
+
+    prefix_parts = ["sessions"]
+    if user_id:
+        prefix_parts.append(user_id)
+    if project_id:
+        prefix_parts.append(project_id)
 
     return S3SessionManager(
         session_id=session_id,
         bucket=config.session_storage_bucket_name,
-        prefix="sessions",
+        prefix="/".join(prefix_parts),
     )
 
 
@@ -37,17 +47,18 @@ def get_mcp_client():
 
 
 @contextmanager
-def get_agent(session_id: str, project_id: str | None = None):
+def get_agent(session_id: str, project_id: str | None = None, user_id: str | None = None):
     """Get an agent instance with S3-based session management.
 
     Args:
         session_id: Unique identifier for the session
         project_id: Project ID for document search (optional for init)
+        user_id: User ID for session isolation (optional)
 
     Yields:
         Agent instance with session management configured
     """
-    session_manager = get_session_manager(session_id)
+    session_manager = get_session_manager(session_id, user_id=user_id, project_id=project_id)
     mcp_client = get_mcp_client()
 
     tools = [calculator, current_time, generate_image, http_request]

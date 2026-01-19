@@ -142,7 +142,7 @@ export function useAwsClient() {
 
       const client = await createAwsClient('execute-api');
       const headers = new Headers(options?.headers);
-      headers.set('X-Id-Token', user.id_token);
+      headers.set('X-User-Id', user.profile?.['cognito:username'] as string);
 
       const response = await client.fetch(`${apis.Backend}${path}`, {
         ...options,
@@ -210,7 +210,7 @@ export function useAwsClient() {
           headers: {
             'Content-Type': 'application/json',
             'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id': sessionId,
-            'X-Id-Token': user.id_token,
+            'X-User-Id': user.profile?.['cognito:username'] as string,
           },
           body: JSON.stringify({
             prompt,
