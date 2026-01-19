@@ -19,7 +19,9 @@
     "projects": "プロジェクト",
     "settings": "設定",
     "logout": "ログアウト",
-    "greeting": "こんにちは、{{name}}さん"
+    "greeting": "こんにちは、{{name}}さん",
+    "expand": "サイドバーを展開",
+    "collapse": "サイドバーを折りたたむ"
   },
   "projects": {
     "title": "プロジェクト",

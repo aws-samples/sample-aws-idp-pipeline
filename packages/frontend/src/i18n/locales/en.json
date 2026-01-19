@@ -19,7 +19,9 @@
     "projects": "Projects",
     "settings": "Settings",
     "logout": "Logout",
-    "greeting": "Hi, {{name}}"
+    "greeting": "Hi, {{name}}",
+    "expand": "Expand sidebar",
+    "collapse": "Collapse sidebar"
   },
   "projects": {
     "title": "Projects",

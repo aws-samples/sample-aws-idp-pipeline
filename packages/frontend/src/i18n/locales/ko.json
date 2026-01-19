@@ -19,7 +19,9 @@
     "projects": "프로젝트",
     "settings": "설정",
     "logout": "로그아웃",
-    "greeting": "안녕하세요, {{name}}님"
+    "greeting": "안녕하세요, {{name}}님",
+    "expand": "사이드바 펼치기",
+    "collapse": "사이드바 접기"
   },
   "projects": {
     "title": "프로젝트",
