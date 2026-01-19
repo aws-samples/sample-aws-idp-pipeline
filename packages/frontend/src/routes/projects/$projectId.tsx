@@ -123,7 +123,8 @@ export const Route = createFileRoute('/projects/$projectId')({
 function ProjectDetailPage() {
   const { projectId } = Route.useParams();
   const { fetchApi, invokeAgent } = useAwsClient();
-  const agentSessionId = useMemo(() => nanoid(), []);
+  // AgentCore requires session ID >= 33 chars
+  const agentSessionId = useMemo(() => `idp-session-${nanoid(21)}`, []);
   const [project, setProject] = useState<Project | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
