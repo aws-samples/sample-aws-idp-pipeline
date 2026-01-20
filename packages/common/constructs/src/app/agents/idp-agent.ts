@@ -16,6 +16,7 @@ export interface IdpAgentProps {
   sessionStorageBucket: IBucket;
   lancedbLockTable: ITable;
   lancedbExpressBucketName: string;
+  backendTable: ITable;
   gateway?: Gateway;
 }
 
@@ -31,6 +32,7 @@ export class IdpAgent extends Construct {
       sessionStorageBucket,
       lancedbLockTable,
       lancedbExpressBucketName,
+      backendTable,
       gateway,
     } = props;
 
@@ -46,6 +48,7 @@ export class IdpAgent extends Construct {
         SESSION_STORAGE_BUCKET_NAME: sessionStorageBucket.bucketName,
         LANCEDB_LOCK_TABLE_NAME: lancedbLockTable.tableName,
         LANCEDB_EXPRESS_BUCKET_NAME: lancedbExpressBucketName,
+        BACKEND_TABLE_NAME: backendTable.tableName,
         ...(gateway?.gatewayUrl && { MCP_GATEWAY_URL: gateway.gatewayUrl }),
       },
     });
@@ -59,6 +62,9 @@ export class IdpAgent extends Construct {
 
     // Grant DynamoDB read/write access for LanceDB lock table
     lancedbLockTable.grantReadWriteData(this.runtime.role);
+
+    // Grant DynamoDB read/write access for backend table
+    backendTable.grantReadWriteData(this.runtime.role);
 
     // Grant S3 Express access for LanceDB storage
     this.runtime.addToRolePolicy(

@@ -49,12 +49,25 @@ export class AgentStack extends Stack {
       SSM_KEYS.LANCEDB_EXPRESS_BUCKET_NAME,
     );
 
+    // Get backend table from SSM
+    const backendTableName = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.BACKEND_TABLE_NAME,
+    );
+
+    const backendTable = Table.fromTableName(
+      this,
+      'BackendTable',
+      backendTableName,
+    );
+
     const idpAgent = new IdpAgent(this, 'IdpAgent', {
       agentPath: path.resolve(process.cwd(), '../../packages/agents/idp-agent'),
       agentName: 'idp_agent',
       sessionStorageBucket,
       lancedbLockTable,
       lancedbExpressBucketName,
+      backendTable,
       gateway,
     });
 
@@ -67,6 +80,7 @@ export class AgentStack extends Stack {
       sessionStorageBucket,
       lancedbLockTable,
       lancedbExpressBucketName,
+      backendTable,
       gateway,
     });
 

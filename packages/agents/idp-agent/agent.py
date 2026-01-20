@@ -1,12 +1,13 @@
 from contextlib import contextmanager
 
 import boto3
-from strands import Agent, tool
+from strands import Agent
 from strands.session import S3SessionManager
 from strands_tools import calculator, current_time, generate_image, http_request
 
 from agentcore_mcp_client import AgentCoreGatewayMCPClient
 from config import get_config
+from helpers import get_project_language
 
 
 def get_session_manager(
@@ -67,6 +68,7 @@ def get_agent(session_id: str, project_id: str | None = None, user_id: str | Non
     config = get_config()
     if config.is_agentcore:
         from strands_tools import code_interpreter
+
         tools.append(code_interpreter)
 
     system_prompt = """
@@ -76,17 +78,24 @@ Provide accurate answers based on the search results and cite the source when an
 """
 
     if project_id:
-        if mcp_client:
-            tools.append(mcp_client)
+        language_code = get_project_language(project_id) or "en"
+
         system_prompt += f"""
 Current project_id: {project_id}
 When using the search_documents tool, always use this project_id.
+You MUST respond in the language corresponding to code: {language_code}.
 """
 
-    agent = Agent(
-        system_prompt=system_prompt,
-        tools=tools,
-        session_manager=session_manager,
-    )
+    def create_agent():
+        return Agent(
+            system_prompt=system_prompt,
+            tools=tools,
+            session_manager=session_manager,
+        )
 
-    yield agent
+    if mcp_client:
+        with mcp_client:
+            tools.extend(mcp_client.list_tools_sync())
+            yield create_agent()
+    else:
+        yield create_agent()

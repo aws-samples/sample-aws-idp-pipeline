@@ -10,6 +10,7 @@ class Config(BaseSettings):
     session_storage_bucket_name: str = ""
     mcp_gateway_url: str = ""
     agentcore_runtime_id: str = ""
+    backend_table_name: str = ""
 
     @property
     def is_agentcore(self) -> bool:
