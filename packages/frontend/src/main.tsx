@@ -2,6 +2,7 @@ import { useAuth } from 'react-oidc-context';
 import CognitoAuth from './components/CognitoAuth';
 import { useRuntimeConfig } from './hooks/useRuntimeConfig';
 import RuntimeConfigProvider from './components/RuntimeConfig';
+import { ToastProvider } from './components/Toast';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider, createRouter } from '@tanstack/react-router';
@@ -40,7 +41,9 @@ if (root) {
     <React.StrictMode>
       <RuntimeConfigProvider>
         <CognitoAuth>
-          <App />
+          <ToastProvider>
+            <App />
+          </ToastProvider>
         </CognitoAuth>
       </RuntimeConfigProvider>
     </React.StrictMode>,

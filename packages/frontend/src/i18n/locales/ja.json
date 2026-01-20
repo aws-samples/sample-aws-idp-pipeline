@@ -14,7 +14,9 @@
     "confirm": "確認",
     "search": "検索",
     "noResults": "結果が見つかりません",
-    "language": "言語"
+    "language": "言語",
+    "yesterday": "昨日",
+    "daysAgo": "{{count}}日前"
   },
   "nav": {
     "projects": "プロジェクト",
@@ -40,6 +42,7 @@
     "editProject": "プロジェクト編集",
     "deleteProject": "プロジェクト削除",
     "deleteConfirm": "このプロジェクトを削除しますか？",
+    "deleteConfirmMessage": "「{{name}}」を削除しますか？\nこの操作は取り消せません。",
     "projectName": "プロジェクト名",
     "projectNamePlaceholder": "マイプロジェクト",
     "projectId": "プロジェクトID",
@@ -53,7 +56,11 @@
     "advancedSettings": "詳細設定",
     "notFound": "プロジェクトが見つかりません",
     "backToProjects": "プロジェクト一覧へ",
-    "languageTooltip": "ドキュメント分析時にこの言語で結果が出力されます"
+    "languageTooltip": "ドキュメント分析時にこの言語で結果が出力されます",
+    "sortCreatedDesc": "作成日 ↓",
+    "sortCreatedAsc": "作成日 ↑",
+    "sortUpdatedDesc": "更新日 ↓",
+    "sortUpdatedAsc": "更新日 ↑"
   },
   "documents": {
     "title": "ドキュメント",
@@ -153,9 +160,22 @@
     "startConversation": "会話を始める",
     "uploadAndAsk": "ドキュメントをアップロードして質問してください",
     "newConversation": "新しい会話",
+    "newChat": "新しいチャット",
     "clearHistory": "履歴をクリア",
     "enterToSend": "Enterで送信、Shift+Enterで改行",
-    "usingTool": "{{tool}}を使用中..."
+    "usingTool": "{{tool}}を使用中...",
+    "welcomeTitle": "何をお手伝いしましょうか？",
+    "welcomeDescription": "アップロードされたドキュメントについて質問してください",
+    "trySaying": "こんな質問をしてみてください",
+    "suggestions": {
+      "summarize": "このドキュメントを要約してください",
+      "explain": "このドキュメントの要点を説明してください",
+      "extract": "このドキュメントから重要な情報を抽出してください"
+    },
+    "history": "会話履歴",
+    "noHistory": "会話履歴がありません",
+    "artifacts": "アーティファクト",
+    "noArtifacts": "アーティファクトがありません"
   },
   "viewer": {
     "zoomIn": "拡大",

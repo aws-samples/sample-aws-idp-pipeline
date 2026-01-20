@@ -77,6 +77,14 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
+export interface ChatSession {
+  session_id: string;
+  session_type: string;
+  created_at: string;
+  updated_at: string;
+  session_name: string | null;
+}
+
 export interface WorkflowProgress {
   workflowId: string;
   documentId: string;

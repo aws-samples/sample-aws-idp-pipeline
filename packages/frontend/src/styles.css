@@ -628,7 +628,7 @@ a {
 
 /* Page Container */
 .bento-page {
-  padding: 1.5rem 2rem 2rem;
+  padding: 0.75rem 2rem 2rem;
   min-height: 100%;
   overflow-y: auto;
   position: relative;
@@ -640,8 +640,8 @@ a {
   display: flex;
   flex-direction: column;
   gap: 2rem;
-  padding: 1.5rem 0 2rem;
-  margin-bottom: 1.5rem;
+  padding: 0.5rem 0 1.5rem;
+  margin-bottom: 1rem;
 }
 
 @media (min-width: 768px) {
@@ -1525,6 +1525,17 @@ a {
   background: var(--color-bg-secondary) !important;
   border-color: var(--color-border) !important;
   color: var(--color-text-primary) !important;
+}
+
+/* Chat input box - transparent textarea */
+.card .chat-input-box textarea {
+  background: transparent !important;
+  border: none !important;
+  color: var(--color-text-primary) !important;
+}
+
+.card .chat-input-box textarea::placeholder {
+  color: var(--color-text-muted) !important;
 }
 
 .card textarea::placeholder,
