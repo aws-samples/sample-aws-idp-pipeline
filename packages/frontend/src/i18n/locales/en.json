@@ -14,7 +14,9 @@
     "confirm": "Confirm",
     "search": "Search",
     "noResults": "No results found",
-    "language": "Language"
+    "language": "Language",
+    "yesterday": "Yesterday",
+    "daysAgo": "{{count}} days ago"
   },
   "nav": {
     "projects": "Projects",
@@ -40,6 +42,7 @@
     "editProject": "Edit Project",
     "deleteProject": "Delete Project",
     "deleteConfirm": "Are you sure you want to delete this project?",
+    "deleteConfirmMessage": "Are you sure you want to delete \"{{name}}\"?\nThis action cannot be undone.",
     "projectName": "Project Name",
     "projectNamePlaceholder": "My Project",
     "projectId": "Project ID",
@@ -53,7 +56,11 @@
     "advancedSettings": "Advanced Settings",
     "notFound": "Project not found",
     "backToProjects": "Back to Projects",
-    "languageTooltip": "Documents will be analyzed in this language"
+    "languageTooltip": "Documents will be analyzed in this language",
+    "sortCreatedDesc": "Created ↓",
+    "sortCreatedAsc": "Created ↑",
+    "sortUpdatedDesc": "Updated ↓",
+    "sortUpdatedAsc": "Updated ↑"
   },
   "documents": {
     "title": "Documents",
@@ -153,9 +160,22 @@
     "startConversation": "Start a conversation",
     "uploadAndAsk": "Upload documents and ask questions about them",
     "newConversation": "New Conversation",
+    "newChat": "New Chat",
     "clearHistory": "Clear History",
     "enterToSend": "Press Enter to send, Shift+Enter for new line",
-    "usingTool": "Using {{tool}}..."
+    "usingTool": "Using {{tool}}...",
+    "welcomeTitle": "How can I help you?",
+    "welcomeDescription": "Ask questions about your uploaded documents",
+    "trySaying": "Try asking",
+    "suggestions": {
+      "summarize": "Summarize this document for me",
+      "explain": "Explain the key points of this document",
+      "extract": "Extract important information from this document"
+    },
+    "history": "History",
+    "noHistory": "No conversation history",
+    "artifacts": "Artifacts",
+    "noArtifacts": "No artifacts yet"
   },
   "viewer": {
     "zoomIn": "Zoom In",

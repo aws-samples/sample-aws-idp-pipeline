@@ -1,5 +1,21 @@
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  FileText,
+  Image,
+  Film,
+  Music,
+  File,
+  Plus,
+  RefreshCw,
+  CloudUpload,
+  X,
+  Eye,
+  Trash2,
+  Check,
+  Loader2,
+  FileX,
+} from 'lucide-react';
 import { Document, Workflow, WorkflowProgress } from '../types/project';
 
 interface DocumentsPanelProps {
@@ -24,48 +40,18 @@ interface DocumentsPanelProps {
 
 const getFileIcon = (fileType: string) => {
   if (fileType.includes('pdf')) {
-    return (
-      <svg
-        className="h-5 w-5 text-red-500"
-        fill="currentColor"
-        viewBox="0 0 20 20"
-      >
-        <path
-          fillRule="evenodd"
-          d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
-          clipRule="evenodd"
-        />
-      </svg>
-    );
+    return <FileText className="h-5 w-5 text-blue-500" />;
   }
   if (fileType.includes('image')) {
-    return (
-      <svg
-        className="h-5 w-5 text-green-500"
-        fill="currentColor"
-        viewBox="0 0 20 20"
-      >
-        <path
-          fillRule="evenodd"
-          d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"
-          clipRule="evenodd"
-        />
-      </svg>
-    );
+    return <Image className="h-5 w-5 text-emerald-500" />;
   }
-  return (
-    <svg
-      className="h-5 w-5 text-slate-400"
-      fill="currentColor"
-      viewBox="0 0 20 20"
-    >
-      <path
-        fillRule="evenodd"
-        d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
+  if (fileType.includes('video')) {
+    return <Film className="h-5 w-5 text-violet-500" />;
+  }
+  if (fileType.includes('audio')) {
+    return <Music className="h-5 w-5 text-amber-500" />;
+  }
+  return <File className="h-5 w-5 text-slate-400" />;
 };
 
 const getStatusBadge = (status: string) => {
@@ -101,7 +87,7 @@ export default function DocumentsPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="w-1/3 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden">
+    <div className="w-full h-full flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
       {/* Documents Header with Toolbar */}
       <div className="p-3 border-b border-slate-200">
         <div className="flex items-center gap-2">
@@ -113,19 +99,7 @@ export default function DocumentsPanel({
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
+            <Plus className="h-4 w-4" />
             {t('documents.addDocument')}
           </button>
           <button
@@ -133,19 +107,7 @@ export default function DocumentsPanel({
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
             title={t('documents.refresh')}
           >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
+            <RefreshCw className="h-4 w-4" />
             {t('documents.refresh')}
           </button>
           <span className="ml-auto text-xs text-slate-500">
@@ -170,40 +132,19 @@ export default function DocumentsPanel({
             className="absolute top-3 right-3 p-1.5 hover:bg-slate-200 rounded-lg transition-colors z-10"
             title="Close"
           >
-            <svg
-              className="h-4 w-4 text-slate-500"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <X className="h-4 w-4 text-slate-500" />
           </button>
           <label
             className={`flex flex-col items-center justify-center p-8 cursor-pointer transition-colors ${
               isDragging ? 'bg-blue-100' : 'hover:bg-slate-100'
             } ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            <svg
+            <CloudUpload
               className={`h-12 w-12 mb-3 transition-colors ${
                 isDragging ? 'text-blue-500' : 'text-slate-400'
               }`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-              />
-            </svg>
+              strokeWidth={1.5}
+            />
             <p
               className={`text-sm font-medium mb-1 transition-colors ${
                 isDragging ? 'text-blue-700' : 'text-slate-700'
@@ -235,19 +176,10 @@ export default function DocumentsPanel({
       <div className="flex-1 overflow-y-auto p-3">
         {documents.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-6">
-            <svg
-              className="h-16 w-16 text-slate-200 mb-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-            </svg>
+            <FileX
+              className="h-16 w-16 text-slate-300 dark:text-slate-500 mb-4"
+              strokeWidth={1}
+            />
             <p className="text-sm font-medium text-slate-500 mb-1">
               {t('documents.noDocuments')}
             </p>
@@ -334,25 +266,7 @@ export default function DocumentsPanel({
                             className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30 dark:hover:bg-blue-800/40 rounded-lg transition-colors"
                             title="View analysis"
                           >
-                            <svg
-                              className="h-3.5 w-3.5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                              />
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                              />
-                            </svg>
+                            <Eye className="h-3.5 w-3.5" />
                             {t('documents.view')}
                           </button>
                         )}
@@ -364,19 +278,7 @@ export default function DocumentsPanel({
                           className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                           title="Delete document"
                         >
-                          <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                          </svg>
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     )}
@@ -388,53 +290,11 @@ export default function DocumentsPanel({
                       <div className="mt-3 pt-3 border-t border-slate-100">
                         <div className="flex items-center gap-2 mb-1">
                           {processingComplete ? (
-                            <svg
-                              className="h-4 w-4 text-green-500"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
+                            <Check className="h-4 w-4 text-green-500" />
                           ) : processingFailed ? (
-                            <svg
-                              className="h-4 w-4 text-red-500"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M6 18L18 6M6 6l12 12"
-                              />
-                            </svg>
+                            <X className="h-4 w-4 text-red-500" />
                           ) : (
-                            <svg
-                              className="h-4 w-4 text-blue-500 animate-spin"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                            >
-                              <circle
-                                className="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                strokeWidth="4"
-                              />
-                              <path
-                                className="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                              />
-                            </svg>
+                            <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
                           )}
                           <span
                             className={`text-xs font-medium ${

@@ -371,7 +371,11 @@ const AppLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
       {/* Main Content */}
       <main className="app-main">
         <section className="card">{children}</section>
-        <footer className="app-footer">Powered by Korea PACE Team</footer>
+        <footer className="app-footer">
+          <span className="text-xs font-medium bg-gradient-to-r from-slate-400 to-slate-500 dark:from-slate-500 dark:to-slate-600 bg-clip-text text-transparent">
+            Powered by Korea PACE Team
+          </span>
+        </footer>
       </main>
     </div>
   );

@@ -1,14 +1,22 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { useTranslation } from 'react-i18next';
+import { Search, ArrowUpDown } from 'lucide-react';
 import { useAwsClient } from '../hooks/useAwsClient';
 import CubeLoader from '../components/CubeLoader';
+import ConfirmModal from '../components/ConfirmModal';
 import ProjectSettingsModal, {
   Project,
   LANGUAGES,
   CARD_COLORS,
 } from '../components/ProjectSettingsModal';
+
+type SortOption =
+  | 'created_desc'
+  | 'created_asc'
+  | 'updated_desc'
+  | 'updated_asc';
 
 export const Route = createFileRoute('/')({
   component: ProjectsPage,
@@ -18,7 +26,7 @@ interface ProjectCardProps {
   project: Project;
   colorIndex: number;
   onEdit: (project: Project) => void;
-  onDelete: (projectId: string) => void;
+  onDelete: (project: Project) => void;
   index: number;
 }
 
@@ -153,7 +161,7 @@ function ProjectCard({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            onDelete(project.project_id);
+            onDelete(project);
           }}
           className="bento-action-btn bento-action-delete"
           title={t('projects.deleteProject')}
@@ -193,6 +201,54 @@ function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortOption, setSortOption] = useState<SortOption>('created_desc');
+
+  const filteredProjects = useMemo(() => {
+    let result = [...projects];
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          p.description?.toLowerCase().includes(query),
+      );
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      switch (sortOption) {
+        case 'created_desc':
+          return (
+            new Date(b.created_at || 0).getTime() -
+            new Date(a.created_at || 0).getTime()
+          );
+        case 'created_asc':
+          return (
+            new Date(a.created_at || 0).getTime() -
+            new Date(b.created_at || 0).getTime()
+          );
+        case 'updated_desc':
+          return (
+            new Date(b.updated_at || 0).getTime() -
+            new Date(a.updated_at || 0).getTime()
+          );
+        case 'updated_asc':
+          return (
+            new Date(a.updated_at || 0).getTime() -
+            new Date(b.updated_at || 0).getTime()
+          );
+        default:
+          return 0;
+      }
+    });
+
+    return result;
+  }, [projects, searchQuery, sortOption]);
 
   const isInitializedRef = useRef(false);
 
@@ -258,14 +314,23 @@ function ProjectsPage() {
     await loadProjects();
   };
 
-  const handleDeleteProject = async (projectId: string) => {
-    if (!window.confirm(t('projects.deleteConfirm'))) return;
+  const handleDeleteProject = (project: Project) => {
+    setDeleteTarget(project);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await fetchApi(`projects/${projectId}`, { method: 'DELETE' });
+      await fetchApi(`projects/${deleteTarget.project_id}`, {
+        method: 'DELETE',
+      });
+      setDeleteTarget(null);
       await loadProjects();
     } catch (error) {
       console.error('Failed to delete project:', error);
     }
+    setDeleting(false);
   };
 
   return (
@@ -289,6 +354,44 @@ function ProjectsPage() {
               </p>
             </div>
           </header>
+
+          {/* Filter Bar */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            {/* Search */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('common.search')}
+                className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900 dark:text-white placeholder-slate-400"
+              />
+            </div>
+
+            {/* Sort */}
+            <div className="flex items-center gap-2">
+              <ArrowUpDown className="w-4 h-4 text-slate-400" />
+              <select
+                value={sortOption}
+                onChange={(e) => setSortOption(e.target.value as SortOption)}
+                className="px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900 dark:text-white"
+              >
+                <option value="created_desc">
+                  {t('projects.sortCreatedDesc')}
+                </option>
+                <option value="created_asc">
+                  {t('projects.sortCreatedAsc')}
+                </option>
+                <option value="updated_desc">
+                  {t('projects.sortUpdatedDesc')}
+                </option>
+                <option value="updated_asc">
+                  {t('projects.sortUpdatedAsc')}
+                </option>
+              </select>
+            </div>
+          </div>
 
           <div className="bento-grid">
             {/* New Project Card */}
@@ -316,7 +419,7 @@ function ProjectsPage() {
               </span>
             </button>
 
-            {projects.map((project, index) => (
+            {filteredProjects.map((project, index) => (
               <ProjectCard
                 key={project.project_id}
                 project={project}
@@ -337,6 +440,20 @@ function ProjectsPage() {
         onClose={closeModal}
         onSave={handleSaveProject}
         isCreating={!editingProject}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        title={t('projects.deleteProject')}
+        message={t('projects.deleteConfirmMessage', {
+          name: deleteTarget?.name,
+        })}
+        confirmText={t('common.delete')}
+        variant="danger"
+        loading={deleting}
       />
     </div>
   );

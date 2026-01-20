@@ -9,6 +9,7 @@ import {
   Download,
   Upload,
   ChevronDown,
+  MessageSquarePlus,
 } from 'lucide-react';
 import { Project, CARD_COLORS } from './ProjectSettingsModal';
 
@@ -17,6 +18,7 @@ interface ProjectNavBarProps {
   documentCount: number;
   isConnected: boolean;
   onSettingsClick: () => void;
+  onNewChat: () => void;
 }
 
 interface DropdownItem {
@@ -113,6 +115,7 @@ export default function ProjectNavBar({
   documentCount,
   isConnected,
   onSettingsClick,
+  onNewChat,
 }: ProjectNavBarProps) {
   const { t } = useTranslation();
   const projectColor = CARD_COLORS[project.color ?? 0] || CARD_COLORS[0];
@@ -188,6 +191,14 @@ export default function ProjectNavBar({
 
       {/* Menu */}
       <div className="flex items-center gap-1">
+        <button
+          onClick={onNewChat}
+          className="inline-flex items-center gap-1.5 h-8 px-3 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
+        >
+          <MessageSquarePlus className="h-4 w-4" />
+          <span>{t('chat.newChat')}</span>
+        </button>
+
         {menuItems.map((item) => (
           <NavDropdown
             key={item.label}

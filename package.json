@@ -8,6 +8,7 @@
   },
   "private": true,
   "dependencies": {
+    "@ark-ui/react": "^5.30.0",
     "@aws-cdk/aws-lambda-python-alpha": "2.233.0-alpha.0",
     "@aws-crypto/sha256-browser": "^5.2.0",
     "@aws-sdk/client-s3": "^3.965.0",
