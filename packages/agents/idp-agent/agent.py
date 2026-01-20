@@ -2,6 +2,7 @@ from contextlib import contextmanager
 
 import boto3
 from strands import Agent
+from strands.models import BedrockModel
 from strands.session import S3SessionManager
 from strands_tools import calculator, current_time, generate_image, http_request
 
@@ -86,8 +87,14 @@ When using the search_documents tool, always use this project_id.
 You MUST respond in the language corresponding to code: {language_code}.
 """
 
+    bedrock_model = BedrockModel(
+        model_id=config.bedrock_model_id,
+        region_name=config.aws_region,
+    )
+
     def create_agent():
         return Agent(
+            model=bedrock_model,
             system_prompt=system_prompt,
             tools=tools,
             session_manager=session_manager,

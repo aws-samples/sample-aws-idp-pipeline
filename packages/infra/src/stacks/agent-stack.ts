@@ -69,6 +69,7 @@ export class AgentStack extends Stack {
       lancedbExpressBucketName,
       backendTable,
       gateway,
+      bedrockModelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
     });
 
     const bidiAgent = new IdpAgent(this, 'BidiAgent', {

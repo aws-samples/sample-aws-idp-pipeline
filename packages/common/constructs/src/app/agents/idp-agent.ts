@@ -18,6 +18,7 @@ export interface IdpAgentProps {
   lancedbExpressBucketName: string;
   backendTable: ITable;
   gateway?: Gateway;
+  bedrockModelId?: string;
 }
 
 export class IdpAgent extends Construct {
@@ -34,6 +35,7 @@ export class IdpAgent extends Construct {
       lancedbExpressBucketName,
       backendTable,
       gateway,
+      bedrockModelId,
     } = props;
 
     const dockerImage = AgentRuntimeArtifact.fromAsset(agentPath, {
@@ -50,6 +52,7 @@ export class IdpAgent extends Construct {
         LANCEDB_EXPRESS_BUCKET_NAME: lancedbExpressBucketName,
         BACKEND_TABLE_NAME: backendTable.tableName,
         ...(gateway?.gatewayUrl && { MCP_GATEWAY_URL: gateway.gatewayUrl }),
+        ...(bedrockModelId && { BEDROCK_MODEL_ID: bedrockModelId }),
       },
     });
 
