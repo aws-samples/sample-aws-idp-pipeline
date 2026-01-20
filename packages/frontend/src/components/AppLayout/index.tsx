@@ -86,11 +86,54 @@ const CollapseIcon = ({ collapsed }: { collapsed: boolean }) => (
   </svg>
 );
 
+const SunIcon = () => (
+  <svg
+    className="w-4 h-4"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <circle cx="12" cy="12" r="5" />
+    <line x1="12" y1="1" x2="12" y2="3" />
+    <line x1="12" y1="21" x2="12" y2="23" />
+    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+    <line x1="1" y1="12" x2="3" y2="12" />
+    <line x1="21" y1="12" x2="23" y2="12" />
+    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+  </svg>
+);
+
+const MoonIcon = () => (
+  <svg
+    className="w-4 h-4"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+  </svg>
+);
+
 /**
  * Defines the App layout with sidebar navigation.
  */
-const LAST_PROJECT_KEY = 'idp-last-project';
 const SIDEBAR_COLLAPSED_KEY = 'idp-sidebar-collapsed';
+const THEME_KEY = 'idp-theme';
+
+const getInitialTheme = (): 'light' | 'dark' => {
+  const stored = localStorage.getItem(THEME_KEY);
+  if (stored === 'dark' || stored === 'light') return stored;
+  if (window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+  return 'light';
+};
 
 const AppLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
   const { user, removeUser, signoutRedirect, clearStaleState } = useAuth();
@@ -100,6 +143,7 @@ const AppLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
   });
+  const [theme, setTheme] = useState<'light' | 'dark'>(getInitialTheme);
   const langDropdownRef = useRef<HTMLDivElement>(null);
 
   const toggleSidebar = () => {
@@ -108,22 +152,21 @@ const AppLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(newValue));
   };
 
-  // Track and save last visited project
-  useEffect(() => {
-    const match = pathname.match(/^\/projects\/([^/]+)/);
-    if (match) {
-      localStorage.setItem(LAST_PROJECT_KEY, match[1]);
-    }
-  }, [pathname]);
-
-  const getProjectsPath = () => {
-    const lastProject = localStorage.getItem(LAST_PROJECT_KEY);
-    return lastProject ? `/projects/${lastProject}` : '/';
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem(THEME_KEY, newTheme);
   };
+
+  // Apply theme class to document
+  useEffect(() => {
+    document.documentElement.classList.remove('light', 'dark');
+    document.documentElement.classList.add(theme);
+  }, [theme]);
 
   const navItems = [
     {
-      to: getProjectsPath(),
+      to: '/',
       label: t('nav.projects'),
       icon: <ProjectsIcon />,
       matchPaths: ['/', '/projects'],
@@ -182,7 +225,7 @@ const AppLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
         <div className="sidebar-header">
           <a href="/" className="sidebar-brand">
             <img
-              src={Config.logo}
+              src="/logo.png"
               alt={`${Config.applicationName} logo`}
               className="sidebar-logo"
             />
@@ -217,6 +260,21 @@ const AppLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
 
         {/* Bottom Section */}
         <div className="sidebar-footer">
+          {/* Theme Toggle */}
+          <button
+            type="button"
+            className="sidebar-theme-toggle"
+            onClick={toggleTheme}
+            title={theme === 'light' ? t('nav.darkMode') : t('nav.lightMode')}
+          >
+            {theme === 'light' ? <MoonIcon /> : <SunIcon />}
+            {!sidebarCollapsed && (
+              <span>
+                {theme === 'light' ? t('nav.darkMode') : t('nav.lightMode')}
+              </span>
+            )}
+          </button>
+
           {/* Language Selector */}
           <div className="sidebar-lang-selector" ref={langDropdownRef}>
             <button
@@ -313,6 +371,7 @@ const AppLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
       {/* Main Content */}
       <main className="app-main">
         <section className="card">{children}</section>
+        <footer className="app-footer">Powered by Korea PACE Team</footer>
       </main>
     </div>
   );
