@@ -44,7 +44,7 @@ function ProjectDetailPage() {
   const { projectId } = Route.useParams();
   const { fetchApi, invokeAgent } = useAwsClient();
   // AgentCore requires session ID >= 33 chars
-  const agentSessionId = useMemo(() => `idp-session-${nanoid(21)}`, []);
+  const agentSessionId = useMemo(() => nanoid(33), []);
   const [project, setProject] = useState<Project | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -195,7 +195,7 @@ function ProjectDetailPage() {
       const response = await fetchApi<{
         session_id: string;
         messages: { role: string; content: string }[];
-      }>(`chat/sessions/${agentSessionId}/history`);
+      }>(`chat/projects/${projectId}/sessions/${agentSessionId}`);
       if (response.messages.length > 0) {
         const loadedMessages: ChatMessage[] = response.messages.map(
           (msg, idx) => ({
@@ -490,7 +490,7 @@ function ProjectDetailPage() {
 
     try {
       const response = await invokeAgent(
-        userMessage.content,
+        [{ text: userMessage.content }],
         agentSessionId,
         projectId,
         handleStreamEvent,

@@ -20,6 +20,27 @@ export interface StreamEvent {
   name?: string;
 }
 
+export interface ContentSource {
+  base64: string;
+}
+
+export interface ImageContent {
+  format: string;
+  source: ContentSource;
+}
+
+export interface DocumentContent {
+  format: string;
+  name: string;
+  source: ContentSource;
+}
+
+export interface ContentBlock {
+  image?: ImageContent;
+  document?: DocumentContent;
+  text?: string;
+}
+
 /** 스트림 파싱 (JSON 이벤트) */
 async function parseStream(
   response: Response,
@@ -192,7 +213,7 @@ export function useAwsClient() {
   /** Bedrock Agent 호출 (스트리밍 지원) */
   const invokeAgent = useCallback(
     async (
-      prompt: string,
+      prompt: ContentBlock[],
       sessionId: string,
       projectId: string,
       onEvent?: (event: StreamEvent) => void,

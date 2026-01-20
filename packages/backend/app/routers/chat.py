@@ -72,18 +72,21 @@ def get_chat_history(
     print(s3_path)
 
     conn = get_duckdb_connection()
-    result = conn.execute(f"""
-        SELECT
-            message.role as role,
-            string_agg(content_item.text, '') as content,
-            created_at,
-            updated_at
-        FROM read_json_auto('{s3_path}'),
-        UNNEST(message.content) as t(content_item)
-        WHERE message.role IN ('user', 'assistant')
-        GROUP BY message_id, message.role, created_at, updated_at
-        ORDER BY message_id
-    """).fetchall()
+    try:
+        result = conn.execute(f"""
+            SELECT
+                message.role as role,
+                string_agg(content_item.text, '') as content,
+                created_at,
+                updated_at
+            FROM read_json_auto('{s3_path}'),
+            UNNEST(message.content) as t(content_item)
+            WHERE message.role IN ('user', 'assistant')
+            GROUP BY message_id, message.role, created_at, updated_at
+            ORDER BY message_id
+        """).fetchall()
+    except Exception:
+        return ChatHistoryResponse(session_id=session_id, messages=[])
 
     return ChatHistoryResponse(
         session_id=session_id,
