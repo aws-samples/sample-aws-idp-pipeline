@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { MessageSquare, FileCode } from 'lucide-react';
+import { MessageSquare, FileCode, Loader2, ChevronDown } from 'lucide-react';
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -11,12 +11,18 @@ interface SidePanelProps {
   sessions: ChatSession[];
   currentSessionId: string;
   onSessionSelect: (sessionId: string) => void;
+  hasMoreSessions?: boolean;
+  loadingMoreSessions?: boolean;
+  onLoadMoreSessions?: () => void;
 }
 
 export default function SidePanel({
   sessions,
   currentSessionId,
   onSessionSelect,
+  hasMoreSessions = false,
+  loadingMoreSessions = false,
+  onLoadMoreSessions,
 }: SidePanelProps) {
   const { t, i18n } = useTranslation();
 
@@ -94,6 +100,24 @@ export default function SidePanel({
                       </div>
                     </button>
                   ))}
+                  {hasMoreSessions && onLoadMoreSessions && (
+                    <button
+                      onClick={onLoadMoreSessions}
+                      disabled={loadingMoreSessions}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 mt-2 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {loadingMoreSessions ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                      <span>
+                        {loadingMoreSessions
+                          ? t('common.loading')
+                          : t('chat.loadMore', 'Load more')}
+                      </span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>

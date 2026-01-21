@@ -23,6 +23,8 @@ from shared.s3_analysis import (
     get_s3_client,
     parse_s3_uri,
     update_segment_analysis,
+    update_segment_status,
+    SegmentStatus,
 )
 from shared.websocket import notify_step_start, notify_step_complete, notify_step_error
 
@@ -140,7 +142,11 @@ def save_ocr_to_segments(file_uri: str, ocr_result: dict) -> int:
         # Fallback: no pages array, use top-level content
         content = ocr_result.get('content', '')
         if content:
-            update_segment_analysis(file_uri, 0, paddleocr=content)
+            update_segment_analysis(
+                file_uri, 0,
+                paddleocr=content,
+                status=SegmentStatus.OCR_PROCESSING
+            )
             print(f'OCR content saved to segment 0')
         return 1
 
@@ -148,7 +154,11 @@ def save_ocr_to_segments(file_uri: str, ocr_result: dict) -> int:
     for i, page in enumerate(pages):
         page_content = page.get('content', '')
         if page_content:
-            update_segment_analysis(file_uri, i, paddleocr=page_content)
+            update_segment_analysis(
+                file_uri, i,
+                paddleocr=page_content,
+                status=SegmentStatus.OCR_PROCESSING
+            )
             print(f'OCR content saved to segment {i}')
 
     return len(pages)

@@ -68,6 +68,22 @@ Summary:"""
         return f'Summary generation failed: {e}'
 
 
+def extract_document_id_from_uri(file_uri: str) -> str:
+    """Extract document_id from file_uri as fallback.
+    Expected format: s3://bucket/projects/{project_id}/documents/{document_id}/{file_name}
+    """
+    if not file_uri:
+        return ''
+    parts = file_uri.split('/')
+    try:
+        doc_index = parts.index('documents')
+        if doc_index + 1 < len(parts):
+            return parts[doc_index + 1]
+    except ValueError:
+        pass
+    return ''
+
+
 def handler(event, context):
     print(f'Event: {json.dumps(event)}')
 
@@ -76,6 +92,11 @@ def handler(event, context):
     file_uri = event.get('file_uri')
     segment_count = event.get('segment_count', 0)
     model_id = os.environ.get('SUMMARIZER_MODEL_ID', 'us.anthropic.claude-3-5-haiku-20241022-v1:0')
+
+    # Fallback: extract document_id from file_uri if not provided
+    if not document_id and file_uri:
+        document_id = extract_document_id_from_uri(file_uri)
+        print(f'Extracted document_id from file_uri: {document_id}')
 
     record_step_complete(workflow_id, StepName.SEGMENT_ANALYZER, segment_count=segment_count)
     notify_step_complete(workflow_id, 'SegmentAnalyzer', segment_count=segment_count)

@@ -330,7 +330,7 @@ export default function ChatPanel({
                 /* AI message - no bubble, markdown */
                 <div
                   key={message.id}
-                  className="prose prose-sm dark:prose-invert max-w-none text-slate-800 dark:text-slate-200"
+                  className="prose prose-sm dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 [&_strong]:!text-inherit"
                 >
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {message.content}
@@ -366,7 +366,7 @@ export default function ChatPanel({
                   </div>
                 )}
                 {streamingContent ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none text-slate-800 dark:text-slate-200">
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 [&_strong]:!text-inherit">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {streamingContent}
                     </ReactMarkdown>

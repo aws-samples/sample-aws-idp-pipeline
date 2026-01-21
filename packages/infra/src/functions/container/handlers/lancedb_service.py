@@ -230,6 +230,26 @@ def action_get_segments(params: dict) -> dict:
     return {'success': True, 'segments': segments}
 
 
+def action_list_tables(params: dict) -> dict:
+    """List all tables in LanceDB."""
+    db = get_lancedb_connection()
+    table_names = db.table_names()
+    return {'success': True, 'tables': table_names}
+
+
+def action_count(params: dict) -> dict:
+    """Count records in a project table."""
+    project_id = params.get('project_id', 'default')
+    db = get_lancedb_connection()
+
+    if project_id not in db.table_names():
+        return {'success': True, 'project_id': project_id, 'count': 0, 'exists': False}
+
+    table = db.open_table(project_id)
+    count = table.count_rows()
+    return {'success': True, 'project_id': project_id, 'count': count, 'exists': True}
+
+
 def action_search(params: dict) -> dict:
     project_id = params.get('project_id', 'default')
     table = get_or_create_table(project_id)
@@ -269,6 +289,8 @@ def handler(event, _context):
         'add_record': action_add_record,
         'get_segments': action_get_segments,
         'search': action_search,
+        'list_tables': action_list_tables,
+        'count': action_count,
     }
 
     if action not in actions:

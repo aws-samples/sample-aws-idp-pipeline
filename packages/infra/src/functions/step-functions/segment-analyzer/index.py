@@ -7,7 +7,12 @@ from shared.ddb_client import (
     get_project_document_prompt,
     StepName,
 )
-from shared.s3_analysis import get_segment_analysis, add_segment_ai_analysis
+from shared.s3_analysis import (
+    get_segment_analysis,
+    add_segment_ai_analysis,
+    update_segment_status,
+    SegmentStatus,
+)
 from shared.websocket import notify_segment_progress
 
 from agent import VisionReactAgent
@@ -68,6 +73,9 @@ def handler(event, _context):
         context_parts.append(f'## PaddleOCR:\n{ocr_text}')
 
     context = '\n\n'.join(context_parts) if context_parts else 'No prior analysis available.'
+
+    # Update status to ANALYZING
+    update_segment_status(file_uri, segment_index, SegmentStatus.ANALYZING)
 
     try:
         agent = VisionReactAgent(
@@ -130,6 +138,9 @@ def handler(event, _context):
     except Exception as e:
         print(f'Error in segment analysis: {e}')
         is_video = segment_type in ('VIDEO', 'CHAPTER')
+
+        # Update status to FAILED
+        update_segment_status(file_uri, segment_index, SegmentStatus.FAILED, error=str(e))
 
         # Save error to S3
         add_segment_ai_analysis(

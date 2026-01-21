@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import boto3
 
-from shared.s3_analysis import get_segment_analysis
+from shared.s3_analysis import get_segment_analysis, update_segment_status, SegmentStatus
 
 sqs_client = None
 LANCEDB_WRITE_QUEUE_URL = os.environ.get('LANCEDB_WRITE_QUEUE_URL')
@@ -64,6 +64,9 @@ def handler(event, _context):
 
     image_uri = segment_data.get('image_uri', '')
 
+    # Update status to FINALIZING
+    update_segment_status(file_uri, segment_index, SegmentStatus.FINALIZING)
+
     message = {
         'workflow_id': workflow_id,
         'project_id': project_id,
@@ -84,6 +87,9 @@ def handler(event, _context):
 
         print(f'Sent segment {segment_index} to SQS, MessageId: {response["MessageId"]}')
 
+        # Update status to COMPLETED
+        update_segment_status(file_uri, segment_index, SegmentStatus.COMPLETED)
+
         return {
             'workflow_id': workflow_id,
             'segment_index': segment_index,
@@ -94,6 +100,8 @@ def handler(event, _context):
 
     except Exception as e:
         print(f'Error sending to SQS: {e}')
+        # Update status to FAILED
+        update_segment_status(file_uri, segment_index, SegmentStatus.FAILED, error=str(e))
         return {
             'workflow_id': workflow_id,
             'segment_index': segment_index,

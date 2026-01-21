@@ -76,3 +76,44 @@ def delete_s3_prefix(bucket: str, prefix: str) -> int:
         deleted_count += len(delete_keys)
 
     return deleted_count
+
+
+def get_analysis_prefix_from_file_uri(file_uri: str) -> tuple[str, str]:
+    """Get S3 bucket and analysis prefix from file URI.
+
+    Args:
+        file_uri: S3 URI like s3://bucket/projects/{project_id}/documents/{document_id}/{file}
+
+    Returns:
+        Tuple of (bucket, analysis_prefix)
+    """
+    bucket, key = parse_s3_uri(file_uri)
+    # Remove the filename to get the document folder
+    doc_folder = key.rsplit("/", 1)[0]
+    analysis_prefix = f"{doc_folder}/analysis/segment_"
+    return bucket, analysis_prefix
+
+
+def list_segment_keys(file_uri: str) -> list[str]:
+    """List all segment JSON file keys from S3.
+
+    Args:
+        file_uri: S3 URI of the original document
+
+    Returns:
+        List of S3 keys for segment files, sorted by segment index
+    """
+    bucket, prefix = get_analysis_prefix_from_file_uri(file_uri)
+    s3 = get_s3_client()
+    paginator = s3.get_paginator("list_objects_v2")
+
+    segment_keys = []
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            if key.endswith(".json"):
+                segment_keys.append(key)
+
+    # Sort by segment index (segment_0000.json, segment_0001.json, ...)
+    segment_keys.sort()
+    return segment_keys

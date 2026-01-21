@@ -6,6 +6,7 @@ import { useAwsClient, StreamEvent } from '../../hooks/useAwsClient';
 import { useWebSocket, WebSocketMessage } from '../../hooks/useWebSocket';
 import { useToast } from '../../components/Toast';
 import CubeLoader from '../../components/CubeLoader';
+import ConfirmModal from '../../components/ConfirmModal';
 import ProjectSettingsModal, {
   Project,
 } from '../../components/ProjectSettingsModal';
@@ -55,6 +56,10 @@ function ProjectDetailPage() {
   // AgentCore requires session ID >= 33 chars
   const [currentSessionId, setCurrentSessionId] = useState(() => nanoid(33));
   const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [sessionsNextCursor, setSessionsNextCursor] = useState<string | null>(
+    null,
+  );
+  const [loadingMoreSessions, setLoadingMoreSessions] = useState(false);
   const [project, setProject] = useState<Project | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
@@ -75,6 +80,8 @@ function ProjectDetailPage() {
   const [showUploadArea, setShowUploadArea] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
@@ -201,20 +208,51 @@ function ProjectDetailPage() {
 
   const loadSessions = useCallback(async () => {
     try {
-      const data = await fetchApi<ChatSession[]>(
-        `chat/projects/${projectId}/sessions`,
-      );
+      const data = await fetchApi<{
+        sessions: ChatSession[];
+        next_cursor: string | null;
+      }>(`chat/projects/${projectId}/sessions`);
       setSessions(
-        data.sort(
+        data.sessions.sort(
           (a, b) =>
             new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
         ),
       );
+      setSessionsNextCursor(data.next_cursor);
     } catch (error) {
       console.error('Failed to load sessions:', error);
       setSessions([]);
+      setSessionsNextCursor(null);
     }
   }, [fetchApi, projectId]);
+
+  const loadMoreSessions = useCallback(async () => {
+    if (!sessionsNextCursor || loadingMoreSessions) return;
+
+    setLoadingMoreSessions(true);
+    try {
+      const data = await fetchApi<{
+        sessions: ChatSession[];
+        next_cursor: string | null;
+      }>(`chat/projects/${projectId}/sessions?cursor=${sessionsNextCursor}`);
+
+      setSessions((prev) => {
+        const existingIds = new Set(prev.map((s) => s.session_id));
+        const newSessions = data.sessions.filter(
+          (s) => !existingIds.has(s.session_id),
+        );
+        return [...prev, ...newSessions].sort(
+          (a, b) =>
+            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+        );
+      });
+      setSessionsNextCursor(data.next_cursor);
+    } catch (error) {
+      console.error('Failed to load more sessions:', error);
+    } finally {
+      setLoadingMoreSessions(false);
+    }
+  }, [fetchApi, projectId, sessionsNextCursor, loadingMoreSessions]);
 
   const handleSessionSelect = useCallback(
     async (sessionId: string) => {
@@ -491,15 +529,26 @@ function ProjectDetailPage() {
     }
   };
 
-  const handleDeleteDocument = async (documentId: string) => {
-    if (!window.confirm(t('documents.deleteConfirm'))) return;
+  const handleDeleteDocument = (documentId: string) => {
+    const doc = documents.find((d) => d.document_id === documentId);
+    if (doc) {
+      setDeleteTarget(doc);
+    }
+  };
+
+  const confirmDeleteDocument = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await fetchApi(`projects/${projectId}/documents/${documentId}`, {
+      await fetchApi(`projects/${projectId}/documents/${deleteTarget.document_id}`, {
         method: 'DELETE',
       });
       await loadDocuments();
+      setDeleteTarget(null);
     } catch (error) {
       console.error('Failed to delete document:', error);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -673,6 +722,9 @@ function ProjectDetailPage() {
                 sessions={sessions}
                 currentSessionId={currentSessionId}
                 onSessionSelect={handleSessionSelect}
+                hasMoreSessions={!!sessionsNextCursor}
+                loadingMoreSessions={loadingMoreSessions}
+                onLoadMoreSessions={loadMoreSessions}
               />
             </div>
           </ResizablePanel>
@@ -710,6 +762,18 @@ function ProjectDetailPage() {
             });
           }
         }}
+      />
+
+      {/* Delete Document Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDeleteDocument}
+        title={t('documents.deleteConfirm')}
+        message={deleteTarget?.file_name || ''}
+        confirmText={t('common.delete')}
+        variant="danger"
+        loading={deleting}
       />
     </div>
   );

@@ -3,9 +3,9 @@ import json
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.ddb.workflows import get_workflow_item, query_workflow_segments, query_workflows
+from app.ddb.workflows import get_workflow_item, query_workflows
 from app.markdown import fix_image_uri, transform_markdown_images
-from app.s3 import generate_presigned_url, get_s3_client, parse_s3_uri
+from app.s3 import generate_presigned_url, get_s3_client, list_segment_keys, parse_s3_uri
 
 
 def _get_segment_from_s3(file_uri: str, s3_key: str) -> dict | None:
@@ -103,76 +103,55 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
 
     file_uri = wf.data.file_uri
 
-    # Get segment references from DynamoDB
-    segment_items = query_workflow_segments(workflow_id)
+    # List segment files directly from S3
+    segment_keys = list_segment_keys(file_uri)
     segments = []
 
-    for seg in segment_items:
-        # Get actual segment data from S3
-        print(f"[DEBUG] segment {seg.data.segment_index}: s3_key={seg.data.s3_key}")
-        s3_data = _get_segment_from_s3(file_uri, seg.data.s3_key)
-        print(f"[DEBUG] s3_data loaded: {s3_data is not None}")
+    for s3_key in segment_keys:
+        s3_data = _get_segment_from_s3(file_uri, s3_key)
 
-        if s3_data:
-            print(f"[DEBUG] image_uri from S3: {s3_data.get('image_uri', '')[:100]}")
-            print(f"[DEBUG] bda_indexer preview: {s3_data.get('bda_indexer', '')[:200]}")
-            # Data from S3
-            image_uri = fix_image_uri(s3_data.get("image_uri", ""))
-            bda_indexer = transform_markdown_images(s3_data.get("bda_indexer", ""), image_uri)
-            paddleocr = s3_data.get("paddleocr", "")
-            format_parser = transform_markdown_images(s3_data.get("format_parser", ""), image_uri)
+        if not s3_data:
+            continue
 
-            # Transform ai_analysis content
-            raw_ai_analysis = s3_data.get("ai_analysis", [])
-            ai_analysis = [
-                {
-                    "analysis_query": ia.get("analysis_query", ""),
-                    "content": transform_markdown_images(ia.get("content", ""), image_uri),
-                }
-                for ia in raw_ai_analysis
-            ]
+        image_uri = fix_image_uri(s3_data.get("image_uri", ""))
+        bda_indexer = transform_markdown_images(s3_data.get("bda_indexer", ""), image_uri)
+        paddleocr = s3_data.get("paddleocr", "")
+        format_parser = transform_markdown_images(s3_data.get("format_parser", ""), image_uri)
 
-            segment_type = s3_data.get("segment_type", "PAGE")
-            segment_file_uri = s3_data.get("file_uri")
+        # Transform ai_analysis content
+        raw_ai_analysis = s3_data.get("ai_analysis", [])
+        ai_analysis = [
+            {
+                "analysis_query": ia.get("analysis_query", ""),
+                "content": transform_markdown_images(ia.get("content", ""), image_uri),
+            }
+            for ia in raw_ai_analysis
+        ]
 
-            # Generate video_url for VIDEO/CHAPTER segments
-            video_url = None
-            if segment_type in ("VIDEO", "CHAPTER") and segment_file_uri:
-                video_url = generate_presigned_url(segment_file_uri)
+        segment_type = s3_data.get("segment_type", "PAGE")
+        segment_file_uri = s3_data.get("file_uri")
 
-            segments.append(
-                SegmentData(
-                    segment_index=s3_data.get("segment_index", seg.data.segment_index),
-                    segment_type=segment_type,
-                    image_uri=image_uri,
-                    image_url=generate_presigned_url(image_uri),
-                    file_uri=segment_file_uri,
-                    video_url=video_url,
-                    start_timecode_smpte=s3_data.get("start_timecode_smpte"),
-                    end_timecode_smpte=s3_data.get("end_timecode_smpte"),
-                    bda_indexer=bda_indexer,
-                    paddleocr=paddleocr,
-                    format_parser=format_parser,
-                    ai_analysis=ai_analysis,
-                )
+        # Generate video_url for VIDEO/CHAPTER segments
+        video_url = None
+        if segment_type in ("VIDEO", "CHAPTER") and segment_file_uri:
+            video_url = generate_presigned_url(segment_file_uri)
+
+        segments.append(
+            SegmentData(
+                segment_index=s3_data.get("segment_index", 0),
+                segment_type=segment_type,
+                image_uri=image_uri,
+                image_url=generate_presigned_url(image_uri),
+                file_uri=segment_file_uri,
+                video_url=video_url,
+                start_timecode_smpte=s3_data.get("start_timecode_smpte"),
+                end_timecode_smpte=s3_data.get("end_timecode_smpte"),
+                bda_indexer=bda_indexer,
+                paddleocr=paddleocr,
+                format_parser=format_parser,
+                ai_analysis=ai_analysis,
             )
-        else:
-            # Fallback: use DDB data (for backward compatibility)
-            image_uri = fix_image_uri(seg.data.image_uri)
-            segments.append(
-                SegmentData(
-                    segment_index=seg.data.segment_index,
-                    image_uri=image_uri,
-                    image_url=generate_presigned_url(image_uri),
-                    bda_indexer="",
-                    paddleocr="",
-                    format_parser="",
-                    ai_analysis=[],
-                )
-            )
-
-    # Sort segments by index
-    segments.sort(key=lambda s: s.segment_index)
+        )
 
     return WorkflowDetailResponse(
         workflow_id=workflow_id,

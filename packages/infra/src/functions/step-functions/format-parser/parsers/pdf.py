@@ -5,12 +5,18 @@ Supports:
 - Digital PDF: Direct text extraction
 - Scanned PDF: OCR (future)
 """
+import os
 import tempfile
 
 import fitz
 
-from shared.ddb_client import get_segment_count
-from shared.s3_analysis import update_segment_analysis, get_s3_client, parse_s3_uri
+from shared.s3_analysis import (
+    update_segment_analysis,
+    get_s3_client,
+    parse_s3_uri,
+    get_segment_count_from_s3,
+    SegmentStatus,
+)
 
 
 def download_file_from_s3(uri: str, local_path: str):
@@ -44,12 +50,11 @@ def parse(event: dict) -> dict:
     Returns:
         Updated event with parsing results
     """
-    workflow_id = event.get('workflow_id')
     file_uri = event.get('file_uri')
     segment_count = event.get('segment_count', 0)
 
     if segment_count == 0:
-        segment_count = get_segment_count(workflow_id)
+        segment_count = get_segment_count_from_s3(file_uri)
 
     with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
         tmp_path = tmp.name
@@ -63,7 +68,11 @@ def parse(event: dict) -> dict:
             if page_index < segment_count:
                 pdf_text = pdf_page['text']
                 # Update segment in S3
-                update_segment_analysis(file_uri, page_index, format_parser=pdf_text)
+                update_segment_analysis(
+                    file_uri, page_index,
+                    format_parser=pdf_text,
+                    status=SegmentStatus.PARSING
+                )
                 updated_count += 1
 
         print(f'PDF: Updated {updated_count} segments in S3 with extracted text')

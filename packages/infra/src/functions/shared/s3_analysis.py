@@ -6,10 +6,22 @@ Storage format: s3://bucket/projects/{project_id}/documents/{document_id}/analys
 """
 import json
 import os
+from enum import Enum
 from typing import Optional
 from urllib.parse import urlparse
 
 import boto3
+
+
+class SegmentStatus(str, Enum):
+    """Segment processing status."""
+    INDEXING = 'indexing'
+    OCR_PROCESSING = 'ocr_processing'
+    PARSING = 'parsing'
+    ANALYZING = 'analyzing'
+    FINALIZING = 'finalizing'
+    COMPLETED = 'completed'
+    FAILED = 'failed'
 
 s3_client = None
 
@@ -154,15 +166,41 @@ def update_segment_analysis(
         data = {
             'segment_index': segment_index,
             'segment_type': 'PAGE',
+            'status': SegmentStatus.INDEXING,
             'image_uri': '',
             'bda_indexer': '',
             'format_parser': '',
+            'paddleocr': '',
             'ai_analysis': []
         }
 
     data.update(updates)
     save_segment_analysis(file_uri, segment_index, data)
     return data
+
+
+def update_segment_status(
+    file_uri: str,
+    segment_index: int,
+    status: SegmentStatus,
+    error: str = None
+) -> Optional[dict]:
+    """
+    Update segment status in S3.
+
+    Args:
+        file_uri: Original file URI
+        segment_index: Segment index
+        status: New status
+        error: Error message if status is FAILED
+
+    Returns:
+        Updated data dict or None if failed
+    """
+    updates = {'status': status}
+    if error:
+        updates['error'] = error
+    return update_segment_analysis(file_uri, segment_index, **updates)
 
 
 def add_segment_ai_analysis(
@@ -276,3 +314,35 @@ def get_summary(file_uri: str) -> Optional[str]:
     except Exception as e:
         print(f'Error getting summary from {s3_key}: {e}')
         return None
+
+
+def get_segment_count_from_s3(file_uri: str) -> int:
+    """
+    Count segment analysis files in S3.
+
+    Args:
+        file_uri: Original file URI
+
+    Returns:
+        Number of segment files found
+    """
+    client = get_s3_client()
+    bucket, key = parse_s3_uri(file_uri)
+
+    # Get base directory for analysis files
+    if '/analysis/' in key:
+        base_dir = key.split('/analysis/')[0]
+    else:
+        base_dir = key.rsplit('/', 1)[0]
+
+    prefix = f'{base_dir}/analysis/segment_'
+
+    try:
+        paginator = client.get_paginator('list_objects_v2')
+        count = 0
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            count += len(page.get('Contents', []))
+        return count
+    except Exception as e:
+        print(f'Error counting segments from S3: {e}')
+        return 0
