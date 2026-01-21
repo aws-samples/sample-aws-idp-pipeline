@@ -18,9 +18,23 @@ class Session(BaseModel):
     session_name: str | None = None
 
 
+class TextContent(BaseModel):
+    type: str = "text"
+    text: str
+
+
+class ImageContent(BaseModel):
+    type: str = "image"
+    format: str
+    source: str  # base64 encoded or S3 URL
+
+
+ContentItem = TextContent | ImageContent
+
+
 class ChatMessage(BaseModel):
     role: str
-    content: str
+    content: list[ContentItem]
     created_at: str
     updated_at: str
 
@@ -111,29 +125,54 @@ def get_chat_history(
         raise HTTPException(status_code=500, detail="Session storage bucket not configured")
 
     s3_path = f"s3://{bucket_name}/sessions/{x_user_id}/{project_id}/session_{session_id}/agents/agent_default/messages/message_*.json"
-    print(s3_path)
 
     conn = get_duckdb_connection()
     try:
         result = conn.execute(f"""
             SELECT
+                message_id,
                 message.role as role,
-                string_agg(content_item.text, '') as content,
+                message.content as content,
                 created_at,
                 updated_at
-            FROM read_json_auto('{s3_path}'),
-            UNNEST(message.content) as t(content_item)
+            FROM read_json_auto('{s3_path}')
             WHERE message.role IN ('user', 'assistant')
-            GROUP BY message_id, message.role, created_at, updated_at
             ORDER BY message_id
         """).fetchall()
     except Exception:
         return ChatHistoryResponse(session_id=session_id, messages=[])
 
-    return ChatHistoryResponse(
-        session_id=session_id,
-        messages=[ChatMessage(role=row[0], content=row[1], created_at=row[2], updated_at=row[3]) for row in result],
-    )
+    messages = []
+    for row in result:
+        role, content_items, created_at, updated_at = row[1], row[2], row[3], row[4]
+        parsed_content: list[ContentItem] = []
+
+        for item in content_items:
+            if "text" in item and item["text"]:
+                parsed_content.append(TextContent(text=item["text"]))
+            elif "image" in item:
+                img = item["image"]
+                source = img.get("source", {})
+                # bytes가 있으면 base64, 아니면 S3 URL 등
+                source_value = source.get("bytes", source.get("url", ""))
+                parsed_content.append(
+                    ImageContent(
+                        format=img.get("format", "png"),
+                        source=source_value,
+                    )
+                )
+
+        if parsed_content:
+            messages.append(
+                ChatMessage(
+                    role=role,
+                    content=parsed_content,
+                    created_at=created_at,
+                    updated_at=updated_at,
+                )
+            )
+
+    return ChatHistoryResponse(session_id=session_id, messages=messages)
 
 
 class UpdateSessionRequest(BaseModel):
