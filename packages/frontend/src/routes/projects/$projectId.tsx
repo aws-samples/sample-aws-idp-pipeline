@@ -540,9 +540,12 @@ function ProjectDetailPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await fetchApi(`projects/${projectId}/documents/${deleteTarget.document_id}`, {
-        method: 'DELETE',
-      });
+      await fetchApi(
+        `projects/${projectId}/documents/${deleteTarget.document_id}`,
+        {
+          method: 'DELETE',
+        },
+      );
       await loadDocuments();
       setDeleteTarget(null);
     } catch (error) {
@@ -770,7 +773,7 @@ function ProjectDetailPage() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDeleteDocument}
         title={t('documents.deleteConfirm')}
-        message={deleteTarget?.file_name || ''}
+        message={deleteTarget?.name || ''}
         confirmText={t('common.delete')}
         variant="danger"
         loading={deleting}
