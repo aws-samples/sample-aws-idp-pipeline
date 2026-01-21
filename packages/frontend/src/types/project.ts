@@ -70,10 +70,18 @@ export interface WorkflowDetail {
   segments: SegmentData[];
 }
 
+export interface ChatAttachment {
+  id: string;
+  type: 'image' | 'document';
+  name: string;
+  preview: string | null; // data URL for images
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  attachments?: ChatAttachment[];
   timestamp: Date;
 }
 

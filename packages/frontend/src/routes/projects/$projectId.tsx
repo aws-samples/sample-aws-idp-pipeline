@@ -30,6 +30,7 @@ import {
   Workflow,
   WorkflowDetail,
   ChatMessage,
+  ChatAttachment,
   ChatSession,
   WorkflowProgress,
 } from '../../types/project';
@@ -602,10 +603,19 @@ function ProjectDetailPage() {
     async (files: AttachedFile[]) => {
       if ((!inputMessage.trim() && files.length === 0) || sending) return;
 
+      // Convert AttachedFile to ChatAttachment for display
+      const attachments: ChatAttachment[] = files.map((f) => ({
+        id: f.id,
+        type: f.type === 'image' ? 'image' : 'document',
+        name: f.file.name,
+        preview: f.preview,
+      }));
+
       const userMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'user',
         content: inputMessage.trim(),
+        attachments: attachments.length > 0 ? attachments : undefined,
         timestamp: new Date(),
       };
 
@@ -621,20 +631,26 @@ function ProjectDetailPage() {
 
         // Process attached files
         for (const attachedFile of files) {
-          const arrayBuffer = await attachedFile.file.arrayBuffer();
-          const base64 = btoa(
-            new Uint8Array(arrayBuffer).reduce(
-              (data, byte) => data + String.fromCharCode(byte),
-              '',
-            ),
-          );
+          // Use FileReader for reliable base64 encoding
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const result = reader.result as string;
+              // Remove data URL prefix (e.g., "data:image/png;base64,")
+              const base64Data = result.split(',')[1];
+              resolve(base64Data);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(attachedFile.file);
+          });
 
           if (attachedFile.type === 'image') {
-            // Extract format from mime type (e.g., 'image/jpeg' -> 'jpeg')
-            const format =
+            // Extract and normalize format (jpeg -> jpg for backend compatibility)
+            let format =
               attachedFile.file.type.split('/')[1] ||
-              attachedFile.file.name.split('.').pop() ||
+              attachedFile.file.name.split('.').pop()?.toLowerCase() ||
               'png';
+            if (format === 'jpeg') format = 'jpg';
             contentBlocks.push({
               image: {
                 format,

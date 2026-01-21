@@ -373,10 +373,40 @@ export default function ChatPanel({
               message.role === 'user' ? (
                 /* User message - bubble style */
                 <div key={message.id} className="flex justify-end">
-                  <div className="max-w-[80%] px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-white">
-                    <p className="text-sm whitespace-pre-wrap">
-                      {message.content}
-                    </p>
+                  <div className="max-w-[80%] space-y-2">
+                    {/* Attachments */}
+                    {message.attachments && message.attachments.length > 0 && (
+                      <div className="flex flex-wrap gap-2 justify-end">
+                        {message.attachments.map((attachment) =>
+                          attachment.type === 'image' && attachment.preview ? (
+                            <img
+                              key={attachment.id}
+                              src={attachment.preview}
+                              alt={attachment.name}
+                              className="max-w-48 max-h-48 rounded-xl object-cover border border-slate-200 dark:border-slate-600"
+                            />
+                          ) : (
+                            <div
+                              key={attachment.id}
+                              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600"
+                            >
+                              <FileText className="w-4 h-4 text-slate-500" />
+                              <span className="text-sm text-slate-700 dark:text-slate-300">
+                                {attachment.name}
+                              </span>
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    )}
+                    {/* Text content */}
+                    {message.content && (
+                      <div className="px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-white">
+                        <p className="text-sm whitespace-pre-wrap">
+                          {message.content}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
