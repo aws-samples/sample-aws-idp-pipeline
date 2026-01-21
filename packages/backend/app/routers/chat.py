@@ -42,20 +42,23 @@ def get_project_sessions(project_id: str, x_user_id: str = Header(alias="x-user-
     s3_path = f"s3://{bucket_name}/sessions/{x_user_id}/{project_id}/*/session.json"
 
     conn = get_duckdb_connection()
-    result = conn.execute(f"""
-        SELECT session_id, session_type, created_at, updated_at, session_name
-        FROM read_json(
-            '{s3_path}',
-            columns={{
-                session_id: 'VARCHAR',
-                session_type: 'VARCHAR',
-                created_at: 'VARCHAR',
-                updated_at: 'VARCHAR',
-                session_name: 'VARCHAR'
-            }}
-        )
-        ORDER BY created_at DESC
-    """).fetchall()
+    try:
+        result = conn.execute(f"""
+            SELECT session_id, session_type, created_at, updated_at, session_name
+            FROM read_json(
+                '{s3_path}',
+                columns={{
+                    session_id: 'VARCHAR',
+                    session_type: 'VARCHAR',
+                    created_at: 'VARCHAR',
+                    updated_at: 'VARCHAR',
+                    session_name: 'VARCHAR'
+                }}
+            )
+            ORDER BY created_at DESC
+        """).fetchall()
+    except Exception:
+        return []
 
     return [
         Session(
