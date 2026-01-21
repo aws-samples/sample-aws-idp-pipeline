@@ -1,0 +1,26 @@
+{
+  "name": "@idp-v2/session_name_update",
+  "version": "1.0.0",
+  "description": "Lambda handler to update session_name in session.json on S3 events",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.972.0",
+    "@aws-sdk/client-s3": "^3.958.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.160",
+    "@types/node": "^22.19.1",
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "packageManager": "pnpm@10.12.4"
+}

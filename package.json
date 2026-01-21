@@ -27,6 +27,7 @@
     "apache-arrow": "^21.1.0",
     "aws-cdk": "2.1033.0",
     "aws-cdk-lib": "2.230.0",
+    "aws-lambda": "^1.0.7",
     "aws4fetch": "^1.0.20",
     "constructs": "10.4.3",
     "esbuild": "0.27.0",
