@@ -63,7 +63,7 @@ def get_project_sessions(project_id: str, x_user_id: str = Header(alias="x-user-
             session_type=row[1],
             created_at=row[2],
             updated_at=row[3],
-            session_name=None,
+            session_name=row[4],
         )
         for row in result
     ]
