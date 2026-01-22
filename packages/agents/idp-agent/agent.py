@@ -1,7 +1,10 @@
+import logging
 from contextlib import contextmanager
 
 import boto3
 from strands import Agent
+from strands.hooks.events import BeforeToolCallEvent
+from strands.hooks.registry import HookProvider, HookRegistry
 from strands.models import BedrockModel
 from strands.session import S3SessionManager
 from strands_tools import calculator, current_time, generate_image, http_request
@@ -9,6 +12,31 @@ from strands_tools import calculator, current_time, generate_image, http_request
 from agentcore_mcp_client import AgentCoreGatewayMCPClient
 from config import get_config
 from helpers import get_project_language
+
+logger = logging.getLogger(__name__)
+
+
+class ToolParameterEnforcerHook(HookProvider):
+    """Hook that enforces user_id and project_id parameters for specific tools."""
+
+    def __init__(self, user_id: str | None = None, project_id: str | None = None):
+        self.user_id = user_id
+        self.project_id = project_id
+
+    def register_hooks(self, registry: HookRegistry, **kwargs) -> None:
+        registry.add_callback(BeforeToolCallEvent, self._enforce_parameters)
+
+    def _enforce_parameters(self, event: BeforeToolCallEvent) -> None:
+        if event.selected_tool is None:
+            return
+
+        tool_name = event.selected_tool.tool_name
+
+        if tool_name.endswith("save_artifact") and self.user_id:
+            event.tool_use["input"]["user_id"] = self.user_id
+
+        if tool_name.endswith(("save_artifact", "search_documents")) and self.project_id:
+            event.tool_use["input"]["project_id"] = self.project_id
 
 
 def get_session_manager(
@@ -76,16 +104,15 @@ def get_agent(session_id: str, project_id: str | None = None, user_id: str | Non
 You are an Intelligent Document Processing (IDP) assistant.
 Your role is to help users find and understand information from their uploaded documents.
 Provide accurate answers based on the search results and cite the source when answering.
+
+When using search_documents or save_artifact tools, you don't need to worry about user_id or project_id parameters -
+they will be automatically filled by the system.
 """
 
     if project_id:
         language_code = get_project_language(project_id) or "en"
 
         system_prompt += f"""
-Current project_id: {project_id}
-Current user_id: {user_id}
-When using the search_documents tool, always use this project_id.
-When using the save_artifact tool, always use this user_id.
 You MUST respond in the language corresponding to code: {language_code}.
 """
 
@@ -94,17 +121,21 @@ You MUST respond in the language corresponding to code: {language_code}.
         region_name=config.aws_region,
     )
 
+    hooks: list[HookProvider] = [ToolParameterEnforcerHook(user_id=user_id, project_id=project_id)]
+
     def create_agent():
         return Agent(
             model=bedrock_model,
             system_prompt=system_prompt,
             tools=tools,
+            hooks=hooks,
             session_manager=session_manager,
         )
 
     if mcp_client:
         with mcp_client:
-            tools.extend(mcp_client.list_tools_sync())
+            mcp_tools = mcp_client.list_tools_sync()
+            tools.extend(mcp_tools)
             yield create_agent()
     else:
         yield create_agent()

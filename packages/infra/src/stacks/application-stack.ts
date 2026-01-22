@@ -38,6 +38,16 @@ export class ApplicationStack extends Stack {
     );
     RuntimeConfig.ensure(this).config.agentRuntimeArn = agentRuntimeArn;
 
+    const agentStorageBucketName = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.AGENT_STORAGE_BUCKET_NAME,
+    );
+    const agentStorageBucket = Bucket.fromBucketName(
+      this,
+      'AgentStorageBucket',
+      agentStorageBucketName,
+    );
+
     const userIdentity = new UserIdentity(this, 'UserIdentity');
 
     const backend = new Backend(this, 'Backend', { vpc });
@@ -77,5 +87,8 @@ export class ApplicationStack extends Stack {
         ],
       }),
     );
+
+    // Grant agent storage bucket read access for artifacts
+    agentStorageBucket.grantRead(userIdentity.identityPool.authenticatedRole);
   }
 }

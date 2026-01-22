@@ -1,7 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import agents, artifacts, chat, documents, etc, health, projects, search, workflows
+from app import embedding as _embedding  # noqa: F401 - Register embedding function
+from app.routers import (
+    agents,
+    artifacts,
+    chat,
+    documents,
+    etc,
+    health,
+    projects,
+    search,
+    workflows,
+)
+
+del _embedding  # Silence unused import warning
 
 app = FastAPI(
     openapi_tags=[

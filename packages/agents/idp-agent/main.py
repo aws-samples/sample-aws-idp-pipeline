@@ -54,4 +54,10 @@ if __name__ == "__main__":
     import logging
 
     logging.basicConfig(level=logging.INFO)
+
+    # Print tool list on startup
+    with get_agent(session_id="test", project_id="test", user_id="test") as agent:
+        tool_names = list(agent.tool_registry.registry.keys())
+        print(f"Available tools: {tool_names}")
+
     app.run(port=8080)
