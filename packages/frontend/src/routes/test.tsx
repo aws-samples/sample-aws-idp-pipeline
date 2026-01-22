@@ -16,6 +16,12 @@ interface Project {
   updated_at: string;
 }
 
+interface Agent {
+  name: string;
+  content?: string;
+  updated_at: string;
+}
+
 interface SearchResult {
   workflow_id: string;
   segment_id: string;
@@ -44,6 +50,7 @@ interface RerankResponse {
 
 function RouteComponent() {
   const { fetchApi } = useAwsClient();
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,6 +71,13 @@ function RouteComponent() {
   const [expandedRerankSegments, setExpandedRerankSegments] = useState<
     Set<string>
   >(new Set());
+
+  // Agent states
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+  const [newAgentName, setNewAgentName] = useState('');
+  const [newAgentContent, setNewAgentContent] = useState('');
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
 
   const toggleRerankSegment = (segmentId: string) => {
     setExpandedRerankSegments((prev) => {
@@ -414,6 +428,284 @@ function RouteComponent() {
                   );
                 })}
               </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Agent API Test Section */}
+      {selectedProject && (
+        <section style={{ marginTop: '24px' }}>
+          <h2>Agent Management</h2>
+          <p style={{ color: '#666', fontSize: '14px' }}>
+            Project: <strong>{selectedProject.project_id}</strong>
+          </p>
+
+          {/* Create Agent Form */}
+          <div
+            style={{
+              marginBottom: '16px',
+              padding: '16px',
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              backgroundColor: '#f9f9f9',
+            }}
+          >
+            <h3 style={{ margin: '0 0 12px 0' }}>Create New Agent</h3>
+            <div
+              style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
+            >
+              <input
+                type="text"
+                value={newAgentName}
+                onChange={(e) => setNewAgentName(e.target.value)}
+                placeholder="Agent name"
+                style={{
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  borderRadius: '4px',
+                  border: '1px solid #ccc',
+                }}
+              />
+              <textarea
+                value={newAgentContent}
+                onChange={(e) => setNewAgentContent(e.target.value)}
+                placeholder="Agent system prompt (markdown)"
+                rows={4}
+                style={{
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  borderRadius: '4px',
+                  border: '1px solid #ccc',
+                  fontFamily: 'monospace',
+                }}
+              />
+              <button
+                onClick={async () => {
+                  if (!newAgentName.trim() || !newAgentContent.trim()) {
+                    alert('Please fill in both name and content');
+                    return;
+                  }
+                  try {
+                    await fetchApi(
+                      `projects/${selectedProject.project_id}/agents/${newAgentName}`,
+                      {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          content: newAgentContent,
+                        }),
+                      },
+                    );
+                    setNewAgentName('');
+                    setNewAgentContent('');
+                    // Reload agents
+                    setAgentsLoading(true);
+                    const data = await fetchApi<Agent[]>(
+                      `projects/${selectedProject.project_id}/agents`,
+                    );
+                    setAgents(data);
+                    setAgentsLoading(false);
+                  } catch (e) {
+                    alert('Error: ' + (e as Error).message);
+                  }
+                }}
+                disabled={!newAgentName.trim() || !newAgentContent.trim()}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '14px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  backgroundColor:
+                    !newAgentName.trim() || !newAgentContent.trim()
+                      ? '#ccc'
+                      : '#28a745',
+                  color: 'white',
+                  cursor:
+                    !newAgentName.trim() || !newAgentContent.trim()
+                      ? 'not-allowed'
+                      : 'pointer',
+                  alignSelf: 'flex-start',
+                }}
+              >
+                Create Agent
+              </button>
+            </div>
+          </div>
+
+          {/* Load Agents Button */}
+          <button
+            onClick={async () => {
+              setAgentsLoading(true);
+              setSelectedAgent(null);
+              try {
+                const data = await fetchApi<Agent[]>(
+                  `projects/${selectedProject.project_id}/agents`,
+                );
+                setAgents(data);
+              } catch (e) {
+                alert('Error: ' + (e as Error).message);
+              }
+              setAgentsLoading(false);
+            }}
+            style={{
+              padding: '8px 16px',
+              fontSize: '14px',
+              borderRadius: '4px',
+              border: 'none',
+              backgroundColor: '#007bff',
+              color: 'white',
+              cursor: 'pointer',
+              marginBottom: '16px',
+            }}
+          >
+            {agentsLoading ? 'Loading...' : 'Load Agents'}
+          </button>
+
+          {/* Agents Table */}
+          {agents.length > 0 && (
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                marginBottom: '16px',
+              }}
+            >
+              <thead>
+                <tr style={{ backgroundColor: '#f0f0f0' }}>
+                  <th
+                    style={{
+                      padding: '10px',
+                      textAlign: 'left',
+                      border: '1px solid #ddd',
+                    }}
+                  >
+                    Name
+                  </th>
+                  <th
+                    style={{
+                      padding: '10px',
+                      textAlign: 'left',
+                      border: '1px solid #ddd',
+                    }}
+                  >
+                    Updated At
+                  </th>
+                  <th
+                    style={{
+                      padding: '10px',
+                      textAlign: 'left',
+                      border: '1px solid #ddd',
+                    }}
+                  >
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {agents.map((agent) => (
+                  <tr key={agent.name}>
+                    <td style={{ padding: '10px', border: '1px solid #ddd' }}>
+                      {agent.name}
+                    </td>
+                    <td style={{ padding: '10px', border: '1px solid #ddd' }}>
+                      {new Date(agent.updated_at).toLocaleString()}
+                    </td>
+                    <td style={{ padding: '10px', border: '1px solid #ddd' }}>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const data = await fetchApi<Agent>(
+                              `projects/${selectedProject.project_id}/agents/${agent.name}`,
+                            );
+                            setSelectedAgent(data);
+                          } catch (e) {
+                            alert('Error: ' + (e as Error).message);
+                          }
+                        }}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '12px',
+                          borderRadius: '4px',
+                          border: 'none',
+                          backgroundColor: '#17a2b8',
+                          color: 'white',
+                          cursor: 'pointer',
+                          marginRight: '4px',
+                        }}
+                      >
+                        View
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!window.confirm(`Delete agent "${agent.name}"?`))
+                            return;
+                          try {
+                            await fetchApi(
+                              `projects/${selectedProject.project_id}/agents/${agent.name}`,
+                              {
+                                method: 'DELETE',
+                              },
+                            );
+                            setAgents(
+                              agents.filter((a) => a.name !== agent.name),
+                            );
+                            if (selectedAgent?.name === agent.name) {
+                              setSelectedAgent(null);
+                            }
+                          } catch (e) {
+                            alert('Error: ' + (e as Error).message);
+                          }
+                        }}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '12px',
+                          borderRadius: '4px',
+                          border: 'none',
+                          backgroundColor: '#dc3545',
+                          color: 'white',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {agents.length === 0 && !agentsLoading && (
+            <p style={{ color: '#666' }}>
+              No agents found. Click "Load Agents" to fetch or create one above.
+            </p>
+          )}
+
+          {/* Selected Agent Detail */}
+          {selectedAgent && (
+            <div
+              style={{
+                padding: '16px',
+                border: '1px solid #17a2b8',
+                borderRadius: '8px',
+                backgroundColor: '#e7f6f8',
+              }}
+            >
+              <h3 style={{ margin: '0 0 8px 0' }}>{selectedAgent.name}</h3>
+              <pre
+                style={{
+                  backgroundColor: '#fff',
+                  padding: '12px',
+                  borderRadius: '4px',
+                  border: '1px solid #ddd',
+                  whiteSpace: 'pre-wrap',
+                  fontFamily: 'monospace',
+                  fontSize: '13px',
+                }}
+              >
+                {selectedAgent.content}
+              </pre>
             </div>
           )}
         </section>

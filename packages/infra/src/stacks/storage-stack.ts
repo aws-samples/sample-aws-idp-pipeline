@@ -73,6 +73,17 @@ export class StorageStack extends Stack {
       stringValue: sessionStorage.bucket.bucketName,
     });
 
+    // Agent Storage Bucket (for custom agent prompts)
+    // Structure: /{user_id}/{project_id}/agents/{agent_name}.md
+    const agentStorage = new S3Bucket(this, 'AgentStorage', {
+      bucketPrefix: 'agent-storage',
+    });
+
+    new StringParameter(this, 'AgentStorageBucketNameParam', {
+      parameterName: SSM_KEYS.AGENT_STORAGE_BUCKET_NAME,
+      stringValue: agentStorage.bucket.bucketName,
+    });
+
     // Model Artifacts Bucket (for ML models like PaddleOCR)
     const modelArtifacts = new S3Bucket(this, 'ModelArtifacts', {
       bucketPrefix: 'model-artifacts',

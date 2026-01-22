@@ -3,6 +3,7 @@ export const SSM_KEYS = {
   LANCEDB_LOCK_TABLE_NAME: '/idp-v2/lancedb/lock/table-name',
   DOCUMENT_STORAGE_BUCKET_NAME: '/idp-v2/document-storage/bucket-name',
   SESSION_STORAGE_BUCKET_NAME: '/idp-v2/session-storage/bucket-name',
+  AGENT_STORAGE_BUCKET_NAME: '/idp-v2/agent-storage/bucket-name',
   MODEL_ARTIFACTS_BUCKET_NAME: '/idp-v2/model-artifacts/bucket-name',
   BACKEND_TABLE_NAME: '/idp-v2/backend/table-name',
   LANCEDB_EXPRESS_BUCKET_NAME: '/idp-v2/lancedb/express/bucket-name',

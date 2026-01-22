@@ -14,6 +14,7 @@ class Config(BaseSettings):
     lancedb_express_bucket_name: str = ""
     websocket_endpoint: str = ""
     session_storage_bucket_name: str = ""
+    agent_storage_bucket_name: str = ""
 
 
 @lru_cache
