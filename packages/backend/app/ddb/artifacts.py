@@ -6,6 +6,26 @@ from app.ddb.client import get_table
 from app.ddb.models import Artifact
 
 
+def make_artifact_key(artifact_id: str) -> dict:
+    return {"PK": f"ART#{artifact_id}", "SK": "META"}
+
+
+def get_artifact_item(artifact_id: str) -> Artifact | None:
+    """Get a single artifact by ID."""
+    table = get_table()
+    response = table.get_item(Key=make_artifact_key(artifact_id))
+    item = response.get("Item")
+    if not item:
+        return None
+    return Artifact.model_validate(item)
+
+
+def delete_artifact_item(artifact_id: str) -> None:
+    """Delete an artifact item."""
+    table = get_table()
+    table.delete_item(Key=make_artifact_key(artifact_id))
+
+
 @dataclass
 class PaginatedArtifacts:
     items: list[Artifact]
@@ -59,7 +79,9 @@ def query_user_project_artifacts(
 
     query_params = {
         "IndexName": "GSI2",
-        "KeyConditionExpression": Key("GSI2PK").eq(f"USR#{user_id}#PROJ#{project_id}#ART"),
+        "KeyConditionExpression": Key("GSI2PK").eq(
+            f"USR#{user_id}#PROJ#{project_id}#ART"
+        ),
         "ScanIndexForward": False,
         "Limit": limit,
     }
