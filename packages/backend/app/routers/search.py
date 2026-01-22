@@ -56,6 +56,54 @@ class RerankedSearchResponse(BaseModel):
     results: list[RerankedSearchResult]
 
 
+class Segment(BaseModel):
+    workflow_id: str
+    segment_id: str
+    segment_index: int
+    content: str
+    keywords: str
+    file_uri: str
+    file_type: str
+    image_uri: str | None
+
+
+class SegmentListResponse(BaseModel):
+    segments: list[Segment]
+
+
+@router.get("/segments", response_model=SegmentListResponse)
+def get_segments(
+    project_id: str = Path(..., description="프로젝트 ID"),
+) -> SegmentListResponse:
+    """프로젝트의 세그먼트 목록을 조회합니다."""
+    db = get_db()
+    table_name = project_id
+
+    if table_name not in db.table_names():
+        raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
+
+    table = db.open_table(table_name)
+    rows = table.to_arrow().to_pylist()
+
+    print("rows", rows)
+
+    return SegmentListResponse(
+        segments=[
+            Segment(
+                workflow_id=row["workflow_id"],
+                segment_id=row["segment_id"],
+                segment_index=row["segment_index"],
+                content=row["content"],
+                keywords=row["keywords"],
+                file_uri=row["file_uri"],
+                file_type=row["file_type"],
+                image_uri=row.get("image_uri"),
+            )
+            for row in rows
+        ]
+    )
+
+
 @router.get("/hybrid", response_model=HybridSearchResponse)
 def hybrid_search(
     project_id: str = Path(..., description="프로젝트 ID"),
