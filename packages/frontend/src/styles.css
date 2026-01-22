@@ -722,7 +722,7 @@ a {
   margin: 0;
   letter-spacing: -0.02em;
   line-height: 1.15;
-  max-width: 860px;
+  max-width: 1100px;
   word-break: keep-all;
 }
 
@@ -1833,4 +1833,152 @@ a {
 
 :root.dark .card ::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-muted);
+}
+
+/* Glowing Effect Card Styles */
+.glow {
+  position: absolute;
+  inset: 0;
+}
+
+.glow::after {
+  position: absolute;
+}
+
+/* Artifact Card */
+.artifact-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  transition: all 0.3s ease;
+}
+
+.artifact-card:hover {
+  border-color: var(--color-border-light);
+  box-shadow: 0 0 30px rgba(59, 130, 246, 0.1);
+}
+
+:root.dark .artifact-card:hover {
+  box-shadow: 0 0 30px rgba(59, 130, 246, 0.15);
+}
+
+/* Artifact Card Gradient Background */
+.artifact-card-gradient {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.artifact-card:hover .artifact-card-gradient {
+  opacity: 1;
+}
+
+/* Code artifact gradient */
+.artifact-card[data-type='code'] .artifact-card-gradient {
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.05) 0%,
+    rgba(139, 92, 246, 0.05) 100%
+  );
+}
+
+:root.dark .artifact-card[data-type='code'] .artifact-card-gradient {
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.1) 0%,
+    rgba(139, 92, 246, 0.1) 100%
+  );
+}
+
+/* Markdown artifact gradient */
+.artifact-card[data-type='markdown'] .artifact-card-gradient {
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.05) 0%,
+    rgba(16, 185, 129, 0.05) 100%
+  );
+}
+
+:root.dark .artifact-card[data-type='markdown'] .artifact-card-gradient {
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.1) 0%,
+    rgba(16, 185, 129, 0.1) 100%
+  );
+}
+
+/* Image artifact gradient */
+.artifact-card[data-type='image'] .artifact-card-gradient {
+  background: linear-gradient(
+    135deg,
+    rgba(236, 72, 153, 0.05) 0%,
+    rgba(244, 114, 182, 0.05) 100%
+  );
+}
+
+:root.dark .artifact-card[data-type='image'] .artifact-card-gradient {
+  background: linear-gradient(
+    135deg,
+    rgba(236, 72, 153, 0.1) 0%,
+    rgba(244, 114, 182, 0.1) 100%
+  );
+}
+
+/* Table artifact gradient */
+.artifact-card[data-type='table'] .artifact-card-gradient {
+  background: linear-gradient(
+    135deg,
+    rgba(245, 158, 11, 0.05) 0%,
+    rgba(251, 191, 36, 0.05) 100%
+  );
+}
+
+:root.dark .artifact-card[data-type='table'] .artifact-card-gradient {
+  background: linear-gradient(
+    135deg,
+    rgba(245, 158, 11, 0.1) 0%,
+    rgba(251, 191, 36, 0.1) 100%
+  );
+}
+
+/* Chart artifact gradient */
+.artifact-card[data-type='chart'] .artifact-card-gradient {
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.05) 0%,
+    rgba(129, 140, 248, 0.05) 100%
+  );
+}
+
+:root.dark .artifact-card[data-type='chart'] .artifact-card-gradient {
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.1) 0%,
+    rgba(129, 140, 248, 0.1) 100%
+  );
+}
+
+/* Artifact Icon Colors */
+.artifact-icon-code {
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+}
+
+.artifact-icon-markdown {
+  background: linear-gradient(135deg, #22c55e 0%, #10b981 100%);
+}
+
+.artifact-icon-image {
+  background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+}
+
+.artifact-icon-table {
+  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+}
+
+.artifact-icon-chart {
+  background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
 }

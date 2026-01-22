@@ -139,7 +139,7 @@ class BaseOCRModel(ABC):
 
     def format_output(self, results: List[Any], output_format: str = "markdown") -> Dict[str, Any]:
         """Format the prediction results."""
-        output = {"success": True, "format": output_format, "results": [], "content": ""}
+        output = {"success": True, "format": output_format, "results": [], "content": "", "blocks": []}
 
         for res in results:
             if hasattr(res, "json"):
@@ -148,9 +148,25 @@ class BaseOCRModel(ABC):
                 res_data = res_json.get("res", res_json)
                 parsing_list = res_data.get("parsing_res_list", [])
 
+                # Store blocks for frontend visualization
                 for block in parsing_list:
-                    block_content = block.get("block_content", "")
+                    output["blocks"].append({
+                        "block_id": block.get("block_id", 0),
+                        "block_label": block.get("block_label", "text"),
+                        "block_content": block.get("block_content", ""),
+                        "block_bbox": block.get("block_bbox", []),
+                        "block_order": block.get("block_order"),
+                        "group_id": block.get("group_id", 0),
+                    })
+
+                # Generate text content for LanceDB (skip empty blocks)
+                for block in parsing_list:
+                    block_content = block.get("block_content", "").strip()
                     block_label = block.get("block_label", "text")
+
+                    # Skip blocks with no text content (e.g., figure, chart, image)
+                    if not block_content:
+                        continue
 
                     if output_format == "markdown":
                         if block_label == "doc_title":
@@ -229,15 +245,46 @@ class PPOcrV5Model(BaseOCRModel):
         return self._model.predict(input=image_path)
 
     def format_output(self, results: List[Any], output_format: str = "markdown") -> Dict[str, Any]:
-        output = {"success": True, "format": output_format, "results": [], "content": ""}
+        output = {"success": True, "format": output_format, "results": [], "content": "", "blocks": []}
 
         for res in results:
             if hasattr(res, "json"):
                 res_data = res.json.get("res", {})
                 rec_texts = res_data.get("rec_texts", [])
+                rec_polys = res_data.get("rec_polys", [])
+                rec_boxes = res_data.get("rec_boxes", [])
 
                 output["results"].append(res.json)
-                output["content"] = "\n".join(rec_texts)
+                # Filter empty texts
+                output["content"] = "\n".join(t for t in rec_texts if t.strip())
+
+                # Create synthetic blocks from PP-OCRv5 results
+                for idx, text in enumerate(rec_texts):
+                    # Get bounding box from rec_polys or rec_boxes
+                    bbox = []
+                    if rec_polys and idx < len(rec_polys):
+                        poly = rec_polys[idx]
+                        if poly and len(poly) == 4:
+                            xs = [p[0] for p in poly]
+                            ys = [p[1] for p in poly]
+                            bbox = [min(xs), min(ys), max(xs), max(ys)]
+                    elif rec_boxes and idx < len(rec_boxes):
+                        box = rec_boxes[idx]
+                        if len(box) == 4:
+                            bbox = box
+                        elif len(box) == 8:
+                            xs = [box[i] for i in range(0, 8, 2)]
+                            ys = [box[i] for i in range(1, 8, 2)]
+                            bbox = [min(xs), min(ys), max(xs), max(ys)]
+
+                    output["blocks"].append({
+                        "block_id": idx,
+                        "block_label": "text",
+                        "block_content": text,
+                        "block_bbox": bbox,
+                        "block_order": idx,
+                        "group_id": 0,
+                    })
 
         return output
 
@@ -296,7 +343,7 @@ class PPStructureV3Model(BaseOCRModel):
         return self._model.predict(input=image_path)
 
     def format_output(self, results: List[Any], output_format: str = "markdown") -> Dict[str, Any]:
-        output = {"success": True, "format": output_format, "results": [], "content": ""}
+        output = {"success": True, "format": output_format, "results": [], "content": "", "blocks": []}
 
         for res in results:
             if hasattr(res, "json"):
@@ -304,10 +351,26 @@ class PPStructureV3Model(BaseOCRModel):
                 res_data = res.json.get("res", {})
                 parsing_list = res_data.get("parsing_res_list", [])
 
+                # Store blocks for frontend visualization
+                for block in parsing_list:
+                    output["blocks"].append({
+                        "block_id": block.get("block_id", 0),
+                        "block_label": block.get("block_label", "text"),
+                        "block_content": block.get("block_content", ""),
+                        "block_bbox": block.get("block_bbox", []),
+                        "block_order": block.get("block_order"),
+                        "group_id": block.get("group_id", 0),
+                    })
+
+                # Generate text content for LanceDB (skip empty blocks)
                 content_parts = []
                 for block in parsing_list:
-                    block_content = block.get("block_content", "")
+                    block_content = block.get("block_content", "").strip()
                     block_label = block.get("block_label", "text")
+
+                    # Skip blocks with no text content (e.g., figure, chart, image)
+                    if not block_content:
+                        continue
 
                     if output_format == "markdown":
                         if block_label == "doc_title":
@@ -447,9 +510,20 @@ def predict_fn(input_data, model):
 
         for page_idx, res in enumerate(results):
             page_output = ocr_model.format_output([res], output_format="markdown")
+
+            # Extract image dimensions from result data
+            width, height = None, None
+            if hasattr(res, "json"):
+                res_data = res.json.get("res", {})
+                width = res_data.get("width")
+                height = res_data.get("height")
+
             pages.append({
                 "page_index": page_idx,
                 "content": page_output.get("content", ""),
+                "blocks": page_output.get("blocks", []),
+                "width": width,
+                "height": height,
                 "results": page_output.get("results", [])
             })
             all_content.append(page_output.get("content", ""))

@@ -5,6 +5,10 @@
     "create": "作成",
     "delete": "削除",
     "edit": "編集",
+    "rename": "名前変更",
+    "copy": "コピー",
+    "copied": "コピー済み!",
+    "download": "ダウンロード",
     "close": "閉じる",
     "loading": "読み込み中",
     "loadingDescription": "しばらくお待ちください...",
@@ -20,6 +24,7 @@
   },
   "nav": {
     "projects": "プロジェクト",
+    "artifacts": "アーティファクト",
     "settings": "設定",
     "logout": "ログアウト",
     "greeting": "こんにちは、{{name}}さん",
@@ -178,7 +183,11 @@
     "artifacts": "アーティファクト",
     "noArtifacts": "アーティファクトがありません",
     "deleteSession": "会話を削除",
-    "deleteSessionConfirm": "この会話を削除しますか？削除された会話は復元できません。"
+    "deleteSessionConfirm": "この会話を削除しますか？削除された会話は復元できません。",
+    "renameSession": "会話の名前変更",
+    "sessionNamePlaceholder": "会話名を入力",
+    "deleteArtifact": "アーティファクトを削除",
+    "deleteArtifactConfirm": "このアーティファクトを削除しますか？削除されたアーティファクトは復元できません。"
   },
   "viewer": {
     "zoomIn": "拡大",
@@ -204,6 +213,16 @@
     "startNewChat": "新しい会話を開始",
     "deleteAgent": "エージェント削除",
     "deleteConfirmMessage": "「{{name}}」を削除しますか？この操作は取り消せません。"
+  },
+  "artifacts": {
+    "heroTag": "AI Generated Artifacts",
+    "heroTitle": "AIが生成したコード、ドキュメント、インサイト",
+    "heroDescription": "会話中に作成されたすべてのアーティファクトを閲覧・管理できます。\n生成されたコンテンツをすばやくコピー、ダウンロード、整理できます。",
+    "description": "生成されたアーティファクトの表示と管理",
+    "searchPlaceholder": "アーティファクトを検索...",
+    "noArtifacts": "アーティファクトがありません",
+    "noArtifactsDescription": "チャット会話中に生成されたアーティファクトがここに表示されます。",
+    "items": "件"
   },
   "languages": {
     "ko": "韓国語",

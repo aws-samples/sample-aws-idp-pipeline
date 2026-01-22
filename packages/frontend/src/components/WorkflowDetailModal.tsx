@@ -4,6 +4,7 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { WorkflowDetail, AnalysisPopup } from '../types/project';
 import { LANGUAGES, CARD_COLORS } from './ProjectSettingsModal';
+import OcrDocumentView from './OcrDocumentView';
 
 interface WorkflowDetailModalProps {
   workflow: WorkflowDetail;
@@ -162,7 +163,11 @@ export default function WorkflowDetailModal({
                       .filter((type) => {
                         if (type === 'BDA')
                           return !!currentSegment?.bda_indexer;
-                        if (type === 'OCR') return !!currentSegment?.paddleocr;
+                        if (type === 'OCR')
+                          return (
+                            !!currentSegment?.paddleocr ||
+                            !!currentSegment?.paddleocr_blocks?.blocks?.length
+                          );
                         if (type === 'PDF')
                           return !!currentSegment?.format_parser;
                         if (type === 'AI')
@@ -185,10 +190,28 @@ export default function WorkflowDetailModal({
                                 title: `AI Analysis - Segment ${currentSegmentIndex + 1}`,
                                 qaItems,
                               });
+                            } else if (type === 'OCR') {
+                              // Use document view if blocks exist, otherwise fallback to text
+                              if (
+                                currentSegment?.paddleocr_blocks?.blocks?.length
+                              ) {
+                                setAnalysisPopup({
+                                  type: 'ocr',
+                                  content: '',
+                                  title: `OCR Content - Segment ${currentSegmentIndex + 1}`,
+                                  qaItems: [],
+                                });
+                              } else {
+                                setAnalysisPopup({
+                                  type: 'ocr',
+                                  content: currentSegment?.paddleocr || '',
+                                  title: `OCR Content - Segment ${currentSegmentIndex + 1}`,
+                                  qaItems: [],
+                                });
+                              }
                             } else {
                               const contentMap: Record<string, string> = {
                                 BDA: currentSegment?.bda_indexer || '',
-                                OCR: currentSegment?.paddleocr || '',
                                 PDF: currentSegment?.format_parser || '',
                               };
                               setAnalysisPopup({
@@ -201,7 +224,9 @@ export default function WorkflowDetailModal({
                           }}
                           className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                             (type === 'AI' && analysisPopup.type === 'ai') ||
+                            (type === 'OCR' && analysisPopup.type === 'ocr') ||
                             (type !== 'AI' &&
+                              type !== 'OCR' &&
                               analysisPopup.title.includes(type))
                               ? 'bg-blue-500 text-white'
                               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -220,7 +245,13 @@ export default function WorkflowDetailModal({
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto flex flex-col min-h-0">
-                  {analysisPopup.type === 'ai' && analysisPopup.qaItems ? (
+                  {analysisPopup.type === 'ocr' &&
+                  currentSegment?.paddleocr_blocks?.blocks?.length ? (
+                    <OcrDocumentView
+                      blocks={currentSegment?.paddleocr_blocks}
+                      imageUrl={currentSegment?.image_url}
+                    />
+                  ) : analysisPopup.type === 'ai' && analysisPopup.qaItems ? (
                     analysisPopup.qaItems.length === 0 ? (
                       <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
                         <svg
@@ -441,26 +472,41 @@ export default function WorkflowDetailModal({
                           content: currentSegment?.bda_indexer,
                         },
                         {
-                          type: 'bda',
+                          type: 'ocr',
                           label: 'OCR',
-                          content: currentSegment?.paddleocr,
+                          hasBlocks:
+                            !!currentSegment?.paddleocr_blocks?.blocks?.length,
+                          content:
+                            currentSegment?.paddleocr ||
+                            (currentSegment?.paddleocr_blocks?.blocks?.length
+                              ? 'blocks'
+                              : ''),
                         },
                         {
                           type: 'bda',
                           label: 'PDF',
                           content: currentSegment?.format_parser,
                         },
-                      ].map(({ type, label, content }) => (
+                      ].map(({ type, label, content, hasBlocks }) => (
                         <button
                           key={label}
                           onClick={() => {
                             if (content) {
-                              setAnalysisPopup({
-                                type: type as 'bda',
-                                content,
-                                title: `${label} Content - Segment ${currentSegmentIndex + 1}`,
-                                qaItems: [],
-                              });
+                              if (type === 'ocr') {
+                                setAnalysisPopup({
+                                  type: 'ocr',
+                                  content: hasBlocks ? '' : (content as string),
+                                  title: `OCR Content - Segment ${currentSegmentIndex + 1}`,
+                                  qaItems: [],
+                                });
+                              } else {
+                                setAnalysisPopup({
+                                  type: type as 'bda',
+                                  content: content as string,
+                                  title: `${label} Content - Segment ${currentSegmentIndex + 1}`,
+                                  qaItems: [],
+                                });
+                              }
                             }
                           }}
                           disabled={!content}

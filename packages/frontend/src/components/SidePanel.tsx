@@ -1,14 +1,20 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   MessageSquare,
-  FileCode,
+  Layers,
   Loader2,
   ChevronDown,
+  MoreVertical,
   Pencil,
-  Check,
-  X,
   Trash2,
+  Code,
+  Table,
+  BarChart3,
+  FileText,
+  Image,
+  Copy,
+  Download,
 } from 'lucide-react';
 import {
   ResizablePanelGroup,
@@ -16,7 +22,8 @@ import {
   ResizableHandle,
 } from './ui/resizable';
 import ConfirmModal from './ConfirmModal';
-import { ChatSession } from '../types/project';
+import InputModal from './InputModal';
+import { ChatSession, Artifact, ArtifactType } from '../types/project';
 
 interface SidePanelProps {
   sessions: ChatSession[];
@@ -27,7 +34,22 @@ interface SidePanelProps {
   hasMoreSessions?: boolean;
   loadingMoreSessions?: boolean;
   onLoadMoreSessions?: () => void;
+  // Artifacts
+  artifacts?: Artifact[];
+  currentArtifactId?: string;
+  onArtifactSelect?: (artifactId: string) => void;
+  onArtifactCopy?: (artifact: Artifact) => void;
+  onArtifactDownload?: (artifact: Artifact) => void;
+  onArtifactDelete?: (artifactId: string) => Promise<void>;
 }
+
+const artifactIcons: Record<ArtifactType, typeof Code> = {
+  code: Code,
+  table: Table,
+  chart: BarChart3,
+  markdown: FileText,
+  image: Image,
+};
 
 export default function SidePanel({
   sessions,
@@ -38,65 +60,83 @@ export default function SidePanel({
   hasMoreSessions = false,
   loadingMoreSessions = false,
   onLoadMoreSessions,
+  artifacts = [],
+  currentArtifactId,
+  onArtifactSelect,
+  onArtifactCopy,
+  onArtifactDownload,
+  onArtifactDelete,
 }: SidePanelProps) {
-  const { t, i18n } = useTranslation();
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(
+  const { t } = useTranslation();
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [openArtifactMenuId, setOpenArtifactMenuId] = useState<string | null>(
+    null,
+  );
+  const [sessionToRename, setSessionToRename] = useState<ChatSession | null>(
     null,
   );
   const [sessionToDelete, setSessionToDelete] = useState<ChatSession | null>(
     null,
   );
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [artifactToDelete, setArtifactToDelete] = useState<Artifact | null>(
+    null,
+  );
+  const [saving, setSaving] = useState(false);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(
+    null,
+  );
+  const [deletingArtifactId, setDeletingArtifactId] = useState<string | null>(
+    null,
+  );
 
+  // Close menu when clicking outside
   useEffect(() => {
-    if (editingSessionId && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('[data-session-menu]')) {
+        setOpenMenuId(null);
+      }
+      if (!target.closest('[data-artifact-menu]')) {
+        setOpenArtifactMenuId(null);
+      }
+    };
+
+    if (openMenuId || openArtifactMenuId) {
+      document.addEventListener('mousedown', handleClickOutside);
     }
-  }, [editingSessionId]);
 
-  const handleStartEdit = (session: ChatSession, e: React.MouseEvent) => {
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openMenuId, openArtifactMenuId]);
+
+  const handleMenuToggle = (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setEditingSessionId(session.session_id);
-    setEditingName(
-      session.session_name || `Session ${session.session_id.slice(0, 8)}`,
-    );
+    setOpenMenuId(openMenuId === sessionId ? null : sessionId);
   };
 
-  const handleCancelEdit = () => {
-    setEditingSessionId(null);
-    setEditingName('');
+  const handleRenameClick = (session: ChatSession) => {
+    setOpenMenuId(null);
+    setSessionToRename(session);
   };
 
-  const handleSaveEdit = async () => {
-    if (!editingSessionId || !onSessionRename || !editingName.trim()) return;
+  const handleDeleteClick = (session: ChatSession) => {
+    setOpenMenuId(null);
+    setSessionToDelete(session);
+  };
+
+  const handleConfirmRename = async (newName: string) => {
+    if (!sessionToRename || !onSessionRename) return;
 
     setSaving(true);
     try {
-      await onSessionRename(editingSessionId, editingName.trim());
-      setEditingSessionId(null);
-      setEditingName('');
+      await onSessionRename(sessionToRename.session_id, newName);
+      setSessionToRename(null);
     } catch (error) {
       console.error('Failed to rename session:', error);
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSaveEdit();
-    } else if (e.key === 'Escape') {
-      handleCancelEdit();
-    }
-  };
-
-  const handleDeleteClick = (session: ChatSession, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSessionToDelete(session);
   };
 
   const handleConfirmDelete = async () => {
@@ -113,25 +153,46 @@ export default function SidePanel({
     }
   };
 
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const locale = i18n.language;
+  const hasActions = onSessionRename || onSessionDelete;
+  const hasArtifactActions =
+    onArtifactCopy || onArtifactDownload || onArtifactDelete;
 
-    if (days === 0) {
-      return date.toLocaleTimeString(locale, {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
-    } else if (days === 1) {
-      return t('common.yesterday');
-    } else if (days < 7) {
-      return t('common.daysAgo', { count: days });
-    } else {
-      return date.toLocaleDateString(locale);
+  const handleArtifactMenuToggle = (
+    artifactId: string,
+    e: React.MouseEvent,
+  ) => {
+    e.stopPropagation();
+    setOpenArtifactMenuId(
+      openArtifactMenuId === artifactId ? null : artifactId,
+    );
+  };
+
+  const handleArtifactCopyClick = (artifact: Artifact) => {
+    setOpenArtifactMenuId(null);
+    onArtifactCopy?.(artifact);
+  };
+
+  const handleArtifactDownloadClick = (artifact: Artifact) => {
+    setOpenArtifactMenuId(null);
+    onArtifactDownload?.(artifact);
+  };
+
+  const handleArtifactDeleteClick = (artifact: Artifact) => {
+    setOpenArtifactMenuId(null);
+    setArtifactToDelete(artifact);
+  };
+
+  const handleConfirmArtifactDelete = async () => {
+    if (!artifactToDelete || !onArtifactDelete) return;
+
+    setDeletingArtifactId(artifactToDelete.artifact_id);
+    try {
+      await onArtifactDelete(artifactToDelete.artifact_id);
+    } catch (error) {
+      console.error('Failed to delete artifact:', error);
+    } finally {
+      setDeletingArtifactId(null);
+      setArtifactToDelete(null);
     }
   };
 
@@ -165,84 +226,72 @@ export default function SidePanel({
                     </p>
                   </div>
                 ) : (
-                  <div className="p-2 space-y-1">
+                  <div className="p-2 space-y-0.5">
                     {sessions.map((session) => (
                       <div
                         key={session.session_id}
-                        className={`group w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                        className={`group relative flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
                           session.session_id === currentSessionId
                             ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-500 dark:text-blue-400'
                             : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
                         }`}
+                        onClick={() => onSessionSelect(session.session_id)}
                       >
-                        {editingSessionId === session.session_id ? (
-                          /* Edit Mode */
-                          <div className="flex items-center gap-2">
-                            <MessageSquare className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
-                            <input
-                              ref={inputRef}
-                              type="text"
-                              value={editingName}
-                              onChange={(e) => setEditingName(e.target.value)}
-                              onKeyDown={handleKeyDown}
-                              className="flex-1 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-2 py-0.5 outline-none focus:border-blue-500"
-                              disabled={saving}
-                            />
+                        <MessageSquare className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
+                        <span className="text-sm truncate flex-1">
+                          {session.session_name ||
+                            `Session ${session.session_id.slice(0, 8)}`}
+                        </span>
+
+                        {hasActions && (
+                          <div className="relative" data-session-menu>
                             <button
-                              onClick={handleSaveEdit}
-                              disabled={saving || !editingName.trim()}
-                              className="p-1 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30 rounded disabled:opacity-50"
+                              onClick={(e) =>
+                                handleMenuToggle(session.session_id, e)
+                              }
+                              className={`p-1 rounded transition-opacity ${
+                                openMenuId === session.session_id
+                                  ? 'opacity-100'
+                                  : 'opacity-0 group-hover:opacity-100'
+                              } text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700`}
                             >
-                              <Check className="w-3.5 h-3.5" />
+                              {deletingSessionId === session.session_id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <MoreVertical className="w-3.5 h-3.5" />
+                              )}
                             </button>
-                            <button
-                              onClick={handleCancelEdit}
-                              disabled={saving}
-                              className="p-1 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 rounded disabled:opacity-50"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
+
+                            {/* Dropdown Menu */}
+                            {openMenuId === session.session_id && (
+                              <div className="absolute right-0 top-full mt-1 z-50 min-w-[120px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1">
+                                {onSessionRename && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRenameClick(session);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                    {t('common.rename', 'Rename')}
+                                  </button>
+                                )}
+                                {onSessionDelete && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteClick(session);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    {t('common.delete')}
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        ) : (
-                          /* Normal Mode */
-                          <button
-                            onClick={() => onSessionSelect(session.session_id)}
-                            className="w-full text-left"
-                          >
-                            <div className="flex items-center gap-2">
-                              <MessageSquare className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
-                              <span className="text-sm truncate flex-1">
-                                {session.session_name ||
-                                  `Session ${session.session_id.slice(0, 8)}`}
-                              </span>
-                              {onSessionRename && (
-                                <button
-                                  onClick={(e) => handleStartEdit(session, e)}
-                                  className="p-1 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-opacity"
-                                >
-                                  <Pencil className="w-3 h-3" />
-                                </button>
-                              )}
-                              {onSessionDelete && (
-                                <button
-                                  onClick={(e) => handleDeleteClick(session, e)}
-                                  disabled={
-                                    deletingSessionId === session.session_id
-                                  }
-                                  className="p-1 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-opacity disabled:opacity-50"
-                                >
-                                  {deletingSessionId === session.session_id ? (
-                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="w-3 h-3" />
-                                  )}
-                                </button>
-                              )}
-                            </div>
-                            <div className="text-xs text-slate-400 dark:text-slate-500 mt-1 pl-5">
-                              {formatDate(session.updated_at)}
-                            </div>
-                          </button>
                         )}
                       </div>
                     ))}
@@ -278,25 +327,138 @@ export default function SidePanel({
           <div className="h-full pt-1">
             <div className="h-full flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-                <FileCode className="w-4 h-4 text-slate-500" />
+                <Layers className="w-4 h-4 text-slate-500" />
                 <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   {t('chat.artifacts', 'Artifacts')}
                 </h3>
               </div>
-              <div className="flex-1 overflow-y-auto p-4">
-                <div className="flex flex-col items-center justify-center h-full">
-                  <FileCode className="w-8 h-8 mb-2 text-slate-300 dark:text-slate-500" />
-                  <p className="text-sm font-medium text-slate-500">
-                    {t('chat.noArtifacts', 'No artifacts yet')}
-                  </p>
-                </div>
+              <div className="flex-1 overflow-y-auto">
+                {artifacts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full p-4">
+                    <Layers className="w-8 h-8 mb-2 text-slate-300 dark:text-slate-500" />
+                    <p className="text-sm font-medium text-slate-500">
+                      {t('chat.noArtifacts', 'No artifacts yet')}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-2 space-y-0.5">
+                    {artifacts.map((artifact) => {
+                      const ArtifactIcon =
+                        artifactIcons[artifact.type] || Layers;
+                      return (
+                        <div
+                          key={artifact.artifact_id}
+                          className={`group relative flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                            artifact.artifact_id === currentArtifactId
+                              ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-500 dark:text-blue-400'
+                              : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                          }`}
+                          onClick={() =>
+                            onArtifactSelect?.(artifact.artifact_id)
+                          }
+                        >
+                          <ArtifactIcon className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
+                          <span className="text-sm truncate flex-1">
+                            {artifact.title}
+                          </span>
+                          {artifact.language && (
+                            <span className="text-xs text-slate-400 dark:text-slate-500">
+                              {artifact.language}
+                            </span>
+                          )}
+
+                          {hasArtifactActions && (
+                            <div className="relative" data-artifact-menu>
+                              <button
+                                onClick={(e) =>
+                                  handleArtifactMenuToggle(
+                                    artifact.artifact_id,
+                                    e,
+                                  )
+                                }
+                                className={`p-1 rounded transition-opacity ${
+                                  openArtifactMenuId === artifact.artifact_id
+                                    ? 'opacity-100'
+                                    : 'opacity-0 group-hover:opacity-100'
+                                } text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700`}
+                              >
+                                {deletingArtifactId === artifact.artifact_id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <MoreVertical className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+
+                              {/* Dropdown Menu */}
+                              {openArtifactMenuId === artifact.artifact_id && (
+                                <div className="absolute right-0 top-full mt-1 z-50 min-w-[120px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1">
+                                  {onArtifactCopy && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleArtifactCopyClick(artifact);
+                                      }}
+                                      className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                    >
+                                      <Copy className="w-3.5 h-3.5" />
+                                      {t('common.copy', 'Copy')}
+                                    </button>
+                                  )}
+                                  {onArtifactDownload && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleArtifactDownloadClick(artifact);
+                                      }}
+                                      className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                      {t('common.download', 'Download')}
+                                    </button>
+                                  )}
+                                  {onArtifactDelete && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleArtifactDeleteClick(artifact);
+                                      }}
+                                      className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      {t('common.delete')}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
 
-      {/* Delete Confirmation Modal */}
+      {/* Rename Modal */}
+      <InputModal
+        isOpen={!!sessionToRename}
+        onClose={() => setSessionToRename(null)}
+        onConfirm={handleConfirmRename}
+        title={t('chat.renameSession', 'Rename Session')}
+        placeholder={t('chat.sessionNamePlaceholder', 'Enter session name')}
+        initialValue={
+          sessionToRename?.session_name ||
+          `Session ${sessionToRename?.session_id.slice(0, 8) || ''}`
+        }
+        confirmText={t('common.save')}
+        loading={saving}
+      />
+
+      {/* Delete Session Confirmation Modal */}
       <ConfirmModal
         isOpen={!!sessionToDelete}
         onClose={() => setSessionToDelete(null)}
@@ -305,6 +467,20 @@ export default function SidePanel({
         message={t(
           'chat.deleteSessionConfirm',
           'Are you sure you want to delete this session? This action cannot be undone.',
+        )}
+        confirmText={t('common.delete')}
+        variant="danger"
+      />
+
+      {/* Delete Artifact Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!artifactToDelete}
+        onClose={() => setArtifactToDelete(null)}
+        onConfirm={handleConfirmArtifactDelete}
+        title={t('chat.deleteArtifact', 'Delete Artifact')}
+        message={t(
+          'chat.deleteArtifactConfirm',
+          'Are you sure you want to delete this artifact? This action cannot be undone.',
         )}
         confirmText={t('common.delete')}
         variant="danger"

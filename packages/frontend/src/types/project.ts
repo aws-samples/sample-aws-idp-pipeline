@@ -41,6 +41,21 @@ export interface DocumentWorkflows {
   workflows: WorkflowSummary[];
 }
 
+export interface OcrBlock {
+  block_id: number;
+  block_label: string;
+  block_content: string;
+  block_bbox: number[]; // [x1, y1, x2, y2]
+  block_order: number | null;
+  group_id: number;
+}
+
+export interface PaddleOcrBlocks {
+  blocks: OcrBlock[];
+  width: number | null;
+  height: number | null;
+}
+
 export interface SegmentData {
   segment_index: number;
   segment_type?: 'PAGE' | 'VIDEO' | 'CHAPTER';
@@ -52,6 +67,7 @@ export interface SegmentData {
   end_timecode_smpte?: string;
   bda_indexer: string;
   paddleocr: string;
+  paddleocr_blocks?: PaddleOcrBlocks;
   format_parser: string;
   ai_analysis: { analysis_query: string; content: string }[];
 }
@@ -116,4 +132,18 @@ export interface Agent {
   content?: string; // system prompt (only in detail response)
   created_at: string;
   updated_at: string;
+}
+
+export type ArtifactType = 'code' | 'table' | 'chart' | 'markdown' | 'image';
+
+export interface Artifact {
+  artifact_id: string;
+  session_id: string;
+  project_id: string;
+  project_name: string;
+  type: ArtifactType;
+  title: string;
+  content: string;
+  language?: string; // for code artifacts
+  created_at: string;
 }

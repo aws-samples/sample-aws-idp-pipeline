@@ -135,6 +135,10 @@ def save_ocr_to_segments(file_uri: str, ocr_result: dict) -> int:
 
     For single image: saves to segment_0000.json
     For PDF: saves each page result to corresponding segment file
+
+    Saves both:
+    - paddleocr: text content for LanceDB indexing
+    - paddleocr_blocks: block array with bbox for frontend visualization
     """
     pages = ocr_result.get('pages', [])
 
@@ -145,6 +149,7 @@ def save_ocr_to_segments(file_uri: str, ocr_result: dict) -> int:
             update_segment_analysis(
                 file_uri, 0,
                 paddleocr=content,
+                paddleocr_blocks=[],
                 status=SegmentStatus.OCR_PROCESSING
             )
             print(f'OCR content saved to segment 0')
@@ -153,13 +158,24 @@ def save_ocr_to_segments(file_uri: str, ocr_result: dict) -> int:
     # Process each page (both single image and multi-page PDF have pages array)
     for i, page in enumerate(pages):
         page_content = page.get('content', '')
-        if page_content:
-            update_segment_analysis(
-                file_uri, i,
-                paddleocr=page_content,
-                status=SegmentStatus.OCR_PROCESSING
-            )
-            print(f'OCR content saved to segment {i}')
+        page_blocks = page.get('blocks', [])
+        page_width = page.get('width')
+        page_height = page.get('height')
+
+        # Build blocks data with image dimensions for frontend
+        blocks_data = {
+            'blocks': page_blocks,
+            'width': page_width,
+            'height': page_height
+        }
+
+        update_segment_analysis(
+            file_uri, i,
+            paddleocr=page_content,
+            paddleocr_blocks=blocks_data,
+            status=SegmentStatus.OCR_PROCESSING
+        )
+        print(f'OCR content saved to segment {i} ({len(page_blocks)} blocks)')
 
     return len(pages)
 
