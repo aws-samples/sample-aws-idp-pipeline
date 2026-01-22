@@ -35,6 +35,8 @@ import {
   ChatSession,
   WorkflowProgress,
   Agent,
+  Artifact,
+  ArtifactsResponse,
 } from '../../types/project';
 import AgentSelectModal from '../../components/AgentSelectModal';
 
@@ -96,6 +98,7 @@ function ProjectDetailPage() {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [showAgentModal, setShowAgentModal] = useState(false);
   const [loadingAgents, setLoadingAgents] = useState(false);
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
@@ -261,6 +264,18 @@ function ProjectDetailPage() {
       setLoadingAgents(false);
     }
   }, [fetchApi, projectId, userId]);
+
+  const loadArtifacts = useCallback(async () => {
+    try {
+      const data = await fetchApi<ArtifactsResponse>(
+        `artifacts?project_id=${projectId}`,
+      );
+      setArtifacts(data.items);
+    } catch (error) {
+      console.error('Failed to load artifacts:', error);
+      setArtifacts([]);
+    }
+  }, [fetchApi, projectId]);
 
   const loadAgentDetail = useCallback(
     async (agentName: string): Promise<Agent | null> => {
@@ -493,11 +508,19 @@ function ProjectDetailPage() {
         loadWorkflows(),
         loadSessions(),
         loadAgents(),
+        loadArtifacts(),
       ]);
       setLoading(false);
     };
     load();
-  }, [loadProject, loadDocuments, loadWorkflows, loadSessions, loadAgents]);
+  }, [
+    loadProject,
+    loadDocuments,
+    loadWorkflows,
+    loadSessions,
+    loadAgents,
+    loadArtifacts,
+  ]);
 
   // Handle workflow completion/failure
   const progressStatus = workflowProgress?.status;
@@ -967,6 +990,7 @@ function ProjectDetailPage() {
                 hasMoreSessions={!!sessionsNextCursor}
                 loadingMoreSessions={loadingMoreSessions}
                 onLoadMoreSessions={loadMoreSessions}
+                artifacts={artifacts}
               />
             </div>
           </ResizablePanel>

@@ -1848,7 +1848,6 @@ a {
 /* Artifact Card */
 .artifact-card {
   position: relative;
-  overflow: hidden;
   border-radius: 1rem;
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border);
@@ -1871,6 +1870,8 @@ a {
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
+  border-radius: 1rem;
+  overflow: hidden;
 }
 
 .artifact-card:hover .artifact-card-gradient {
