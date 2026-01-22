@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from app.config import get_config
 from app.ddb import (
     Document,
+    DocumentData,
     delete_document_item,
     get_document_item,
     get_project_item,
@@ -62,6 +63,19 @@ class DocumentStatusUpdate(BaseModel):
     status: str
 
 
+class DeletedDocumentInfo(BaseModel):
+    document_id: str
+    workflow_id: str | None = None
+    lancedb_deleted: bool = False
+    lancedb_error: str | None = None
+    workflow_deleted: bool = False
+
+
+class DeleteDocumentResponse(BaseModel):
+    message: str
+    details: DeletedDocumentInfo
+
+
 @router.get("")
 def list_documents(project_id: str) -> list[DocumentResponse]:
     """List all documents for a project."""
@@ -91,15 +105,15 @@ def create_document_upload(project_id: str, request: DocumentUploadRequest) -> D
     s3_key = f"projects/{project_id}/documents/{document_id}/{document_id}.{ext}"
 
     # Create document record in DynamoDB
-    data = {
-        "document_id": document_id,
-        "project_id": project_id,
-        "name": request.file_name,
-        "file_type": request.content_type,
-        "file_size": request.file_size,
-        "status": "uploading",
-        "s3_key": s3_key,
-    }
+    data = DocumentData(
+        document_id=document_id,
+        project_id=project_id,
+        name=request.file_name,
+        file_type=request.content_type,
+        file_size=request.file_size,
+        status="uploading",
+        s3_key=s3_key,
+    )
     put_document_item(project_id, document_id, data)
 
     # Generate presigned URL for upload (valid for 1 hour)
@@ -127,8 +141,8 @@ def update_document_status(project_id: str, document_id: str, request: DocumentS
     if not existing:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    data = existing.data.model_dump()
-    data["status"] = request.status
+    data = existing.data.model_copy()
+    data.status = request.status
 
     update_document_data(project_id, document_id, data)
 
@@ -149,7 +163,7 @@ def get_document(project_id: str, document_id: str) -> DocumentResponse:
 
 
 @router.delete("/{document_id}")
-def delete_document(project_id: str, document_id: str) -> dict:
+def delete_document(project_id: str, document_id: str) -> DeleteDocumentResponse:
     """Delete a document and all related data (DynamoDB, S3, LanceDB)."""
     config = get_config()
     s3 = get_s3_client()
@@ -169,7 +183,7 @@ def delete_document(project_id: str, document_id: str) -> dict:
         wf = workflows[0]
         workflow_id = wf.SK.replace("WF#", "")
 
-    deleted_info = {"document_id": document_id, "workflow_id": workflow_id}
+    deleted_info = DeletedDocumentInfo(document_id=document_id, workflow_id=workflow_id)
 
     # 1. Delete from LanceDB (per-project, if workflow exists)
     if workflow_id and config.lancedb_express_bucket_name:
@@ -180,9 +194,9 @@ def delete_document(project_id: str, document_id: str) -> dict:
             if "documents" in db.table_names():
                 lance_table = db.open_table("documents")
                 lance_table.delete(f"workflow_id = '{workflow_id}'")
-                deleted_info["lancedb_deleted"] = True
+                deleted_info.lancedb_deleted = True
         except Exception as e:
-            deleted_info["lancedb_error"] = str(e)
+            deleted_info.lancedb_error = str(e)
 
     # 2. Delete from S3 - document file
     if s3_key:
@@ -198,9 +212,9 @@ def delete_document(project_id: str, document_id: str) -> dict:
     if workflow_id:
         with contextlib.suppress(Exception):
             delete_workflow_item(document_id, workflow_id)
-            deleted_info["workflow_deleted"] = True
+            deleted_info.workflow_deleted = True
 
     # 5. Delete document item from DynamoDB
     delete_document_item(project_id, document_id)
 
-    return {"message": f"Document {document_id} deleted", "details": deleted_info}
+    return DeleteDocumentResponse(message=f"Document {document_id} deleted", details=deleted_info)

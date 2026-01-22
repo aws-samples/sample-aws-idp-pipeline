@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
@@ -76,19 +76,21 @@ def get_agent(project_id: str, agent_name: str, x_user_id: str = Header(alias="x
             content=content,
             updated_at=last_modified,
         )
-    except s3.exceptions.NoSuchKey:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    except s3.exceptions.NoSuchKey as e:
+        raise HTTPException(status_code=404, detail="Agent not found") from e
 
 
 @router.put("/{agent_name}")
-def upsert_agent(project_id: str, agent_name: str, request: AgentUpdate, x_user_id: str = Header(alias="x-user-id")) -> AgentResponse:
+def upsert_agent(
+    project_id: str, agent_name: str, request: AgentUpdate, x_user_id: str = Header(alias="x-user-id")
+) -> AgentResponse:
     """Create or update an agent (upsert)."""
     config = get_config()
     s3 = get_s3_client()
 
     key = _get_agent_key(x_user_id, project_id, agent_name)
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(datetime.UTC).isoformat()
     s3.put_object(
         Bucket=config.agent_storage_bucket_name,
         Key=key,
@@ -116,7 +118,7 @@ def delete_agent(project_id: str, agent_name: str, x_user_id: str = Header(alias
         s3.head_object(Bucket=config.agent_storage_bucket_name, Key=key)
     except s3.exceptions.ClientError as e:
         if e.response["Error"]["Code"] == "404":
-            raise HTTPException(status_code=404, detail="Agent not found")
+            raise HTTPException(status_code=404, detail="Agent not found") from e
         raise
 
     # Delete the agent

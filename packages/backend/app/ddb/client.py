@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import boto3
 
 from app.config import get_config
+from app.ddb.models import DdbKey
 
 _ddb_resource = None
 NANOID_ALPHABET = string.ascii_letters + string.digits + "_-"
@@ -35,7 +36,7 @@ def generate_project_id() -> str:
     return f"proj_{generate_nanoid()}"
 
 
-def batch_delete_items(items: list[dict]) -> None:
+def batch_delete_items(items: list[DdbKey]) -> None:
     """Batch delete items from DynamoDB."""
     table = get_table()
     with table.batch_writer() as batch:

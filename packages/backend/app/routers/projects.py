@@ -1,4 +1,5 @@
 import contextlib
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -47,7 +48,22 @@ class ProjectCreate(BaseModel):
     color: int | None = None
     document_prompt: str | None = None
     ocr_model: str | None = None
-    ocr_options: dict | None = None
+    ocr_options: dict[str, Any] | None = None
+
+
+class DeletedInfo(BaseModel):
+    project_id: str
+    workflow_count: int = 0
+    lancedb_objects_deleted: int = 0
+    lancedb_error: str | None = None
+    workflow_items_deleted: int = 0
+    s3_objects_deleted: int = 0
+    project_items_deleted: int = 0
+
+
+class DeleteProjectResponse(BaseModel):
+    message: str
+    details: DeletedInfo
 
 
 class ProjectUpdate(BaseModel):
@@ -57,7 +73,7 @@ class ProjectUpdate(BaseModel):
     color: int | None = None
     document_prompt: str | None = None
     ocr_model: str | None = None
-    ocr_options: dict | None = None
+    ocr_options: dict[str, Any] | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -70,7 +86,7 @@ class ProjectResponse(BaseModel):
     color: int | None = None
     document_prompt: str | None = None
     ocr_model: str | None = None
-    ocr_options: dict | None = None
+    ocr_options: dict[str, Any] | None = None
     created_at: str
     updated_at: str | None = None
 
@@ -187,7 +203,21 @@ def update_project(project_id: str, request: ProjectUpdate) -> ProjectResponse:
     if not existing:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    data = existing.data.model_copy(update={k: v for k, v in request.model_dump().items() if v is not None})
+    data = existing.data.model_copy()
+    if request.name is not None:
+        data.name = request.name
+    if request.description is not None:
+        data.description = request.description
+    if request.language is not None:
+        data.language = request.language
+    if request.color is not None:
+        data.color = request.color
+    if request.document_prompt is not None:
+        data.document_prompt = request.document_prompt
+    if request.ocr_model is not None:
+        data.ocr_model = request.ocr_model
+    if request.ocr_options is not None:
+        data.ocr_options = request.ocr_options
 
     update_project_data(project_id, data)
 
@@ -195,7 +225,7 @@ def update_project(project_id: str, request: ProjectUpdate) -> ProjectResponse:
 
 
 @router.delete("/{project_id}")
-def delete_project(project_id: str) -> dict:
+def delete_project(project_id: str) -> DeleteProjectResponse:
     """Delete a project and all related data (documents, workflows, S3, LanceDB)."""
     config = get_config()
 
@@ -203,7 +233,7 @@ def delete_project(project_id: str) -> dict:
     if not existing:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    deleted_info = {"project_id": project_id}
+    deleted_info = DeletedInfo(project_id=project_id)
 
     # 1. Get all items under this project
     project_items = query_all_project_items(project_id)
@@ -218,16 +248,16 @@ def delete_project(project_id: str) -> dict:
             workflow_ids.append(wf.SK.replace("WF#", ""))
             workflow_items.append({"PK": wf.PK, "SK": wf.SK, "document_id": doc_id})
 
-    deleted_info["workflow_count"] = len(workflow_ids)
+    deleted_info.workflow_count = len(workflow_ids)
 
     # 2. Delete from LanceDB (per-project S3 Express bucket)
     if config.lancedb_express_bucket_name:
         try:
             lancedb_prefix = f"{project_id}.lance/"
             lancedb_deleted = delete_s3_prefix(config.lancedb_express_bucket_name, lancedb_prefix)
-            deleted_info["lancedb_objects_deleted"] = lancedb_deleted
+            deleted_info.lancedb_objects_deleted = lancedb_deleted
         except Exception as e:
-            deleted_info["lancedb_error"] = str(e)
+            deleted_info.lancedb_error = str(e)
 
     # 3. Delete workflow items from DynamoDB (including STEP, SEG#*, etc.)
     total_wf_deleted = 0
@@ -236,17 +266,17 @@ def delete_project(project_id: str) -> dict:
         wf_id = wf_info["SK"].replace("WF#", "")
         with contextlib.suppress(Exception):
             total_wf_deleted += delete_workflow_item(doc_id, wf_id)
-    deleted_info["workflow_items_deleted"] = total_wf_deleted
+    deleted_info.workflow_items_deleted = total_wf_deleted
 
     # 4. Delete from S3 - entire project folder
     project_prefix = f"projects/{project_id}/"
     with contextlib.suppress(Exception):
         s3_deleted = delete_s3_prefix(config.document_storage_bucket_name, project_prefix)
-        deleted_info["s3_objects_deleted"] = s3_deleted
+        deleted_info.s3_objects_deleted = s3_deleted
 
     # 5. Delete all project items from DynamoDB (PROJ#, DOC#*, WF#* links)
     batch_delete_items(project_items)
 
-    deleted_info["project_items_deleted"] = len(project_items)
+    deleted_info.project_items_deleted = len(project_items)
 
-    return {"message": f"Project {project_id} deleted", "details": deleted_info}
+    return DeleteProjectResponse(message=f"Project {project_id} deleted", details=deleted_info)

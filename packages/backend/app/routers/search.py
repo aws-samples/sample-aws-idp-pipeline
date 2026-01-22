@@ -1,31 +1,9 @@
-from datetime import datetime
-
 from fastapi import APIRouter, HTTPException, Path, Query
-from lancedb.pydantic import LanceModel, Vector
 from pydantic import BaseModel
 
-from app.embedding import get_embedding_function
 from app.keywords import extract_keywords
 from app.lancedb import get_db
 from app.reranker import rerank
-
-embedding_function = get_embedding_function()
-
-
-class DocumentRecord(LanceModel):
-    workflow_id: str
-    segment_id: str
-    segment_index: int
-
-    content: str = embedding_function.SourceField()
-    vector: Vector(1024) = embedding_function.VectorField()  # type: ignore
-    keywords: str
-
-    file_uri: str
-    file_type: str
-    image_uri: str | None = None
-    created_at: datetime
-
 
 router = APIRouter(prefix="/projects/{project_id}/search", tags=["search"])
 

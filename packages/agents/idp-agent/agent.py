@@ -83,7 +83,9 @@ Provide accurate answers based on the search results and cite the source when an
 
         system_prompt += f"""
 Current project_id: {project_id}
+Current user_id: {user_id}
 When using the search_documents tool, always use this project_id.
+When using the save_artifact tool, always use this user_id.
 You MUST respond in the language corresponding to code: {language_code}.
 """
 

@@ -51,18 +51,24 @@ def update_project_data(project_id: str, data: ProjectData) -> None:
     )
 
 
-def query_all_project_items(project_id: str) -> list[dict]:
+def query_all_project_items(project_id: str) -> list[DdbKey]:
     """Query all items under PROJ#{project_id} with pagination."""
     table = get_table()
-    items = []
-    response = table.query(KeyConditionExpression=Key("PK").eq(f"PROJ#{project_id}"))
-    items.extend(response.get("Items", []))
+    items: list[DdbKey] = []
+    response = table.query(
+        KeyConditionExpression=Key("PK").eq(f"PROJ#{project_id}"),
+        ProjectionExpression="PK, SK",
+    )
+    items.extend(DdbKey(PK=str(item["PK"]), SK=str(item["SK"])) for item in response.get("Items", []))
 
-    while response.get("LastEvaluatedKey"):
+    last_key = response.get("LastEvaluatedKey")
+    while last_key:
         response = table.query(
             KeyConditionExpression=Key("PK").eq(f"PROJ#{project_id}"),
-            ExclusiveStartKey=response["LastEvaluatedKey"],
+            ProjectionExpression="PK, SK",
+            ExclusiveStartKey=last_key,
         )
-        items.extend(response.get("Items", []))
+        items.extend(DdbKey(PK=str(item["PK"]), SK=str(item["SK"])) for item in response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
 
     return items

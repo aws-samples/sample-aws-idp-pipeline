@@ -1,0 +1,16 @@
+{
+  "name": "artifact-mcp",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/lambda/artifact-mcp/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "packages/lambda/artifact-mcp/dist",
+        "tsConfig": "packages/lambda/artifact-mcp/tsconfig.json"
+      }
+    }
+  }
+}

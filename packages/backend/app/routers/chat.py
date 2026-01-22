@@ -185,6 +185,10 @@ class UpdateSessionRequest(BaseModel):
     session_name: str
 
 
+class DeleteSessionResponse(BaseModel):
+    deleted_count: int
+
+
 @router.patch("/projects/{project_id}/sessions/{session_id}")
 def update_session(
     project_id: str,
@@ -228,7 +232,9 @@ def update_session(
 
 
 @router.delete("/projects/{project_id}/sessions/{session_id}")
-def delete_session(project_id: str, session_id: str, x_user_id: str = Header(alias="x-user-id")) -> dict:
+def delete_session(
+    project_id: str, session_id: str, x_user_id: str = Header(alias="x-user-id")
+) -> DeleteSessionResponse:
     """Delete a session from S3."""
     config = get_config()
     bucket_name = config.session_storage_bucket_name
@@ -239,4 +245,4 @@ def delete_session(project_id: str, session_id: str, x_user_id: str = Header(ali
     prefix = f"sessions/{x_user_id}/{project_id}/session_{session_id}/"
     deleted_count = delete_s3_prefix(bucket_name, prefix)
 
-    return {"deleted_count": deleted_count}
+    return DeleteSessionResponse(deleted_count=deleted_count)

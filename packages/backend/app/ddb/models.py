@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from pydantic import BaseModel
 
@@ -18,7 +18,7 @@ class ProjectData(BaseModel):
     color: int | None = None
     document_prompt: str | None = None
     ocr_model: str | None = None
-    ocr_options: dict | None = None
+    ocr_options: dict[str, Any] | None = None
 
 
 class Project(BaseModel):
@@ -95,3 +95,19 @@ class SegmentAnalysis(BaseModel):
     paddleocr: str = ""
     format_parser: str = ""
     ai_analysis: list[AIAnalysis] = []
+
+
+class ArtifactData(BaseModel):
+    user_id: str
+    project_id: str
+    filename: str
+    content_type: str
+    s3_key: str
+    s3_bucket: str
+    file_size: int
+
+
+class Artifact(BaseModel):
+    artifact_id: str
+    data: ArtifactData
+    created_at: str

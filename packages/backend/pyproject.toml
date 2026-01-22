@@ -21,6 +21,21 @@ packages = [ "app" ]
 [tool.hatch.metadata]
 allow-direct-references = true
 
+[tool.pyright]
+reportArgumentType = false
+reportUnusedCallResult = false
+reportExplicitAny = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownParameterType = false
+reportUnknownArgumentType = false
+reportUnannotatedClassAttribute = false
+reportMissingTypeStubs = false
+reportCallInDefaultInitializer = false
+reportInvalidTypeForm = false
+reportAny = false
+reportMissingParameterType = false
+
 [tool.ruff]
 exclude = [ ".ruff_cache", ".svn", ".tox", ".venv", "dist" ]
 line-length = 120
@@ -40,6 +55,7 @@ requires-python = ">=3.12"
 readme = "README.md"
 dependencies = [
   "boto3>=1.42.0",
+  "boto3-stubs>=1.42.30",
   "duckdb>=1.0.0",
   "fastapi[standard]>=0.123.0",
   "kiwipiepy>=0.22.2",

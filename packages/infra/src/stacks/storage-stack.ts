@@ -105,6 +105,11 @@ export class StorageStack extends Stack {
           partitionKey: { name: 'GSI1PK', type: AttributeType.STRING },
           sortKey: { name: 'GSI1SK', type: AttributeType.STRING },
         },
+        {
+          indexName: 'GSI2',
+          partitionKey: { name: 'GSI2PK', type: AttributeType.STRING },
+          sortKey: { name: 'GSI2SK', type: AttributeType.STRING },
+        },
       ],
     });
 

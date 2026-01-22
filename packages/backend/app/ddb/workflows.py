@@ -47,12 +47,14 @@ def delete_workflow_item(document_id: str, workflow_id: str) -> int:
     items = response.get("Items", [])
 
     # Handle pagination
-    while response.get("LastEvaluatedKey"):
+    last_key = response.get("LastEvaluatedKey")
+    while last_key:
         response = table.query(
             KeyConditionExpression=Key("PK").eq(f"WF#{workflow_id}"),
-            ExclusiveStartKey=response["LastEvaluatedKey"],
+            ExclusiveStartKey=last_key,
         )
         items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
 
     # Batch delete all related items
     if items:

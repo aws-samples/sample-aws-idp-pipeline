@@ -18,7 +18,7 @@ importers:
         specifier: ^5.2.0
         version: 5.2.0
       '@aws-sdk/client-s3':
-        specifier: ^3.965.0
+        specifier: ^3.972.0
         version: 3.972.0
       '@aws-sdk/client-ssm':
         specifier: ^3.958.0
@@ -26,6 +26,9 @@ importers:
       '@aws-sdk/credential-providers':
         specifier: ^3.965.0
         version: 3.966.0
+      '@aws-sdk/s3-request-presigner':
+        specifier: ^3.972.0
+        version: 3.972.0
       '@aws/nx-plugin':
         specifier: 0.64.1
         version: 0.64.1(@babel/core@7.28.5)(@babel/traverse@7.28.5)(@swc-node/register@1.9.2(@swc/core@1.5.29(@swc/helpers@0.5.18))(@swc/types@0.1.25)(typescript@5.9.3))(@swc/core@1.5.29(@swc/helpers@0.5.18))(@swc/helpers@0.5.18)(@types/babel__core@7.20.5)(@types/node@22.19.1)(@vitest/ui@4.0.16)(@zkochan/js-yaml@0.0.7)(esbuild@0.27.0)(eslint@9.39.2(jiti@2.4.2))(hono@4.11.3)(jiti@2.4.2)(jsdom@22.1.0)(lightningcss@1.30.2)(nx@22.1.3(@swc-node/register@1.9.2(@swc/core@1.5.29(@swc/helpers@0.5.18))(@swc/types@0.1.25)(typescript@5.9.3))(@swc/core@1.5.29(@swc/helpers@0.5.18)))(prettier@3.6.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(terser@5.44.1)(tsx@4.20.6)(webpack@5.104.1(@swc/core@1.5.29(@swc/helpers@0.5.18))(esbuild@0.27.0))(yaml@2.8.2)
@@ -41,12 +44,6 @@ importers:
       '@lancedb/lancedb':
         specifier: ^0.23.0
         version: 0.23.0(apache-arrow@21.1.0)
-      '@smithy/protocol-http':
-        specifier: ^5.3.7
-        version: 5.3.8
-      '@smithy/signature-v4':
-        specifier: ^5.3.7
-        version: 5.3.8
       '@tailwindcss/typography':
         specifier: ^0.5.19
         version: 0.5.19(tailwindcss@4.1.17)
@@ -593,6 +590,10 @@ packages:
     resolution: {integrity: sha512-JyOf+R/6vJW8OEVFCAyzEOn2reri/Q+L0z9zx4JQSKWvTmJ1qeFO25sOm8VIfB8URKhfGRTQF30pfYaH2zxt/A==}
     engines: {node: '>=20.0.0'}
 
+  '@aws-sdk/s3-request-presigner@3.972.0':
+    resolution: {integrity: sha512-AsmnNkW+RF+UQ86bYduMN4e6DuEAsy9nragtBAdGnlVYILTB7C2AjMVzp2EM1WOzjZ4dDsOUS/t099rzi+GcfQ==}
+    engines: {node: '>=20.0.0'}
+
   '@aws-sdk/signature-v4-multi-region@3.972.0':
     resolution: {integrity: sha512-2udiRijmjpN81Pvajje4TsjbXDZNP6K9bYUanBYH8hXa/tZG5qfGCySD+TyX0sgDxCQmEDMg3LaQdfjNHBDEgQ==}
     engines: {node: '>=20.0.0'}
@@ -635,6 +636,10 @@ packages:
 
   '@aws-sdk/util-endpoints@3.972.0':
     resolution: {integrity: sha512-6JHsl1V/a1ZW8D8AFfd4R52fwZPnZ5H4U6DS8m/bWT8qad72NvbOFAC7U2cDtFs2TShqUO3TEiX/EJibtY3ijg==}
+    engines: {node: '>=20.0.0'}
+
+  '@aws-sdk/util-format-url@3.972.0':
+    resolution: {integrity: sha512-o4zqsW/PxrcsTla/Yh2dkRS26kP76QQWZq/i/JgVNFBAr9x0E2oJcCeh8Daj2AA+8AZ8VWln9x706FFzWWQwvQ==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/util-locate-window@3.957.0':
@@ -9482,6 +9487,17 @@ snapshots:
       '@smithy/types': 4.12.0
       tslib: 2.8.1
 
+  '@aws-sdk/s3-request-presigner@3.972.0':
+    dependencies:
+      '@aws-sdk/signature-v4-multi-region': 3.972.0
+      '@aws-sdk/types': 3.972.0
+      '@aws-sdk/util-format-url': 3.972.0
+      '@smithy/middleware-endpoint': 4.4.10
+      '@smithy/protocol-http': 5.3.8
+      '@smithy/smithy-client': 4.10.11
+      '@smithy/types': 4.12.0
+      tslib: 2.8.1
+
   '@aws-sdk/signature-v4-multi-region@3.972.0':
     dependencies:
       '@aws-sdk/middleware-sdk-s3': 3.972.0
@@ -9568,6 +9584,13 @@ snapshots:
       '@smithy/types': 4.12.0
       '@smithy/url-parser': 4.2.8
       '@smithy/util-endpoints': 3.2.8
+      tslib: 2.8.1
+
+  '@aws-sdk/util-format-url@3.972.0':
+    dependencies:
+      '@aws-sdk/types': 3.972.0
+      '@smithy/querystring-builder': 4.2.8
+      '@smithy/types': 4.12.0
       tslib: 2.8.1
 
   '@aws-sdk/util-locate-window@3.957.0':

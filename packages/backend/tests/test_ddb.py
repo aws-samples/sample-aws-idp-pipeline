@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.ddb import client, documents, projects, workflows
-from app.ddb.models import ProjectData
+from app.ddb.models import DocumentData, ProjectData
 
 
 class TestMakeKeys:
@@ -56,7 +56,7 @@ class TestProjectHelpers:
         assert result is None
 
     @patch("app.ddb.projects.now_iso", return_value="2024-01-01T00:00:00+00:00")
-    def test_put_project_item(self, mock_now, mock_table):
+    def test_put_project_item(self, _, mock_table):
         data = ProjectData(project_id="new-proj", name="New Project", description="", status="active")
 
         projects.put_project_item("new-proj", data)
@@ -74,7 +74,7 @@ class TestProjectHelpers:
         )
 
     @patch("app.ddb.projects.now_iso", return_value="2024-01-01T00:00:00+00:00")
-    def test_update_project_data(self, mock_now, mock_table):
+    def test_update_project_data(self, _, mock_table):
         data = ProjectData(project_id="test-id", name="Updated Name", description="", status="active")
 
         projects.update_project_data("test-id", data)
@@ -156,16 +156,16 @@ class TestDocumentHelpers:
         assert result is None
 
     @patch("app.ddb.documents.now_iso", return_value="2024-01-01T00:00:00+00:00")
-    def test_put_document_item(self, mock_now, mock_table):
-        data = {
-            "document_id": "doc-1",
-            "project_id": "proj-1",
-            "name": "test.pdf",
-            "file_type": "application/pdf",
-            "file_size": 1024,
-            "status": "uploaded",
-            "s3_key": "projects/proj-1/documents/doc-1/test.pdf",
-        }
+    def test_put_document_item(self, _, mock_table):
+        data = DocumentData(
+            document_id="doc-1",
+            project_id="proj-1",
+            name="test.pdf",
+            file_type="application/pdf",
+            file_size=1024,
+            status="uploaded",
+            s3_key="projects/proj-1/documents/doc-1/test.pdf",
+        )
 
         documents.put_document_item("proj-1", "doc-1", data)
 
@@ -175,7 +175,7 @@ class TestDocumentHelpers:
                 "SK": "DOC#doc-1",
                 "GSI1PK": "PROJ#proj-1#DOC",
                 "GSI1SK": "2024-01-01T00:00:00+00:00",
-                "data": data,
+                "data": data.model_dump(),
                 "created_at": "2024-01-01T00:00:00+00:00",
                 "updated_at": "2024-01-01T00:00:00+00:00",
             }
