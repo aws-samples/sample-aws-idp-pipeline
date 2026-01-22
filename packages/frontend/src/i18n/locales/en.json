@@ -176,7 +176,9 @@
     "noHistory": "No conversation history",
     "loadMore": "Load more",
     "artifacts": "Artifacts",
-    "noArtifacts": "No artifacts yet"
+    "noArtifacts": "No artifacts yet",
+    "deleteSession": "Delete Session",
+    "deleteSessionConfirm": "Are you sure you want to delete this session? This action cannot be undone."
   },
   "viewer": {
     "zoomIn": "Zoom In",
@@ -185,6 +187,23 @@
     "fitPage": "Fit Page",
     "rotate": "Rotate",
     "download": "Download"
+  },
+  "agent": {
+    "default": "AI Assistant",
+    "defaultDescription": "Project default assistant",
+    "selectAgent": "Select Agent",
+    "createAgent": "Create Agent",
+    "editAgent": "Edit Agent",
+    "changeAgent": "Change Agent",
+    "addAgent": "Add Agent",
+    "name": "Name",
+    "namePlaceholder": "my-agent",
+    "systemPrompt": "System Prompt",
+    "promptPlaceholder": "# Financial Document Analyst\n\nYou are a financial document analysis expert.\n\n## Role\n- Extract key financial metrics and figures\n- Identify important dates and deadlines\n- Summarize contract terms and conditions\n\n## Output Format\n- Use structured tables for numerical data\n- Highlight critical information\n- Provide Korean translation when needed",
+    "changeConfirmMessage": "Changing agent will start a new conversation. Current conversation will be saved in history.",
+    "startNewChat": "Start New Chat",
+    "deleteAgent": "Delete Agent",
+    "deleteConfirmMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
   },
   "languages": {
     "ko": "Korean",

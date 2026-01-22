@@ -7,6 +7,39 @@ import { useRuntimeConfig } from './useRuntimeConfig';
 
 const CREDENTIAL_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
+const MIME_TYPES: Record<string, string> = {
+  // Video
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
+  avi: 'video/x-msvideo',
+  mkv: 'video/x-matroska',
+  // Audio
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  flac: 'audio/flac',
+  ogg: 'audio/ogg',
+  // Image
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  tiff: 'image/tiff',
+  tif: 'image/tiff',
+  webp: 'image/webp',
+  // Document
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  txt: 'text/plain',
+};
+
+const getMimeType = (file: File): string => {
+  if (file.type) return file.type;
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  return (ext && MIME_TYPES[ext]) || 'application/octet-stream';
+};
+
 interface Credentials {
   accessKeyId: string;
   secretAccessKey: string;
@@ -203,7 +236,7 @@ export function useAwsClient() {
           Bucket: documentStorageBucketName,
           Key: key,
           Body: new Uint8Array(await file.arrayBuffer()),
-          ContentType: file.type,
+          ContentType: getMimeType(file),
         }),
       );
     },

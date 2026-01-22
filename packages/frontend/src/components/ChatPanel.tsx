@@ -1,10 +1,19 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowUp, Plus, X, FileText, Archive, Box } from 'lucide-react';
+import {
+  ArrowUp,
+  Plus,
+  X,
+  FileText,
+  Archive,
+  Box,
+  Sparkles,
+  ChevronDown,
+} from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
-import { ChatMessage } from '../types/project';
+import { ChatMessage, Agent } from '../types/project';
 
 export interface AttachedFile {
   id: string;
@@ -20,8 +29,10 @@ interface ChatPanelProps {
   streamingContent: string;
   currentToolUse: string | null;
   loadingHistory?: boolean;
+  selectedAgent: Agent | null;
   onInputChange: (value: string) => void;
   onSendMessage: (files: AttachedFile[]) => void;
+  onAgentClick: () => void;
 }
 
 const formatFileSize = (bytes: number) => {
@@ -77,8 +88,10 @@ export default function ChatPanel({
   streamingContent,
   currentToolUse,
   loadingHistory = false,
+  selectedAgent,
   onInputChange,
   onSendMessage,
+  onAgentClick,
 }: ChatPanelProps) {
   const { t } = useTranslation();
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -317,6 +330,20 @@ export default function ChatPanel({
 
   return (
     <div className="w-full h-full flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+      {/* Agent Header */}
+      <div className="flex items-center px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+        <button
+          onClick={onAgentClick}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        >
+          <Sparkles className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            {selectedAgent?.name || t('agent.default', 'Default Agent')}
+          </span>
+          <ChevronDown className="w-4 h-4 text-slate-400" />
+        </button>
+      </div>
+
       {/* Messages Container */}
       <div className="flex-1 overflow-y-auto">
         {loadingHistory ? (

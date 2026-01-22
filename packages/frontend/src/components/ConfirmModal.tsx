@@ -14,6 +14,7 @@ interface ConfirmModalProps {
   cancelText?: string;
   variant?: ConfirmVariant;
   loading?: boolean;
+  transparentBackdrop?: boolean;
 }
 
 const variantStyles: Record<
@@ -63,6 +64,7 @@ export default function ConfirmModal({
   cancelText,
   variant = 'danger',
   loading = false,
+  transparentBackdrop = false,
 }: ConfirmModalProps) {
   const { t } = useTranslation();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -97,7 +99,11 @@ export default function ConfirmModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200 ${
+        transparentBackdrop
+          ? ''
+          : 'bg-black/40 dark:bg-black/60 backdrop-blur-sm'
+      }`}
       onClick={handleBackdropClick}
     >
       <div

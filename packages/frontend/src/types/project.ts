@@ -110,3 +110,10 @@ export interface AnalysisPopup {
   title: string;
   qaItems: { question: string; answer: string }[];
 }
+
+export interface Agent {
+  name: string;
+  content?: string; // system prompt (only in detail response)
+  created_at: string;
+  updated_at: string;
+}

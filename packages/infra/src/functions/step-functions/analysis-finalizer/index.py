@@ -54,11 +54,13 @@ def handler(event, _context):
     if format_parser:
         parts.append(f'## Format Parser\n{format_parser}')
 
-    image_analysis = segment_data.get('image_analysis', [])
-    for analysis in image_analysis:
+    ai_analysis = segment_data.get('ai_analysis', [])
+    for analysis in ai_analysis:
+        query = analysis.get('analysis_query', '')
         content = analysis.get('content', '')
         if content:
-            parts.append(f'## Image Analysis\n{content}')
+            header = f'## AI Analysis: {query}' if query else '## AI Analysis'
+            parts.append(f'{header}\n{content}')
 
     content_combined = '\n\n'.join(parts)
 

@@ -176,7 +176,9 @@
     "noHistory": "会話履歴がありません",
     "loadMore": "もっと見る",
     "artifacts": "アーティファクト",
-    "noArtifacts": "アーティファクトがありません"
+    "noArtifacts": "アーティファクトがありません",
+    "deleteSession": "会話を削除",
+    "deleteSessionConfirm": "この会話を削除しますか？削除された会話は復元できません。"
   },
   "viewer": {
     "zoomIn": "拡大",
@@ -185,6 +187,23 @@
     "fitPage": "ページに合わせる",
     "rotate": "回転",
     "download": "ダウンロード"
+  },
+  "agent": {
+    "default": "AI Assistant",
+    "defaultDescription": "プロジェクトデフォルトアシスタント",
+    "selectAgent": "エージェント選択",
+    "createAgent": "エージェント作成",
+    "editAgent": "エージェント編集",
+    "changeAgent": "エージェント変更",
+    "addAgent": "エージェント追加",
+    "name": "名前",
+    "namePlaceholder": "my-agent",
+    "systemPrompt": "システムプロンプト",
+    "promptPlaceholder": "# 財務文書アナリスト\n\nあなたは財務文書分析の専門家です。\n\n## 役割\n- 主要な財務指標と数値の抽出\n- 重要な日付と期限の特定\n- 契約条件の要約\n\n## 出力形式\n- 数値データは構造化テーブルを使用\n- 重要情報をハイライト\n- 必要に応じて英語翻訳を提供",
+    "changeConfirmMessage": "エージェントを変更すると新しい会話が始まります。現在の会話は履歴に保存されます。",
+    "startNewChat": "新しい会話を開始",
+    "deleteAgent": "エージェント削除",
+    "deleteConfirmMessage": "「{{name}}」を削除しますか？この操作は取り消せません。"
   },
   "languages": {
     "ko": "韓国語",

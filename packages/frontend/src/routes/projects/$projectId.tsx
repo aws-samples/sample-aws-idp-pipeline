@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from 'react-oidc-context';
 import { nanoid } from 'nanoid';
 import {
   useAwsClient,
@@ -33,7 +34,9 @@ import {
   ChatAttachment,
   ChatSession,
   WorkflowProgress,
+  Agent,
 } from '../../types/project';
+import AgentSelectModal from '../../components/AgentSelectModal';
 
 interface DocumentWorkflows {
   document_id: string;
@@ -57,6 +60,8 @@ function ProjectDetailPage() {
   const { t } = useTranslation();
   const { projectId } = Route.useParams();
   const { fetchApi, invokeAgent } = useAwsClient();
+  const { user } = useAuth();
+  const userId = user?.profile?.['cognito:username'] as string;
   const { showToast } = useToast();
   // AgentCore requires session ID >= 33 chars
   const [currentSessionId, setCurrentSessionId] = useState(() => nanoid(33));
@@ -87,6 +92,10 @@ function ProjectDetailPage() {
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [showAgentModal, setShowAgentModal] = useState(false);
+  const [loadingAgents, setLoadingAgents] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
@@ -231,6 +240,109 @@ function ProjectDetailPage() {
     }
   }, [fetchApi, projectId]);
 
+  const handleNewSession = useCallback(() => {
+    const newSessionId = nanoid(33);
+    setCurrentSessionId(newSessionId);
+    setMessages([]);
+  }, []);
+
+  const loadAgents = useCallback(async () => {
+    if (!userId) return;
+    setLoadingAgents(true);
+    try {
+      const data = await fetchApi<Agent[]>(
+        `users/${userId}/projects/${projectId}/agents`,
+      );
+      setAgents(data);
+    } catch (error) {
+      console.error('Failed to load agents:', error);
+      setAgents([]);
+    } finally {
+      setLoadingAgents(false);
+    }
+  }, [fetchApi, projectId, userId]);
+
+  const loadAgentDetail = useCallback(
+    async (agentName: string): Promise<Agent | null> => {
+      if (!userId) return null;
+      try {
+        return await fetchApi<Agent>(
+          `users/${userId}/projects/${projectId}/agents/${encodeURIComponent(agentName)}`,
+        );
+      } catch (error) {
+        console.error('Failed to load agent detail:', error);
+        return null;
+      }
+    },
+    [fetchApi, projectId, userId],
+  );
+
+  const handleAgentCreate = useCallback(
+    async (name: string, content: string) => {
+      if (!userId) return;
+      await fetchApi(`users/${userId}/projects/${projectId}/agents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, content }),
+      });
+      await loadAgents();
+    },
+    [fetchApi, projectId, userId, loadAgents],
+  );
+
+  const handleAgentUpdate = useCallback(
+    async (name: string, content: string) => {
+      if (!userId) return;
+      await fetchApi(
+        `users/${userId}/projects/${projectId}/agents/${encodeURIComponent(name)}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        },
+      );
+      await loadAgents();
+      // Update selected agent if it was edited
+      if (selectedAgent?.name === name) {
+        setSelectedAgent((prev) => (prev ? { ...prev, content } : null));
+      }
+    },
+    [fetchApi, projectId, userId, loadAgents, selectedAgent],
+  );
+
+  const handleAgentDelete = useCallback(
+    async (name: string) => {
+      if (!userId) return;
+      await fetchApi(
+        `users/${userId}/projects/${projectId}/agents/${encodeURIComponent(name)}`,
+        {
+          method: 'DELETE',
+        },
+      );
+      await loadAgents();
+      // Reset to default if deleted agent was selected
+      if (selectedAgent?.name === name) {
+        setSelectedAgent(null);
+        handleNewSession();
+      }
+    },
+    [fetchApi, projectId, userId, loadAgents, selectedAgent, handleNewSession],
+  );
+
+  const handleAgentSelect = useCallback(
+    (agentName: string | null) => {
+      if (agentName === null) {
+        setSelectedAgent(null);
+      } else {
+        const agent = agents.find((a) => a.name === agentName);
+        setSelectedAgent(agent || null);
+      }
+      // Start new session when agent changes
+      handleNewSession();
+    },
+    [agents, handleNewSession],
+  );
+
   const loadMoreSessions = useCallback(async () => {
     if (!sessionsNextCursor || loadingMoreSessions) return;
 
@@ -269,7 +381,12 @@ function ProjectDetailPage() {
           session_id: string;
           messages: {
             role: string;
-            content: { type: string; text?: string }[];
+            content: {
+              type: string;
+              text?: string;
+              format?: string;
+              source?: string;
+            }[];
           }[];
         }>(`chat/projects/${projectId}/sessions/${sessionId}`);
 
@@ -281,15 +398,32 @@ function ProjectDetailPage() {
           setCurrentSessionId(nanoid(33));
         } else {
           const loadedMessages: ChatMessage[] = response.messages.map(
-            (msg, idx) => ({
-              id: `history-${idx}`,
-              role: msg.role as 'user' | 'assistant',
-              content: msg.content
+            (msg, idx) => {
+              // Extract text content
+              const textContent = msg.content
                 .filter((item) => item.type === 'text' && item.text)
                 .map((item) => item.text)
-                .join('\n'),
-              timestamp: new Date(),
-            }),
+                .join('\n');
+
+              // Extract image attachments
+              const imageAttachments: ChatAttachment[] = msg.content
+                .filter((item) => item.type === 'image' && item.source)
+                .map((item, imgIdx) => ({
+                  id: `history-${idx}-img-${imgIdx}`,
+                  type: 'image' as const,
+                  name: `image-${imgIdx + 1}.${item.format || 'png'}`,
+                  preview: `data:image/${item.format || 'png'};base64,${item.source}`,
+                }));
+
+              return {
+                id: `history-${idx}`,
+                role: msg.role as 'user' | 'assistant',
+                content: textContent,
+                attachments:
+                  imageAttachments.length > 0 ? imageAttachments : undefined,
+                timestamp: new Date(),
+              };
+            },
           );
           setMessages(loadedMessages);
         }
@@ -303,12 +437,6 @@ function ProjectDetailPage() {
     },
     [fetchApi, projectId, showToast, t],
   );
-
-  const handleNewSession = useCallback(() => {
-    const newSessionId = nanoid(33);
-    setCurrentSessionId(newSessionId);
-    setMessages([]);
-  }, []);
 
   const handleSessionRename = useCallback(
     async (sessionId: string, newName: string) => {
@@ -325,6 +453,22 @@ function ProjectDetailPage() {
       );
     },
     [fetchApi, projectId],
+  );
+
+  const handleSessionDelete = useCallback(
+    async (sessionId: string) => {
+      await fetchApi(`chat/projects/${projectId}/sessions/${sessionId}`, {
+        method: 'DELETE',
+      });
+      // Remove from local state
+      setSessions((prev) => prev.filter((s) => s.session_id !== sessionId));
+      // If deleted session was current, start new conversation
+      if (sessionId === currentSessionId) {
+        setCurrentSessionId(nanoid(33));
+        setMessages([]);
+      }
+    },
+    [fetchApi, projectId, currentSessionId],
   );
 
   const loadWorkflowDetail = async (documentId: string, workflowId: string) => {
@@ -348,11 +492,12 @@ function ProjectDetailPage() {
         loadDocuments(),
         loadWorkflows(),
         loadSessions(),
+        loadAgents(),
       ]);
       setLoading(false);
     };
     load();
-  }, [loadProject, loadDocuments, loadWorkflows, loadSessions]);
+  }, [loadProject, loadDocuments, loadWorkflows, loadSessions, loadAgents]);
 
   // Handle workflow completion/failure
   const progressStatus = workflowProgress?.status;
@@ -800,8 +945,10 @@ function ProjectDetailPage() {
                 streamingContent={streamingContent}
                 currentToolUse={currentToolUse}
                 loadingHistory={loadingHistory}
+                selectedAgent={selectedAgent}
                 onInputChange={setInputMessage}
                 onSendMessage={handleSendMessage}
+                onAgentClick={() => setShowAgentModal(true)}
               />
             </div>
           </ResizablePanel>
@@ -816,6 +963,7 @@ function ProjectDetailPage() {
                 currentSessionId={currentSessionId}
                 onSessionSelect={handleSessionSelect}
                 onSessionRename={handleSessionRename}
+                onSessionDelete={handleSessionDelete}
                 hasMoreSessions={!!sessionsNextCursor}
                 loadingMoreSessions={loadingMoreSessions}
                 onLoadMoreSessions={loadMoreSessions}
@@ -868,6 +1016,20 @@ function ProjectDetailPage() {
         confirmText={t('common.delete')}
         variant="danger"
         loading={deleting}
+      />
+
+      {/* Agent Select Modal */}
+      <AgentSelectModal
+        isOpen={showAgentModal}
+        agents={agents}
+        selectedAgentName={selectedAgent?.name || null}
+        loading={loadingAgents}
+        onClose={() => setShowAgentModal(false)}
+        onSelect={handleAgentSelect}
+        onCreate={handleAgentCreate}
+        onUpdate={handleAgentUpdate}
+        onDelete={handleAgentDelete}
+        onLoadDetail={loadAgentDetail}
       />
     </div>
   );

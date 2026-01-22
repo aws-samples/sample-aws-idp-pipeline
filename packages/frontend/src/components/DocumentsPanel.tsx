@@ -95,16 +95,25 @@ export default function DocumentsPanel({
             onClick={onToggleUploadArea}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
               showUploadArea
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                ? ''
+                : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700'
             }`}
+            style={
+              showUploadArea
+                ? {
+                    color: 'var(--color-accent)',
+                    backgroundColor: 'var(--color-accent-light)',
+                  }
+                : { color: 'var(--color-text-secondary)' }
+            }
           >
             <Plus className="h-4 w-4" />
             {t('documents.addDocument')}
           </button>
           <button
             onClick={onRefresh}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors active:scale-95 [&:active_svg]:animate-spin"
+            style={{ color: 'var(--color-text-secondary)' }}
             title={t('documents.refresh')}
           >
             <RefreshCw className="h-4 w-4" />

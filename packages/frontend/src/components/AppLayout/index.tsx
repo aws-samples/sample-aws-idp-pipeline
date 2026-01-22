@@ -131,8 +131,7 @@ const THEME_KEY = 'idp-theme';
 const getInitialTheme = (): 'light' | 'dark' => {
   const stored = localStorage.getItem(THEME_KEY);
   if (stored === 'dark' || stored === 'light') return stored;
-  if (window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
-  return 'light';
+  return 'dark';
 };
 
 const AppLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
@@ -260,75 +259,70 @@ const AppLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
 
         {/* Bottom Section */}
         <div className="sidebar-footer">
-          {/* Theme Toggle */}
-          <button
-            type="button"
-            className="sidebar-theme-toggle"
-            onClick={toggleTheme}
-            title={theme === 'light' ? t('nav.darkMode') : t('nav.lightMode')}
-          >
-            {theme === 'light' ? <MoonIcon /> : <SunIcon />}
-            {!sidebarCollapsed && (
-              <span>
-                {theme === 'light' ? t('nav.darkMode') : t('nav.lightMode')}
-              </span>
-            )}
-          </button>
-
-          {/* Language Selector */}
-          <div className="sidebar-lang-selector" ref={langDropdownRef}>
+          {/* Language & Theme Row */}
+          <div className="sidebar-lang-theme-row">
+            <div className="sidebar-lang-selector" ref={langDropdownRef}>
+              <button
+                type="button"
+                className="sidebar-lang-button"
+                onClick={() => setShowLangDropdown(!showLangDropdown)}
+                title={sidebarCollapsed ? currentLang.name : undefined}
+              >
+                <span className="lang-flag">{currentLang.flag}</span>
+                {!sidebarCollapsed && (
+                  <>
+                    <span className="lang-name">{currentLang.name}</span>
+                    <svg
+                      className={`lang-chevron ${showLangDropdown ? 'open' : ''}`}
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </>
+                )}
+              </button>
+              {showLangDropdown && (
+                <div className="sidebar-lang-dropdown">
+                  {UI_LANGUAGES.map((lang) => (
+                    <button
+                      key={lang.code}
+                      type="button"
+                      className={`lang-option ${i18n.language === lang.code ? 'active' : ''}`}
+                      onClick={() => handleLanguageChange(lang.code)}
+                    >
+                      <span className="lang-flag">{lang.flag}</span>
+                      <span className="lang-name">{lang.name}</span>
+                      {i18n.language === lang.code && (
+                        <svg
+                          className="lang-check"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M20 6L9 17l-5-5" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button
               type="button"
-              className="sidebar-lang-button"
-              onClick={() => setShowLangDropdown(!showLangDropdown)}
-              title={sidebarCollapsed ? currentLang.name : undefined}
+              className="sidebar-theme-icon"
+              onClick={toggleTheme}
+              title={theme === 'light' ? t('nav.darkMode') : t('nav.lightMode')}
             >
-              <span className="lang-flag">{currentLang.flag}</span>
-              {!sidebarCollapsed && (
-                <>
-                  <span className="lang-name">{currentLang.name}</span>
-                  <svg
-                    className={`lang-chevron ${showLangDropdown ? 'open' : ''}`}
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path d="M6 9l6 6 6-6" />
-                  </svg>
-                </>
-              )}
+              {theme === 'light' ? <MoonIcon /> : <SunIcon />}
             </button>
-            {showLangDropdown && (
-              <div className="sidebar-lang-dropdown">
-                {UI_LANGUAGES.map((lang) => (
-                  <button
-                    key={lang.code}
-                    type="button"
-                    className={`lang-option ${i18n.language === lang.code ? 'active' : ''}`}
-                    onClick={() => handleLanguageChange(lang.code)}
-                  >
-                    <span className="lang-flag">{lang.flag}</span>
-                    <span className="lang-name">{lang.name}</span>
-                    {i18n.language === lang.code && (
-                      <svg
-                        className="lang-check"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <path d="M20 6L9 17l-5-5" />
-                      </svg>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* User Info */}
@@ -371,11 +365,14 @@ const AppLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
       {/* Main Content */}
       <main className="app-main">
         <section className="card">{children}</section>
-        <footer className="app-footer">
-          <span className="text-xs font-medium bg-gradient-to-r from-slate-400 to-slate-500 dark:from-slate-500 dark:to-slate-600 bg-clip-text text-transparent">
-            Powered by Korea PACE Team
-          </span>
-        </footer>
+        {/* Hide footer on project detail pages */}
+        {!pathname.match(/^\/projects\/[^/]+/) && (
+          <footer className="app-footer">
+            <span className="text-xs font-medium bg-gradient-to-r from-slate-400 to-slate-500 dark:from-slate-500 dark:to-slate-600 bg-clip-text text-transparent">
+              Powered by Korea PACE Team
+            </span>
+          </footer>
+        )}
       </main>
     </div>
   );

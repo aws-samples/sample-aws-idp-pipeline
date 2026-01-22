@@ -86,7 +86,9 @@ def create_document_upload(project_id: str, request: DocumentUploadRequest) -> D
 
     # Generate document ID and S3 key
     document_id = str(uuid.uuid4())
-    s3_key = f"projects/{project_id}/documents/{document_id}/{request.file_name}"
+    # Use document_id as filename for S3 (original name stored in DynamoDB)
+    ext = request.file_name.rsplit(".", 1)[-1] if "." in request.file_name else ""
+    s3_key = f"projects/{project_id}/documents/{document_id}/{document_id}.{ext}"
 
     # Create document record in DynamoDB
     data = {

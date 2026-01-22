@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -29,6 +29,39 @@ export default function WorkflowDetailModal({
   });
 
   const currentSegment = workflow.segments[currentSegmentIndex];
+
+  // Update analysisPopup content when segment changes
+  useEffect(() => {
+    setAnalysisPopup((prev) => {
+      if (!prev.type) return prev;
+
+      if (prev.type === 'ai') {
+        const qaItems =
+          currentSegment?.ai_analysis?.map((a) => ({
+            question: a.analysis_query,
+            answer: a.content,
+          })) || [];
+        return {
+          ...prev,
+          title: `AI Analysis - Segment ${currentSegmentIndex + 1}`,
+          qaItems,
+        };
+      } else {
+        // Determine which content type is being viewed from the title
+        const contentType = prev.title.split(' ')[0]; // 'BDA', 'OCR', or 'PDF'
+        const contentMap: Record<string, string> = {
+          BDA: currentSegment?.bda_indexer || '',
+          OCR: currentSegment?.paddleocr || '',
+          PDF: currentSegment?.format_parser || '',
+        };
+        return {
+          ...prev,
+          content: contentMap[contentType] || '',
+          title: `${contentType} Content - Segment ${currentSegmentIndex + 1}`,
+        };
+      }
+    });
+  }, [currentSegmentIndex, currentSegment]);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6">
@@ -568,15 +601,8 @@ export default function WorkflowDetailModal({
                         controls
                         className="max-w-full max-h-full rounded-lg shadow-lg"
                         preload="metadata"
+                        src={currentSegment.video_url}
                       >
-                        <source
-                          src={currentSegment.video_url}
-                          type="video/mp4"
-                        />
-                        <source
-                          src={currentSegment.video_url}
-                          type="video/webm"
-                        />
                         Your browser does not support video playback.
                       </video>
                     </div>
