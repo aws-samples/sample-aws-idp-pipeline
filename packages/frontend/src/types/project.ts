@@ -133,16 +133,19 @@ export interface Agent {
   updated_at: string;
 }
 
-export type ArtifactType = 'code' | 'table' | 'chart' | 'markdown' | 'image';
-
 export interface Artifact {
   artifact_id: string;
-  session_id: string;
+  user_id: string;
   project_id: string;
-  project_name: string;
-  type: ArtifactType;
-  title: string;
-  content: string;
-  language?: string; // for code artifacts
+  filename: string;
+  content_type: string;
+  s3_key: string;
+  s3_bucket: string;
+  file_size: number;
   created_at: string;
+}
+
+export interface ArtifactsResponse {
+  items: Artifact[];
+  next_cursor: string | null;
 }

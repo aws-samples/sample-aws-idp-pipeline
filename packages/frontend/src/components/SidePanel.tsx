@@ -8,11 +8,12 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
-  Code,
-  Table,
-  BarChart3,
   FileText,
   Image,
+  FileCode,
+  FileSpreadsheet,
+  Film,
+  File,
   Copy,
   Download,
 } from 'lucide-react';
@@ -23,7 +24,35 @@ import {
 } from './ui/resizable';
 import ConfirmModal from './ConfirmModal';
 import InputModal from './InputModal';
-import { ChatSession, Artifact, ArtifactType } from '../types/project';
+import { ChatSession, Artifact } from '../types/project';
+
+function getArtifactIcon(contentType: string) {
+  if (contentType.startsWith('image/')) return Image;
+  if (contentType.startsWith('video/')) return Film;
+  if (contentType === 'application/pdf') return FileText;
+  if (
+    contentType === 'application/vnd.ms-excel' ||
+    contentType ===
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    contentType === 'text/csv'
+  )
+    return FileSpreadsheet;
+  if (
+    contentType.startsWith('text/') ||
+    contentType === 'application/json' ||
+    contentType === 'application/javascript'
+  )
+    return FileCode;
+  return File;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
 
 interface SidePanelProps {
   sessions: ChatSession[];
@@ -42,14 +71,6 @@ interface SidePanelProps {
   onArtifactDownload?: (artifact: Artifact) => void;
   onArtifactDelete?: (artifactId: string) => Promise<void>;
 }
-
-const artifactIcons: Record<ArtifactType, typeof Code> = {
-  code: Code,
-  table: Table,
-  chart: BarChart3,
-  markdown: FileText,
-  image: Image,
-};
 
 export default function SidePanel({
   sessions,
@@ -343,8 +364,9 @@ export default function SidePanel({
                 ) : (
                   <div className="p-2 space-y-0.5">
                     {artifacts.map((artifact) => {
-                      const ArtifactIcon =
-                        artifactIcons[artifact.type] || Layers;
+                      const ArtifactIcon = getArtifactIcon(
+                        artifact.content_type,
+                      );
                       return (
                         <div
                           key={artifact.artifact_id}
@@ -359,13 +381,11 @@ export default function SidePanel({
                         >
                           <ArtifactIcon className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
                           <span className="text-sm truncate flex-1">
-                            {artifact.title}
+                            {artifact.filename}
                           </span>
-                          {artifact.language && (
-                            <span className="text-xs text-slate-400 dark:text-slate-500">
-                              {artifact.language}
-                            </span>
-                          )}
+                          <span className="text-xs text-slate-400 dark:text-slate-500">
+                            {formatFileSize(artifact.file_size)}
+                          </span>
 
                           {hasArtifactActions && (
                             <div className="relative" data-artifact-menu>
