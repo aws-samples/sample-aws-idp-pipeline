@@ -10,8 +10,8 @@ export interface SaveArtifactInput {
 export interface SaveArtifactOutput {
   artifact_id: string;
   filename: string;
+  s3_bucket: string;
   s3_key: string;
-  url: string;
   created_at: string;
 }
 

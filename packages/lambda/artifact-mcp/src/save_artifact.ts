@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import { SaveArtifactInput, SaveArtifactOutput } from './models.js';
-import { uploadToS3, getPresignedUrl } from './s3.js';
+import { uploadToS3 } from './s3.js';
 import { saveArtifactMetadata } from './dynamodb.js';
 
 function generateArtifactId(): string {
@@ -56,14 +56,11 @@ export const handler = async (
     },
   });
 
-  // Generate presigned URL (1 hour)
-  const url = await getPresignedUrl(bucket, s3Key);
-
   return {
     artifact_id: artifactId,
     filename,
+    s3_bucket: bucket,
     s3_key: s3Key,
-    url,
     created_at: createdAt,
   };
 };
