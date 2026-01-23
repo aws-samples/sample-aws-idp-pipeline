@@ -1,5 +1,5 @@
 {
-  "name": "@idp-v2/session_name_update",
+  "name": "@idp-v2/session_workers",
   "version": "1.0.0",
   "description": "Lambda handler to update session_name in session.json on S3 events",
   "main": "dist/index.js",
