@@ -345,6 +345,9 @@ importers:
       ioredis:
         specifier: ^5.6.1
         version: 5.9.2
+      nanoid:
+        specifier: ^5.1.5
+        version: 5.1.6
     devDependencies:
       '@types/aws-lambda':
         specifier: ^8.10.160

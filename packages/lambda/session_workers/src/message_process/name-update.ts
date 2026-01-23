@@ -4,7 +4,7 @@ import {
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
 import Redis from 'ioredis';
-import { SessionKeyInfo } from '../parse-session-s3-key';
+import { MessageKeyInfo } from '../parse-session-s3-key';
 import { generateSessionName } from './generate-session-name';
 
 let redis: Redis | null = null;
@@ -24,16 +24,9 @@ export async function handleNameUpdate(
   s3Client: S3Client,
   bucket: string,
   key: string,
-  keyInfo: SessionKeyInfo,
+  keyInfo: MessageKeyInfo,
 ): Promise<void> {
-  const sessionIdMatch = key.match(/\/(session_[^/]+)\//);
-  if (!sessionIdMatch) {
-    console.error(`Failed to extract session_id from key: ${key}`);
-    return;
-  }
-  const sessionId = sessionIdMatch[1];
-
-  const sessionJsonKey = `sessions/${keyInfo.userId}/${keyInfo.projectId}/${sessionId}/session.json`;
+  const sessionJsonKey = `sessions/${keyInfo.userId}/${keyInfo.projectId}/${keyInfo.sessionId}/session.json`;
 
   const sessionResponse = await s3Client.send(
     new GetObjectCommand({ Bucket: bucket, Key: sessionJsonKey }),
