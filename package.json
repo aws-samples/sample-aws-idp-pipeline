@@ -1,7 +1,7 @@
 {
   "name": "@idp-v2/source",
   "version": "0.0.0",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "build:all": "nx run-many --target build --all",
     "affected:all": "nx affected --target build"
