@@ -1,5 +1,5 @@
 {
-  "name": "@idp-v2/session_name_update",
+  "name": "@idp-v2/session_workers",
   "version": "1.0.0",
   "description": "Lambda handler to update session_name in session.json on S3 events",
   "main": "dist/index.js",
@@ -15,7 +15,8 @@
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.972.0",
     "@aws-sdk/client-s3": "^3.958.0",
-    "ioredis": "^5.6.1"
+    "ioredis": "^5.6.1",
+    "nanoid": "^5.1.5"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.160",

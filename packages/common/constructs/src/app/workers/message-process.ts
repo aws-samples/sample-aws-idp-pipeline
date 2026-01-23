@@ -8,22 +8,22 @@ import { IBucket, EventType } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
-export interface SessionNameUpdateProps {
+export interface MessageProcessProps {
   bucket: IBucket;
   vpc: IVpc;
   elasticacheEndpoint: string;
 }
 
-export class SessionNameUpdate extends Construct {
+export class MessageProcess extends Construct {
   public readonly function: NodejsFunction;
 
-  constructor(scope: Construct, id: string, props: SessionNameUpdateProps) {
+  constructor(scope: Construct, id: string, props: MessageProcessProps) {
     super(scope, id);
 
     this.function = new NodejsFunction(this, 'Function', {
       entry: path.resolve(
         process.cwd(),
-        '../../packages/lambda/session_name_update/src/index.ts',
+        '../../packages/lambda/session_workers/src/message_process/index.ts',
       ),
       handler: 'handler',
       runtime: Runtime.NODEJS_22_X,
@@ -54,7 +54,7 @@ export class SessionNameUpdate extends Construct {
     this.function.addEventSource(
       new S3EventSourceV2(props.bucket, {
         events: [EventType.OBJECT_CREATED],
-        filters: [{ prefix: 'sessions/', suffix: 'message_1.json' }],
+        filters: [{ prefix: 'sessions/', suffix: '.json' }],
       }),
     );
   }
