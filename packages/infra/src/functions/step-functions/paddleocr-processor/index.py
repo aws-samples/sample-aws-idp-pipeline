@@ -25,7 +25,6 @@ from shared.s3_analysis import (
     get_s3_client,
     parse_s3_uri,
 )
-from shared.websocket import notify_step_start, notify_step_complete, notify_step_error
 
 ENDPOINT_NAME = os.environ.get('PADDLEOCR_ENDPOINT_NAME', 'paddleocr-endpoint')
 BUCKET_NAME = os.environ.get('DOCUMENT_BUCKET_NAME', '')
@@ -139,13 +138,11 @@ def handler(event, _context):
 
     # Record step start
     record_step_start(workflow_id, StepName.PADDLEOCR_PROCESSOR)
-    notify_step_start(workflow_id, 'PaddleOcrProcessor')
 
     # Check if file type is supported
     if not is_supported_file(file_uri):
         print(f'File type not supported for OCR: {file_uri}')
         record_step_complete(workflow_id, StepName.PADDLEOCR_PROCESSOR)
-        notify_step_complete(workflow_id, 'PaddleOcrProcessor')
         return {
             **event,
             'paddleocr_status': 'skipped',
@@ -209,7 +206,6 @@ def handler(event, _context):
             page_count = len(result.get('pages', [])) or 1
 
             record_step_complete(workflow_id, StepName.PADDLEOCR_PROCESSOR)
-            notify_step_complete(workflow_id, 'PaddleOcrProcessor')
 
             print(f'OCR completed: {page_count} pages processed, saved to {ocr_output_uri}')
 
@@ -224,7 +220,6 @@ def handler(event, _context):
             error_msg = result.get('error', 'Unknown error')
             print(f'OCR failed: {error_msg}')
             record_step_error(workflow_id, StepName.PADDLEOCR_PROCESSOR, error_msg)
-            notify_step_error(workflow_id, 'PaddleOcrProcessor', error_msg)
             return {
                 **event,
                 'paddleocr_status': 'failed',
@@ -235,7 +230,6 @@ def handler(event, _context):
         error_msg = str(e)
         print(f'Error processing document: {error_msg}')
         record_step_error(workflow_id, StepName.PADDLEOCR_PROCESSOR, error_msg)
-        notify_step_error(workflow_id, 'PaddleOcrProcessor', error_msg)
         return {
             **event,
             'paddleocr_status': 'error',

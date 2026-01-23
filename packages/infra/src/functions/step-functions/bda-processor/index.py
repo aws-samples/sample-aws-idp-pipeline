@@ -12,7 +12,6 @@ from shared.ddb_client import (
     StepName,
     WorkflowStatus,
 )
-from shared.websocket import notify_step_start, notify_step_complete, notify_step_error
 
 BDA_PROJECT_NAME = os.environ.get('BDA_PROJECT_NAME', 'idp-v2-bda-project')
 BDA_OUTPUT_BUCKET = os.environ.get('BDA_OUTPUT_BUCKET')
@@ -144,7 +143,6 @@ def handler(event, _context):
         }
 
     record_step_start(workflow_id, StepName.BDA_PROCESSOR)
-    notify_step_start(workflow_id, 'BdaProcessor')
     update_workflow_status(document_id, workflow_id, WorkflowStatus.IN_PROGRESS)
 
     if file_type not in SUPPORTED_MIME_TYPES:
@@ -155,7 +153,6 @@ def handler(event, _context):
             skipped=True,
             reason=f'File type {file_type} not supported'
         )
-        notify_step_complete(workflow_id, 'BdaProcessor', message='Skipped - unsupported file type')
 
         return {
             **event,
@@ -209,7 +206,6 @@ def handler(event, _context):
             StepName.BDA_PROCESSOR,
             bda_invocation_arn=invocation_arn
         )
-        notify_step_complete(workflow_id, 'BdaProcessor')
 
         return {
             **event,
@@ -222,7 +218,6 @@ def handler(event, _context):
     except Exception as e:
         print(f'Error starting BDA: {e}')
         record_step_error(workflow_id, StepName.BDA_PROCESSOR, str(e))
-        notify_step_error(workflow_id, 'BdaProcessor', str(e))
 
         return {
             **event,

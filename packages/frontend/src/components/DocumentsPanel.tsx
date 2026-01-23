@@ -25,7 +25,6 @@ interface DocumentsPanelProps {
   uploading: boolean;
   showUploadArea: boolean;
   isDragging: boolean;
-  isConnected: boolean;
   onToggleUploadArea: () => void;
   onRefresh: () => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -71,7 +70,6 @@ export default function DocumentsPanel({
   uploading,
   showUploadArea,
   isDragging,
-  isConnected,
   onToggleUploadArea,
   onRefresh,
   onFileUpload,
@@ -316,12 +314,6 @@ export default function DocumentsPanel({
                           >
                             {workflowProgress.currentStep}
                           </span>
-                          {isConnected && isProcessing && (
-                            <span className="ml-auto text-xs text-green-600 flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                              {t('workflow.live')}
-                            </span>
-                          )}
                         </div>
                         <p
                           className={`text-xs ${

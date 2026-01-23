@@ -9,7 +9,6 @@ from shared.ddb_client import (
     record_step_error,
     StepName,
 )
-from shared.websocket import notify_step_start, notify_step_complete, notify_step_error
 
 bda_client = None
 
@@ -35,7 +34,6 @@ def handler(event, context):
 
     if is_first_check:
         record_step_start(workflow_id, StepName.BDA_STATUS_CHECKER)
-        notify_step_start(workflow_id, 'BdaStatusChecker')
 
     if status == 'SKIPPED':
         print('BDA was skipped, passing through')
@@ -44,7 +42,6 @@ def handler(event, context):
             StepName.BDA_STATUS_CHECKER,
             skipped=True
         )
-        notify_step_complete(workflow_id, 'BdaStatusChecker', message='Skipped')
         return {
             **event,
             'status': 'Success',
@@ -57,7 +54,6 @@ def handler(event, context):
             StepName.BDA_STATUS_CHECKER,
             skipped=True
         )
-        notify_step_complete(workflow_id, 'BdaStatusChecker', message='No BDA invocation')
         return {
             **event,
             'status': 'Success',
@@ -89,7 +85,6 @@ def handler(event, context):
                 StepName.BDA_STATUS_CHECKER,
                 bda_output_uri=output_dir
             )
-            notify_step_complete(workflow_id, 'BdaStatusChecker')
 
             return {
                 **event,
@@ -109,7 +104,6 @@ def handler(event, context):
             error_message = response.get('errorMessage', 'Unknown error')
             print(f'BDA failed: {error_message}')
             record_step_error(workflow_id, StepName.BDA_STATUS_CHECKER, error_message)
-            notify_step_error(workflow_id, 'BdaStatusChecker', error_message)
             return {
                 **event,
                 'status': 'Failed',
@@ -126,7 +120,6 @@ def handler(event, context):
     except Exception as e:
         print(f'Error checking BDA status: {e}')
         record_step_error(workflow_id, StepName.BDA_STATUS_CHECKER, str(e))
-        notify_step_error(workflow_id, 'BdaStatusChecker', str(e))
         return {
             **event,
             'status': 'Failed',

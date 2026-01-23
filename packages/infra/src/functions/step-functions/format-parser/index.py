@@ -7,7 +7,6 @@ from shared.ddb_client import (
     record_step_error,
     StepName,
 )
-from shared.websocket import notify_step_start, notify_step_complete, notify_step_error
 
 from parsers import parse_pdf
 
@@ -24,7 +23,6 @@ def handler(event, _context):
     file_type = event.get('file_type', '')
 
     record_step_start(workflow_id, StepName.FORMAT_PARSER)
-    notify_step_start(workflow_id, 'FormatParser')
 
     parser = PARSERS.get(file_type)
 
@@ -36,7 +34,6 @@ def handler(event, _context):
             skipped=True,
             reason=f'No parser for {file_type}'
         )
-        notify_step_complete(workflow_id, 'FormatParser', message='Skipped - no parser')
         return {
             **event,
             'format_parsing': 'skipped',
@@ -46,7 +43,6 @@ def handler(event, _context):
     try:
         result = parser(event)
         record_step_complete(workflow_id, StepName.FORMAT_PARSER)
-        notify_step_complete(workflow_id, 'FormatParser')
         return {
             **result,
             'format_parsing': 'completed'
@@ -54,7 +50,6 @@ def handler(event, _context):
     except Exception as e:
         print(f'Error in format parsing: {e}')
         record_step_error(workflow_id, StepName.FORMAT_PARSER, str(e))
-        notify_step_error(workflow_id, 'FormatParser', str(e))
         return {
             **event,
             'format_parsing': 'failed',

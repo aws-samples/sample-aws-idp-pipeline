@@ -11,8 +11,6 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as cr from 'aws-cdk-lib/custom-resources';
-import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
-import { WebSocketLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Platform } from 'aws-cdk-lib/aws-ecr-assets';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -157,69 +155,6 @@ export class WorkflowStack extends Stack {
     });
 
     // ========================================
-    // WebSocket API for real-time notifications
-    // ========================================
-
-    const websocketHandler = new lambda.Function(this, 'WebSocketHandler', {
-      functionName: 'idp-v2-websocket-handler',
-      runtime: lambda.Runtime.PYTHON_3_14,
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, '../functions/websocket'),
-      ),
-      timeout: Duration.seconds(30),
-      memorySize: 256,
-      environment: {
-        BACKEND_TABLE_NAME: backendTableName,
-      },
-    });
-
-    backendTable.grantReadWriteData(websocketHandler);
-
-    const webSocketApi = new apigwv2.WebSocketApi(
-      this,
-      'WorkflowWebSocketApi',
-      {
-        apiName: 'idp-v2-workflow-websocket',
-        connectRouteOptions: {
-          integration: new WebSocketLambdaIntegration(
-            'ConnectIntegration',
-            websocketHandler,
-          ),
-        },
-        disconnectRouteOptions: {
-          integration: new WebSocketLambdaIntegration(
-            'DisconnectIntegration',
-            websocketHandler,
-          ),
-        },
-        defaultRouteOptions: {
-          integration: new WebSocketLambdaIntegration(
-            'DefaultIntegration',
-            websocketHandler,
-          ),
-        },
-      },
-    );
-
-    const webSocketStage = new apigwv2.WebSocketStage(
-      this,
-      'WorkflowWebSocketStage',
-      {
-        webSocketApi,
-        stageName: 'v1',
-        autoDeploy: true,
-      },
-    );
-
-    const websocketEndpoint = `https://${webSocketApi.apiId}.execute-api.${this.region}.amazonaws.com/${webSocketStage.stageName}`;
-
-    new ssm.StringParameter(this, 'WebSocketApiEndpoint', {
-      parameterName: '/idp-v2/websocket/endpoint',
-      stringValue: websocketEndpoint,
-    });
-
-    // ========================================
     // EventBridge Rule for S3 Upload Trigger
     // ========================================
 
@@ -307,10 +242,10 @@ export class WorkflowStack extends Stack {
       code: createLayerCode('strands-agents pyyaml', 'strands'),
     });
 
-    // Shared code layer (ddb_client, websocket, embeddings)
+    // Shared code layer (ddb_client, embeddings)
     const sharedLayer = new lambda.LayerVersion(this, 'SharedCodeLayer', {
       layerVersionName: 'idp-v2-shared',
-      description: 'Shared Python modules (ddb_client, websocket, embeddings)',
+      description: 'Shared Python modules (ddb_client, embeddings)',
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_14],
       compatibleArchitectures: [lambda.Architecture.X86_64],
       code: lambda.Code.fromAsset(path.join(__dirname, '../functions'), {
@@ -330,9 +265,6 @@ export class WorkflowStack extends Stack {
         },
       }),
     });
-
-    // Add shared layer to websocket handler (defined earlier)
-    websocketHandler.addLayers(sharedLayer);
 
     // ========================================
     // LanceDB Service (Container Lambda)
@@ -366,7 +298,6 @@ export class WorkflowStack extends Stack {
       environment: {
         BDA_OUTPUT_BUCKET: this.documentBucket.bucketName,
         BACKEND_TABLE_NAME: backendTableName,
-        WEBSOCKET_API_ENDPOINT: websocketEndpoint,
       },
     };
 
@@ -823,15 +754,6 @@ export class WorkflowStack extends Stack {
         }),
       );
 
-      // WebSocket API permissions (for posting messages to connections)
-      fn.addToRolePolicy(
-        new iam.PolicyStatement({
-          actions: ['execute-api:ManageConnections'],
-          resources: [
-            `arn:aws:execute-api:${this.region}:${this.account}:${webSocketApi.apiId}/*`,
-          ],
-        }),
-      );
     }
 
     // Step Functions permissions for trigger

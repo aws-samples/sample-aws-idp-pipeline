@@ -5,7 +5,6 @@ from datetime import datetime
 import boto3
 
 from shared.ddb_client import generate_workflow_id, create_workflow, get_project_language, get_document
-from shared.websocket import notify_workflow_started
 
 sfn_client = None
 STEP_FUNCTION_ARN = os.environ.get('STEP_FUNCTION_ARN')
@@ -199,8 +198,6 @@ def handler(event, context):
                 execution_arn=execution_arn,
                 language=language
             )
-
-            notify_workflow_started(workflow_id, project_id, document_id, file_name)
 
             print(f'Started workflow {workflow_id}, document: {document_id}, execution: {execution_arn}')
 

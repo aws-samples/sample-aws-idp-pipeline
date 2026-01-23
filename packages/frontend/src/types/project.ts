@@ -93,12 +93,22 @@ export interface ChatAttachment {
   preview: string | null; // data URL for images
 }
 
+export interface ChatArtifact {
+  artifact_id: string;
+  filename: string;
+  url: string;
+  created_at?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   attachments?: ChatAttachment[];
   timestamp: Date;
+  isToolResult?: boolean;
+  toolResultType?: 'image' | 'artifact' | 'text';
+  artifact?: ChatArtifact;
 }
 
 export interface ChatSession {

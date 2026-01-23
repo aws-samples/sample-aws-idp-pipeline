@@ -7,7 +7,6 @@ import {
   StreamEvent,
   ContentBlock,
 } from '../../hooks/useAwsClient';
-import { useWebSocket, WebSocketMessage } from '../../hooks/useWebSocket';
 import { useToast } from '../../components/Toast';
 import CubeLoader from '../../components/CubeLoader';
 import ConfirmModal from '../../components/ConfirmModal';
@@ -84,7 +83,6 @@ function ProjectDetailPage() {
     useState<WorkflowDetail | null>(null);
   const [loadingWorkflow, setLoadingWorkflow] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
   const [workflowProgress, setWorkflowProgress] =
     useState<WorkflowProgress | null>(null);
   const [showUploadArea, setShowUploadArea] = useState(false);
@@ -99,89 +97,6 @@ function ProjectDetailPage() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
-    setWorkflowProgress((prev) => {
-      const base = prev || {
-        workflowId: message.workflow_id,
-        documentId: message.document_id || '',
-        fileName: message.file_name || '',
-        status: 'in_progress' as const,
-        currentStep: '',
-        stepMessage: '',
-        segmentProgress: null,
-        error: null,
-      };
-
-      switch (message.event) {
-        case 'WORKFLOW_STARTED':
-          return {
-            ...base,
-            workflowId: message.workflow_id,
-            documentId: message.document_id || base.documentId,
-            fileName: message.file_name || base.fileName,
-            status: 'in_progress',
-            currentStep: 'Starting...',
-            stepMessage: 'Workflow started',
-          };
-        case 'STEP_START':
-          return {
-            ...base,
-            currentStep: message.step || '',
-            stepMessage: message.message || 'Processing...',
-          };
-        case 'STEP_COMPLETE':
-          return {
-            ...base,
-            stepMessage: message.message || 'Step completed',
-          };
-        case 'STEP_ERROR':
-          return {
-            ...base,
-            status: 'failed',
-            error: message.error || 'Unknown error',
-          };
-        case 'SEGMENT_PROGRESS':
-          return {
-            ...base,
-            segmentProgress: {
-              completed: message.completed || 0,
-              total: message.total || 0,
-            },
-          };
-        case 'WORKFLOW_COMPLETE':
-          return {
-            ...base,
-            status: 'completed',
-            currentStep: 'Completed',
-            stepMessage: message.summary || 'Workflow completed',
-          };
-        case 'WORKFLOW_ERROR':
-          return {
-            ...base,
-            status: 'failed',
-            error: message.error || 'Workflow failed',
-          };
-        default:
-          return base;
-      }
-    });
-  }, []);
-
-  const handleWebSocketConnect = useCallback(() => {
-    console.log('WebSocket connected for workflow:', activeWorkflowId);
-  }, [activeWorkflowId]);
-
-  const handleWebSocketDisconnect = useCallback(() => {
-    console.log('WebSocket disconnected');
-  }, []);
-
-  const { isConnected } = useWebSocket({
-    workflowId: activeWorkflowId,
-    onMessage: handleWebSocketMessage,
-    onConnect: handleWebSocketConnect,
-    onDisconnect: handleWebSocketDisconnect,
-  });
 
   const loadProject = useCallback(async () => {
     try {
@@ -374,6 +289,15 @@ function ProjectDetailPage() {
               text?: string;
               format?: string;
               source?: string;
+              s3_url?: string | null;
+              // For tool_result type
+              content?: {
+                type: string;
+                text?: string;
+                format?: string;
+                source?: string;
+                s3_url?: string | null;
+              }[];
             }[];
           }[];
         }>(`chat/projects/${projectId}/sessions/${sessionId}`);
@@ -387,6 +311,72 @@ function ProjectDetailPage() {
         } else {
           const loadedMessages: ChatMessage[] = response.messages.map(
             (msg, idx) => {
+              // Check if this is a tool_result message
+              const toolResultItem = msg.content.find(
+                (item) => item.type === 'tool_result',
+              );
+
+              if (toolResultItem && toolResultItem.content) {
+                // Handle tool_result - show as assistant message
+                const nestedContent = toolResultItem.content;
+
+                // Extract text from nested content
+                const textContent = nestedContent
+                  .filter((item) => item.type === 'text' && item.text)
+                  .map((item) => item.text)
+                  .join('\n');
+
+                // Check if this is an artifact result (JSON with artifact_id)
+                let artifact = undefined;
+                let toolResultType: 'image' | 'artifact' | 'text' = 'text';
+
+                try {
+                  const parsed = JSON.parse(textContent);
+                  if (parsed.artifact_id && parsed.filename && parsed.url) {
+                    artifact = {
+                      artifact_id: parsed.artifact_id,
+                      filename: parsed.filename,
+                      url: parsed.url,
+                      created_at: parsed.created_at,
+                    };
+                    toolResultType = 'artifact';
+                  }
+                } catch {
+                  // Not JSON, continue with normal processing
+                }
+
+                // Extract images from nested content
+                const imageAttachments: ChatAttachment[] = nestedContent
+                  .filter(
+                    (item) =>
+                      item.type === 'image' && (item.s3_url || item.source),
+                  )
+                  .map((item, imgIdx) => ({
+                    id: `history-${idx}-tool-img-${imgIdx}`,
+                    type: 'image' as const,
+                    name: `generated-${imgIdx + 1}.${item.format || 'png'}`,
+                    preview: item.s3_url
+                      ? item.s3_url
+                      : `data:image/${item.format || 'png'};base64,${item.source}`,
+                  }));
+
+                if (imageAttachments.length > 0) {
+                  toolResultType = 'image';
+                }
+
+                return {
+                  id: `history-${idx}`,
+                  role: 'assistant' as const,
+                  content: toolResultType === 'artifact' ? '' : textContent,
+                  attachments:
+                    imageAttachments.length > 0 ? imageAttachments : undefined,
+                  timestamp: new Date(),
+                  isToolResult: true,
+                  toolResultType,
+                  artifact,
+                };
+              }
+
               // Extract text content
               const textContent = msg.content
                 .filter((item) => item.type === 'text' && item.text)
@@ -395,12 +385,17 @@ function ProjectDetailPage() {
 
               // Extract image attachments
               const imageAttachments: ChatAttachment[] = msg.content
-                .filter((item) => item.type === 'image' && item.source)
+                .filter(
+                  (item) =>
+                    item.type === 'image' && (item.s3_url || item.source),
+                )
                 .map((item, imgIdx) => ({
                   id: `history-${idx}-img-${imgIdx}`,
                   type: 'image' as const,
                   name: `image-${imgIdx + 1}.${item.format || 'png'}`,
-                  preview: `data:image/${item.format || 'png'};base64,${item.source}`,
+                  preview: item.s3_url
+                    ? item.s3_url
+                    : `data:image/${item.format || 'png'};base64,${item.source}`,
                 }));
 
               return {
@@ -459,6 +454,16 @@ function ProjectDetailPage() {
     [fetchApi, projectId, currentSessionId],
   );
 
+  const handleArtifactDelete = useCallback(
+    async (artifactId: string) => {
+      await fetchApi(`artifacts/${artifactId}`, {
+        method: 'DELETE',
+      });
+      setArtifacts((prev) => prev.filter((a) => a.artifact_id !== artifactId));
+    },
+    [fetchApi],
+  );
+
   const loadWorkflowDetail = async (documentId: string, workflowId: string) => {
     setLoadingWorkflow(true);
     try {
@@ -506,14 +511,10 @@ function ProjectDetailPage() {
     }
     // Refresh workflows list
     loadWorkflows();
-    // Clear active workflow connection after a delay
+    // Clear workflow progress after a delay
     const timeout = setTimeout(() => {
-      setActiveWorkflowId(null);
-      // Keep progress visible for 5 seconds after completion
-      setTimeout(() => {
-        setWorkflowProgress(null);
-      }, 5000);
-    }, 1000);
+      setWorkflowProgress(null);
+    }, 5000);
     return () => clearTimeout(timeout);
   }, [progressStatus, loadWorkflows]);
 
@@ -660,7 +661,6 @@ function ProjectDetailPage() {
                 (w.status === 'pending' || w.status === 'in_progress'),
             );
             if (newWorkflow) {
-              setActiveWorkflowId(newWorkflow.workflow_id);
               setWorkflowProgress((prev) =>
                 prev
                   ? {
@@ -889,7 +889,6 @@ function ProjectDetailPage() {
       <ProjectNavBar
         project={project}
         documentCount={documents.length}
-        isConnected={isConnected}
         onSettingsClick={() => setShowProjectSettings(true)}
       />
 
@@ -915,7 +914,6 @@ function ProjectDetailPage() {
                 uploading={uploading}
                 showUploadArea={showUploadArea}
                 isDragging={isDragging}
-                isConnected={isConnected}
                 onToggleUploadArea={() => setShowUploadModal(true)}
                 onRefresh={loadDocuments}
                 onFileUpload={handleFileUpload}
@@ -966,6 +964,7 @@ function ProjectDetailPage() {
                 loadingMoreSessions={loadingMoreSessions}
                 onLoadMoreSessions={loadMoreSessions}
                 artifacts={artifacts}
+                onArtifactDelete={handleArtifactDelete}
               />
             </div>
           </ResizablePanel>

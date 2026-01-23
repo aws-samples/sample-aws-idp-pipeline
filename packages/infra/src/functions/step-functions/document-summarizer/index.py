@@ -12,12 +12,6 @@ from shared.ddb_client import (
     WorkflowStatus,
 )
 from shared.s3_analysis import get_all_segment_analyses, save_summary
-from shared.websocket import (
-    notify_step_start,
-    notify_step_complete,
-    notify_step_error,
-    notify_workflow_complete,
-)
 
 bedrock_client = None
 
@@ -99,10 +93,8 @@ def handler(event, context):
         print(f'Extracted document_id from file_uri: {document_id}')
 
     record_step_complete(workflow_id, StepName.SEGMENT_ANALYZER, segment_count=segment_count)
-    notify_step_complete(workflow_id, 'SegmentAnalyzer', segment_count=segment_count)
 
     record_step_start(workflow_id, StepName.DOCUMENT_SUMMARIZER)
-    notify_step_start(workflow_id, 'DocumentSummarizer')
 
     try:
         # Get segments from S3
@@ -116,7 +108,6 @@ def handler(event, context):
                 skipped=True,
                 reason='No segments found'
             )
-            notify_step_complete(workflow_id, 'DocumentSummarizer', message='No segments')
             return {
                 'workflow_id': workflow_id,
                 'status': 'no_segments',
@@ -160,19 +151,12 @@ def handler(event, context):
             StepName.DOCUMENT_SUMMARIZER,
             segment_count=len(segments)
         )
-        notify_step_complete(workflow_id, 'DocumentSummarizer')
 
         update_workflow_status(
             document_id,
             workflow_id,
             WorkflowStatus.COMPLETED,
             summary=summary
-        )
-
-        notify_workflow_complete(
-            workflow_id,
-            summary=summary,
-            segment_count=len(segments)
         )
 
         print(f'Generated summary for workflow {workflow_id} with {len(segments)} segments')
@@ -188,7 +172,6 @@ def handler(event, context):
     except Exception as e:
         print(f'Error in document summarization: {e}')
         record_step_error(workflow_id, StepName.DOCUMENT_SUMMARIZER, str(e))
-        notify_step_error(workflow_id, 'DocumentSummarizer', str(e))
         update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, error=str(e))
         return {
             'workflow_id': workflow_id,

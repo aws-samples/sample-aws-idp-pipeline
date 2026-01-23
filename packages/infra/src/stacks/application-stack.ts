@@ -38,12 +38,6 @@ export class ApplicationStack extends Stack {
     );
     RuntimeConfig.ensure(this).config.agentRuntimeArn = agentRuntimeArn;
 
-    const websocketEndpoint = StringParameter.valueForStringParameter(
-      this,
-      SSM_KEYS.WEBSOCKET_ENDPOINT,
-    );
-    RuntimeConfig.ensure(this).config.websocketEndpoint = websocketEndpoint;
-
     const agentStorageBucketName = StringParameter.valueForStringParameter(
       this,
       SSM_KEYS.AGENT_STORAGE_BUCKET_NAME,

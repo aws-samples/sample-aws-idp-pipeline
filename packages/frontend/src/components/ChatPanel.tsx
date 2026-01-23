@@ -10,6 +10,9 @@ import {
   Sparkles,
   ChevronDown,
   MessageSquarePlus,
+  Wand2,
+  Download,
+  File,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
@@ -448,18 +451,121 @@ export default function ChatPanel({
                     )}
                   </div>
                 </div>
-              ) : (
-                /* AI message - no bubble, markdown */
+              ) : message.isToolResult ? (
+                /* Tool result message - special card design */
                 <div
                   key={message.id}
-                  className="prose prose-sm dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 [&_strong]:!text-inherit"
+                  className="relative overflow-hidden rounded-2xl bg-white dark:bg-gradient-to-br dark:from-violet-600/30 dark:via-purple-600/25 dark:to-fuchsia-600/20 border border-slate-200 dark:border-violet-400 shadow-sm dark:shadow-lg dark:shadow-violet-500/20"
                 >
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw]}
-                  >
-                    {prepareMarkdown(message.content)}
-                  </ReactMarkdown>
+                  {/* Decorative background elements - dark mode only */}
+                  <div className="hidden dark:block absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-violet-300/20 to-transparent rounded-full -translate-y-1/2 translate-x-1/2" />
+                  <div className="hidden dark:block absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-fuchsia-300/20 to-transparent rounded-full translate-y-1/2 -translate-x-1/2" />
+
+                  {/* Header */}
+                  <div className="relative flex items-center gap-2 px-4 py-2.5 border-b border-slate-200 dark:border-violet-400/50 bg-gray-50 dark:bg-violet-500/20">
+                    <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm">
+                      {message.toolResultType === 'artifact' ? (
+                        <File className="w-3.5 h-3.5 text-white" />
+                      ) : (
+                        <Wand2 className="w-3.5 h-3.5 text-white" />
+                      )}
+                    </div>
+                    <span className="text-xs font-semibold text-slate-600 dark:text-fuchsia-300">
+                      {message.toolResultType === 'artifact'
+                        ? t('chat.artifactSaved', 'Artifact Saved')
+                        : t('chat.toolResult', 'Tool Result')}
+                    </span>
+                    <div className="flex-1" />
+                    <Sparkles className="w-4 h-4 text-slate-300 dark:text-violet-400/80" />
+                  </div>
+
+                  {/* Content */}
+                  <div className="relative p-4 space-y-3 dark:bg-violet-500/10">
+                    {/* Artifact card */}
+                    {message.toolResultType === 'artifact' &&
+                      message.artifact && (
+                        <a
+                          href={message.artifact.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/30 dark:to-teal-900/30 border border-emerald-200 dark:border-emerald-500/40 hover:border-emerald-300 dark:hover:border-emerald-400/60 transition-colors group"
+                        >
+                          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm">
+                            <FileText className="w-5 h-5 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-800 dark:text-emerald-100 truncate">
+                              {message.artifact.filename}
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-emerald-300/70">
+                              {t('chat.clickToDownload', 'Click to download')}
+                            </p>
+                          </div>
+                          <Download className="w-5 h-5 text-emerald-500 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
+                        </a>
+                      )}
+                    {/* Generated images */}
+                    {message.attachments && message.attachments.length > 0 && (
+                      <div className="flex flex-wrap gap-3">
+                        {message.attachments.map((attachment) =>
+                          attachment.type === 'image' && attachment.preview ? (
+                            <div
+                              key={attachment.id}
+                              className="relative group overflow-hidden rounded-xl shadow-md"
+                            >
+                              <img
+                                src={attachment.preview}
+                                alt={attachment.name}
+                                className="max-w-80 max-h-80 object-contain bg-gray-50 dark:bg-violet-950/50"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          ) : null,
+                        )}
+                      </div>
+                    )}
+                    {/* Text content */}
+                    {message.content && (
+                      <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-violet-100 [&_strong]:!text-inherit">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          rehypePlugins={[rehypeRaw]}
+                        >
+                          {prepareMarkdown(message.content)}
+                        </ReactMarkdown>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* AI message - no bubble, markdown */
+                <div key={message.id} className="space-y-3">
+                  {/* AI generated images */}
+                  {message.attachments && message.attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {message.attachments.map((attachment) =>
+                        attachment.type === 'image' && attachment.preview ? (
+                          <img
+                            key={attachment.id}
+                            src={attachment.preview}
+                            alt={attachment.name}
+                            className="max-w-80 max-h-80 rounded-xl object-contain border border-slate-200 dark:border-slate-600"
+                          />
+                        ) : null,
+                      )}
+                    </div>
+                  )}
+                  {/* Text content */}
+                  {message.content && (
+                    <div className="prose prose-sm dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 [&_strong]:!text-inherit">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeRaw]}
+                      >
+                        {prepareMarkdown(message.content)}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </div>
               ),
             )}

@@ -13,7 +13,6 @@ from shared.s3_analysis import (
     update_segment_status,
     SegmentStatus,
 )
-from shared.websocket import notify_segment_progress
 
 from agent import VisionReactAgent
 
@@ -121,9 +120,6 @@ def handler(event, _context):
                 analysis_query=f'Chapter {segment_index + 1}' if is_video else f'Page {segment_index + 1}',
                 content=result.get('response', '')
             )
-
-        if segment_count > 0:
-            notify_segment_progress(workflow_id, segment_index + 1, segment_count)
 
         return {
             'workflow_id': workflow_id,

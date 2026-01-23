@@ -12,7 +12,6 @@ class Config(BaseSettings):
     document_storage_bucket_name: str = ""
     backend_table_name: str = ""
     lancedb_express_bucket_name: str = ""
-    websocket_endpoint: str = ""
     session_storage_bucket_name: str = ""
     agent_storage_bucket_name: str = ""
     elasticache_endpoint: str = ""

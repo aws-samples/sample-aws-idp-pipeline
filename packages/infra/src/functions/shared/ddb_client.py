@@ -415,43 +415,6 @@ def add_image_analysis(
     return decimal_to_python(response.get('Attributes', {}))
 
 
-def save_connection(workflow_id: str, connection_id: str, ttl_seconds: int = 3600) -> dict:
-    table = get_table()
-    now = datetime.now(timezone.utc)
-    ttl = int(now.timestamp()) + ttl_seconds
-    now_str = now.isoformat()
-
-    item = {
-        'PK': f'WF#{workflow_id}',
-        'SK': f'CONN#{connection_id}',
-        'data': {
-            'connection_id': connection_id
-        },
-        'created_at': now_str,
-        'updated_at': now_str,
-        'ttl': ttl
-    }
-
-    table.put_item(Item=item)
-    return item
-
-
-def delete_connection(workflow_id: str, connection_id: str) -> None:
-    table = get_table()
-    table.delete_item(
-        Key={'PK': f'WF#{workflow_id}', 'SK': f'CONN#{connection_id}'}
-    )
-
-
-def get_connections(workflow_id: str) -> list:
-    table = get_table()
-    response = table.query(
-        KeyConditionExpression=Key('PK').eq(f'WF#{workflow_id}') & Key('SK').begins_with('CONN#')
-    )
-    items = decimal_to_python(response.get('Items', []))
-    return [{**item, **item.get('data', {})} for item in items]
-
-
 def batch_save_segments(workflow_id: str, segments: list) -> int:
     """Batch save segment references to DynamoDB. Actual data is stored in S3."""
     table = get_table()

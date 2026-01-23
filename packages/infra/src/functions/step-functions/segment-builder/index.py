@@ -29,7 +29,6 @@ from shared.s3_analysis import (
     parse_s3_uri,
     SegmentStatus,
 )
-from shared.websocket import notify_step_start, notify_step_complete, notify_step_error
 
 
 def download_json_from_s3(uri: str) -> Optional[dict]:
@@ -301,7 +300,6 @@ def handler(event, _context):
     bda_output_uri = event.get('bda_output_uri', '')
 
     record_step_start(workflow_id, StepName.SEGMENT_BUILDER)
-    notify_step_start(workflow_id, 'SegmentBuilder')
 
     is_video = is_video_file(file_type)
 
@@ -412,11 +410,6 @@ def handler(event, _context):
             StepName.SEGMENT_BUILDER,
             segment_count=segment_count
         )
-        notify_step_complete(
-            workflow_id,
-            'SegmentBuilder',
-            segment_count=segment_count
-        )
 
         print(f'Built {segment_count} segments')
 
@@ -434,5 +427,4 @@ def handler(event, _context):
         error_msg = str(e)
         print(f'Error building segments: {error_msg}')
         record_step_error(workflow_id, StepName.SEGMENT_BUILDER, error_msg)
-        notify_step_error(workflow_id, 'SegmentBuilder', error_msg)
         raise

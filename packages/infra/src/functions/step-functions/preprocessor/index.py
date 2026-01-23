@@ -28,7 +28,6 @@ from shared.ddb_client import (
     StepName,
 )
 from shared.s3_analysis import get_s3_client, parse_s3_uri
-from shared.websocket import notify_step_start, notify_step_complete, notify_step_error
 
 # Image quality settings for PDF rendering
 PDF_DPI = 150  # DPI for PDF page rendering
@@ -191,7 +190,6 @@ def handler(event, _context):
     file_type = event.get('file_type', '')
 
     record_step_start(workflow_id, StepName.PREPROCESSOR)
-    notify_step_start(workflow_id, 'Preprocessor')
 
     try:
         bucket, base_path = get_document_base_path(file_uri)
@@ -232,11 +230,6 @@ def handler(event, _context):
             StepName.PREPROCESSOR,
             segment_count=len(segments)
         )
-        notify_step_complete(
-            workflow_id,
-            'Preprocessor',
-            segment_count=len(segments)
-        )
 
         return {
             **event,
@@ -248,5 +241,4 @@ def handler(event, _context):
         error_msg = str(e)
         print(f'Error in preprocessor: {error_msg}')
         record_step_error(workflow_id, StepName.PREPROCESSOR, error_msg)
-        notify_step_error(workflow_id, 'Preprocessor', error_msg)
         raise
