@@ -19,6 +19,7 @@ export interface IdpAgentProps {
   backendTable: ITable;
   gateway?: Gateway;
   bedrockModelId?: string;
+  agentStorageBucket?: IBucket;
 }
 
 export class IdpAgent extends Construct {
@@ -36,6 +37,7 @@ export class IdpAgent extends Construct {
       backendTable,
       gateway,
       bedrockModelId,
+      agentStorageBucket,
     } = props;
 
     const dockerImage = AgentRuntimeArtifact.fromAsset(agentPath, {
@@ -53,6 +55,9 @@ export class IdpAgent extends Construct {
         BACKEND_TABLE_NAME: backendTable.tableName,
         ...(gateway?.gatewayUrl && { MCP_GATEWAY_URL: gateway.gatewayUrl }),
         ...(bedrockModelId && { BEDROCK_MODEL_ID: bedrockModelId }),
+        ...(agentStorageBucket && {
+          AGENT_STORAGE_BUCKET_NAME: agentStorageBucket.bucketName,
+        }),
       },
     });
 
@@ -62,6 +67,11 @@ export class IdpAgent extends Construct {
 
     // Grant S3 read/write access for session storage
     sessionStorageBucket.grantReadWrite(this.runtime.role);
+
+    // Grant S3 read access for agent storage (custom prompts)
+    if (agentStorageBucket) {
+      agentStorageBucket.grantRead(this.runtime.role);
+    }
 
     // Grant DynamoDB read/write access for LanceDB lock table
     lancedbLockTable.grantReadWriteData(this.runtime.role);

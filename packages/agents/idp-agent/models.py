@@ -64,3 +64,4 @@ class InvokeRequest(BaseModel):
     session_id: str
     project_id: str
     user_id: str | None = None
+    agent_id: str | None = None

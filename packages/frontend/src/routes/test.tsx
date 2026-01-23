@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { useAwsClient } from '../hooks/useAwsClient';
+import { useAwsClient, StreamEvent } from '../hooks/useAwsClient';
 
 export const Route = createFileRoute('/test')({
   component: RouteComponent,
@@ -17,9 +17,10 @@ interface Project {
 }
 
 interface Agent {
+  agent_id: string;
   name: string;
   content?: string;
-  updated_at: string;
+  created_at: string;
 }
 
 interface SearchResult {
@@ -49,7 +50,7 @@ interface RerankResponse {
 }
 
 function RouteComponent() {
-  const { fetchApi } = useAwsClient();
+  const { fetchApi, invokeAgent } = useAwsClient();
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -78,6 +79,12 @@ function RouteComponent() {
   const [newAgentName, setNewAgentName] = useState('');
   const [newAgentContent, setNewAgentContent] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+
+  // Chat test states
+  const [chatInput, setChatInput] = useState('');
+  const [chatResponse, setChatResponse] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatEvents, setChatEvents] = useState<StreamEvent[]>([]);
 
   const toggleRerankSegment = (segmentId: string) => {
     setExpandedRerankSegments((prev) => {
@@ -138,6 +145,38 @@ function RouteComponent() {
     setRerankTime(endTime - startTime);
     setRerankResults(response.results);
     setReranking(false);
+  };
+
+  const handleChatTest = async () => {
+    if (!selectedProject || !selectedAgent || !chatInput.trim()) return;
+
+    setChatLoading(true);
+    setChatResponse('');
+    setChatEvents([]);
+
+    const sessionId = `test-${crypto.randomUUID()}-${Date.now()}`;
+
+    const handleStreamEvent = (event: StreamEvent) => {
+      console.log('Stream event:', event);
+      setChatEvents((prev) => [...prev, event]);
+    };
+
+    try {
+      const response = await invokeAgent(
+        [{ text: chatInput }],
+        sessionId,
+        selectedProject.project_id,
+        handleStreamEvent,
+        selectedAgent.agent_id,
+      );
+      setChatResponse(response);
+      console.log('Final response:', response);
+    } catch (e) {
+      setChatResponse(`Error: ${(e as Error).message}`);
+      console.error('Chat error:', e);
+    }
+
+    setChatLoading(false);
   };
 
   if (loading) {
@@ -488,11 +527,12 @@ function RouteComponent() {
                   }
                   try {
                     await fetchApi(
-                      `projects/${selectedProject.project_id}/agents/${newAgentName}`,
+                      `projects/${selectedProject.project_id}/agents`,
                       {
-                        method: 'PUT',
+                        method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                          name: newAgentName,
                           content: newAgentContent,
                         }),
                       },
@@ -580,6 +620,15 @@ function RouteComponent() {
                       border: '1px solid #ddd',
                     }}
                   >
+                    ID
+                  </th>
+                  <th
+                    style={{
+                      padding: '10px',
+                      textAlign: 'left',
+                      border: '1px solid #ddd',
+                    }}
+                  >
                     Name
                   </th>
                   <th
@@ -589,7 +638,7 @@ function RouteComponent() {
                       border: '1px solid #ddd',
                     }}
                   >
-                    Updated At
+                    Created At
                   </th>
                   <th
                     style={{
@@ -604,19 +653,29 @@ function RouteComponent() {
               </thead>
               <tbody>
                 {agents.map((agent) => (
-                  <tr key={agent.name}>
+                  <tr key={agent.agent_id}>
+                    <td
+                      style={{
+                        padding: '10px',
+                        border: '1px solid #ddd',
+                        fontSize: '12px',
+                        fontFamily: 'monospace',
+                      }}
+                    >
+                      {agent.agent_id.slice(0, 8)}...
+                    </td>
                     <td style={{ padding: '10px', border: '1px solid #ddd' }}>
                       {agent.name}
                     </td>
                     <td style={{ padding: '10px', border: '1px solid #ddd' }}>
-                      {new Date(agent.updated_at).toLocaleString()}
+                      {new Date(agent.created_at).toLocaleString()}
                     </td>
                     <td style={{ padding: '10px', border: '1px solid #ddd' }}>
                       <button
                         onClick={async () => {
                           try {
                             const data = await fetchApi<Agent>(
-                              `projects/${selectedProject.project_id}/agents/${agent.name}`,
+                              `projects/${selectedProject.project_id}/agents/${agent.agent_id}`,
                             );
                             setSelectedAgent(data);
                           } catch (e) {
@@ -642,15 +701,17 @@ function RouteComponent() {
                             return;
                           try {
                             await fetchApi(
-                              `projects/${selectedProject.project_id}/agents/${agent.name}`,
+                              `projects/${selectedProject.project_id}/agents/${agent.agent_id}`,
                               {
                                 method: 'DELETE',
                               },
                             );
                             setAgents(
-                              agents.filter((a) => a.name !== agent.name),
+                              agents.filter(
+                                (a) => a.agent_id !== agent.agent_id,
+                              ),
                             );
-                            if (selectedAgent?.name === agent.name) {
+                            if (selectedAgent?.agent_id === agent.agent_id) {
                               setSelectedAgent(null);
                             }
                           } catch (e) {
@@ -690,9 +751,20 @@ function RouteComponent() {
                 border: '1px solid #17a2b8',
                 borderRadius: '8px',
                 backgroundColor: '#e7f6f8',
+                marginBottom: '16px',
               }}
             >
               <h3 style={{ margin: '0 0 8px 0' }}>{selectedAgent.name}</h3>
+              <p
+                style={{
+                  margin: '0 0 8px 0',
+                  fontSize: '12px',
+                  color: '#666',
+                  fontFamily: 'monospace',
+                }}
+              >
+                ID: {selectedAgent.agent_id}
+              </p>
               <pre
                 style={{
                   backgroundColor: '#fff',
@@ -706,6 +778,131 @@ function RouteComponent() {
               >
                 {selectedAgent.content}
               </pre>
+            </div>
+          )}
+
+          {/* Chat Test with Selected Agent */}
+          {selectedAgent && (
+            <div
+              style={{
+                padding: '16px',
+                border: '1px solid #6f42c1',
+                borderRadius: '8px',
+                backgroundColor: '#f8f5ff',
+              }}
+            >
+              <h3 style={{ margin: '0 0 12px 0', color: '#6f42c1' }}>
+                Chat Test with "{selectedAgent.name}"
+              </h3>
+              <div
+                style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}
+              >
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !chatLoading && chatInput.trim()) {
+                      handleChatTest();
+                    }
+                  }}
+                  placeholder="Enter message to test agent..."
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    fontSize: '14px',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                  }}
+                />
+                <button
+                  onClick={handleChatTest}
+                  disabled={chatLoading || !chatInput.trim()}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '14px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    backgroundColor:
+                      chatLoading || !chatInput.trim() ? '#ccc' : '#6f42c1',
+                    color: 'white',
+                    cursor:
+                      chatLoading || !chatInput.trim()
+                        ? 'not-allowed'
+                        : 'pointer',
+                  }}
+                >
+                  {chatLoading ? 'Sending...' : 'Send'}
+                </button>
+              </div>
+
+              {/* Stream Events */}
+              {chatEvents.length > 0 && (
+                <div style={{ marginBottom: '12px' }}>
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px' }}>
+                    Stream Events:
+                  </h4>
+                  <div
+                    style={{
+                      backgroundColor: '#1e1e1e',
+                      color: '#d4d4d4',
+                      padding: '12px',
+                      borderRadius: '4px',
+                      fontFamily: 'monospace',
+                      fontSize: '12px',
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                    }}
+                  >
+                    {chatEvents.map((event, idx) => (
+                      <div key={idx} style={{ marginBottom: '4px' }}>
+                        <span
+                          style={{
+                            color:
+                              event.type === 'text'
+                                ? '#9cdcfe'
+                                : event.type === 'tool_use'
+                                  ? '#ce9178'
+                                  : '#6a9955',
+                          }}
+                        >
+                          [{event.type}]
+                        </span>{' '}
+                        {event.type === 'tool_use' && event.name && (
+                          <span style={{ color: '#dcdcaa' }}>{event.name}</span>
+                        )}
+                        {event.type === 'text' &&
+                          event.content &&
+                          event.content.slice(0, 50)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Response */}
+              {chatResponse && (
+                <div>
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px' }}>
+                    Response:
+                  </h4>
+                  <pre
+                    style={{
+                      backgroundColor: '#fff',
+                      padding: '12px',
+                      borderRadius: '4px',
+                      border: '1px solid #ddd',
+                      whiteSpace: 'pre-wrap',
+                      fontFamily: 'inherit',
+                      fontSize: '14px',
+                      maxHeight: '300px',
+                      overflowY: 'auto',
+                    }}
+                  >
+                    {chatResponse}
+                  </pre>
+                </div>
+              )}
             </div>
           )}
         </section>

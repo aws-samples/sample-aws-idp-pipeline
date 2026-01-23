@@ -61,6 +61,18 @@ export class AgentStack extends Stack {
       backendTableName,
     );
 
+    // Get agent storage bucket from SSM
+    const agentStorageBucketName = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.AGENT_STORAGE_BUCKET_NAME,
+    );
+
+    const agentStorageBucket = Bucket.fromBucketName(
+      this,
+      'AgentStorageBucket',
+      agentStorageBucketName,
+    );
+
     const idpAgent = new IdpAgent(this, 'IdpAgent', {
       agentPath: path.resolve(process.cwd(), '../../packages/agents/idp-agent'),
       agentName: 'idp_agent',
@@ -70,6 +82,7 @@ export class AgentStack extends Stack {
       backendTable,
       gateway,
       bedrockModelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+      agentStorageBucket,
     });
 
     const bidiAgent = new IdpAgent(this, 'BidiAgent', {

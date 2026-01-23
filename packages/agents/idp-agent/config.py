@@ -8,6 +8,7 @@ class Config(BaseSettings):
 
     aws_region: str = "us-east-1"
     session_storage_bucket_name: str = ""
+    agent_storage_bucket_name: str = ""
     mcp_gateway_url: str = ""
     agentcore_runtime_id: str = ""
     backend_table_name: str = ""

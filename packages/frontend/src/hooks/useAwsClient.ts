@@ -250,6 +250,7 @@ export function useAwsClient() {
       sessionId: string,
       projectId: string,
       onEvent?: (event: StreamEvent) => void,
+      agentId?: string,
     ): Promise<string> => {
       if (!agentRuntimeArn) throw new Error('Agent runtime ARN not available');
       if (!user?.id_token) throw new Error('User token not available');
@@ -270,6 +271,7 @@ export function useAwsClient() {
             session_id: sessionId,
             project_id: projectId,
             user_id: user.profile?.['cognito:username'] as string,
+            agent_id: agentId,
           }),
         },
       );
