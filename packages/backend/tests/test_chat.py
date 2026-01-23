@@ -149,7 +149,7 @@ class TestGetChatHistory:
         assert len(data["messages"]) == 1
         assert len(data["messages"][0]["content"]) == 2
         assert data["messages"][0]["content"][0] == {"type": "text", "text": "이 이미지를 설명해줘"}
-        assert data["messages"][0]["content"][1] == {"type": "image", "format": "png", "source": "base64data"}
+        assert data["messages"][0]["content"][1] == {"type": "image", "format": "png", "source": "base64data", "s3_url": None}
 
     @patch("app.routers.chat.get_duckdb_connection")
     @patch("app.routers.chat.get_config")

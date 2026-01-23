@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from app.config import get_config
 from app.duckdb import get_duckdb_connection
+from app.message import ContentItem, parse_content_items
 from app.s3 import delete_s3_prefix, get_s3_client
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -16,20 +17,6 @@ class Session(BaseModel):
     created_at: str
     updated_at: str
     session_name: str | None = None
-
-
-class TextContent(BaseModel):
-    type: str = "text"
-    text: str
-
-
-class ImageContent(BaseModel):
-    type: str = "image"
-    format: str
-    source: str  # base64 encoded or S3 URL
-
-
-ContentItem = TextContent | ImageContent
 
 
 class ChatMessage(BaseModel):
@@ -145,28 +132,7 @@ def get_chat_history(
     messages = []
     for row in result:
         role, content_items, created_at, updated_at = row[1], row[2], row[3], row[4]
-        parsed_content: list[ContentItem] = []
-
-        for item in content_items:
-            if "text" in item and item["text"]:
-                parsed_content.append(TextContent(text=item["text"]))
-            elif "image" in item:
-                img = item["image"]
-                source = img.get("source", {})
-                # bytes가 있으면 base64, 아니면 S3 URL 등
-                bytes_data = source.get("bytes")
-                if isinstance(bytes_data, dict) and bytes_data.get("__bytes_encoded__"):
-                    source_value = bytes_data.get("data", "")
-                elif isinstance(bytes_data, str):
-                    source_value = bytes_data
-                else:
-                    source_value = ""
-                parsed_content.append(
-                    ImageContent(
-                        format=img.get("format", "png"),
-                        source=source_value,
-                    )
-                )
+        parsed_content = parse_content_items(content_items)
 
         if parsed_content:
             messages.append(
