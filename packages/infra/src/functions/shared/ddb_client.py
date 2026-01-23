@@ -61,30 +61,33 @@ class WorkflowStatus:
 
 
 class StepName:
+    PREPROCESSOR = 'preprocessor'
     BDA_PROCESSOR = 'bda_processor'
     BDA_STATUS_CHECKER = 'bda_status_checker'
-    DOCUMENT_INDEXER = 'document_indexer'
     FORMAT_PARSER = 'format_parser'
     PADDLEOCR_PROCESSOR = 'paddleocr_processor'
+    SEGMENT_BUILDER = 'segment_builder'
     SEGMENT_ANALYZER = 'segment_analyzer'
     DOCUMENT_SUMMARIZER = 'document_summarizer'
 
     ORDER = [
+        'preprocessor',
         'bda_processor',
         'bda_status_checker',
-        'document_indexer',
         'format_parser',
         'paddleocr_processor',
+        'segment_builder',
         'segment_analyzer',
         'document_summarizer'
     ]
 
     LABELS = {
+        'preprocessor': 'Preprocessing',
         'bda_processor': 'BDA Processing',
         'bda_status_checker': 'BDA Status Check',
-        'document_indexer': 'Document Indexing',
         'format_parser': 'Format Parsing',
         'paddleocr_processor': 'PaddleOCR Processing',
+        'segment_builder': 'Building Segments',
         'segment_analyzer': 'Segment Analysis',
         'document_summarizer': 'Document Summary'
     }
@@ -248,6 +251,7 @@ def record_step_complete(workflow_id: str, step_name: str, **kwargs) -> dict:
     data = steps.get('data', {})
     step_data = data.get(step_name, {})
     step_data['status'] = WorkflowStatus.COMPLETED
+    step_data['ended_at'] = now
     for key, value in kwargs.items():
         step_data[key] = value
     data[step_name] = step_data
@@ -648,3 +652,16 @@ def get_project_ocr_settings(project_id: str) -> dict:
             'ocr_options': data.get('ocr_options') or defaults['ocr_options']
         }
     return defaults
+
+
+def get_document(project_id: str, document_id: str) -> Optional[dict]:
+    """Get document from DynamoDB by project_id and document_id."""
+    table = get_table()
+    response = table.get_item(
+        Key={'PK': f'PROJ#{project_id}', 'SK': f'DOC#{document_id}'}
+    )
+    item = response.get('Item')
+    if item:
+        result = decimal_to_python(item)
+        return result.get('data', {})
+    return None

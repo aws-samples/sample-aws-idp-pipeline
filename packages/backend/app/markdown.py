@@ -3,27 +3,6 @@ import re
 from app.s3 import generate_presigned_url
 
 
-def fix_image_uri(image_uri: str) -> str:
-    """Fix image_uri by adding /assets/ if missing.
-
-    BDA stores images in /assets/ subdirectory but some stored URIs
-    may be missing this path component.
-    """
-    if not image_uri or not image_uri.startswith("s3://"):
-        return image_uri
-
-    # Already has /assets/, return as-is
-    if "/assets/" in image_uri:
-        return image_uri
-
-    # Add /assets/ before the filename
-    parts = image_uri.rsplit("/", 1)
-    if len(parts) == 2:
-        return f"{parts[0]}/assets/{parts[1]}"
-
-    return image_uri
-
-
 def transform_markdown_images(markdown: str, image_uri: str = "") -> str:
     """Transform markdown images to presigned URLs.
 
@@ -35,29 +14,24 @@ def transform_markdown_images(markdown: str, image_uri: str = "") -> str:
     if not markdown:
         return markdown
 
-    # Extract assets base path from image_uri
-    # BDA stores images in /assets/ subdirectory
-    # e.g., s3://bucket/bda-output/.../standard_output/0/assets/rectified_image.png
-    # -> s3://bucket/bda-output/.../standard_output/0/assets/
+    # First, try to extract assets_base from S3 URIs in the markdown itself
+    # This takes priority because BDA markdown may have different base than image_uri
     assets_base = ""
-    if image_uri:
+    s3_uri_match = re.search(r"(s3://[^/]+/.+/assets/)", markdown)
+    if s3_uri_match:
+        assets_base = s3_uri_match.group(1)
+
+    # Fallback: use image_uri if no S3 URI found in markdown
+    if not assets_base and image_uri:
         # Case 1: image_uri already contains /assets/
         assets_match = re.search(r"(s3://[^/]+/.+/assets/)", image_uri)
         if assets_match:
             assets_base = assets_match.group(1)
         else:
             # Case 2: image_uri doesn't have /assets/, construct it from parent dir
-            # e.g., s3://bucket/.../standard_output/0/rectified_image.png
-            # -> s3://bucket/.../standard_output/0/assets/
             parent_dir = image_uri.rsplit("/", 1)[0]
             if parent_dir:
                 assets_base = f"{parent_dir}/assets/"
-
-    # Fallback: try to extract assets_base from S3 URIs in the markdown itself
-    if not assets_base:
-        s3_uri_match = re.search(r"(s3://[^/]+/.+/assets/)", markdown)
-        if s3_uri_match:
-            assets_base = s3_uri_match.group(1)
 
     def transform_image(match):
         alt_text = match.group(1)

@@ -9,6 +9,7 @@ from app.ddb.documents import (
 from app.ddb.models import Document, DocumentData, Project, ProjectData
 from app.ddb.projects import (
     get_project_item,
+    mark_project_updated,
     put_project_item,
     query_all_project_items,
     query_projects,
@@ -36,6 +37,7 @@ __all__ = [
     "get_project_item",
     "put_project_item",
     "update_project_data",
+    "mark_project_updated",
     "query_all_project_items",
     # documents
     "get_document_item",

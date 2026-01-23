@@ -1,32 +1,6 @@
 from unittest.mock import patch
 
-from app.markdown import fix_image_uri, transform_markdown_images
-
-
-class TestFixImageUri:
-    def test_empty_string(self):
-        assert fix_image_uri("") == ""
-
-    def test_none_like_empty(self):
-        assert fix_image_uri("") == ""
-
-    def test_non_s3_uri(self):
-        assert fix_image_uri("https://example.com/image.png") == "https://example.com/image.png"
-
-    def test_already_has_assets(self):
-        uri = "s3://bucket/path/to/assets/image.png"
-        assert fix_image_uri(uri) == uri
-
-    def test_adds_assets_path(self):
-        uri = "s3://bucket/path/to/image.png"
-        expected = "s3://bucket/path/to/assets/image.png"
-        assert fix_image_uri(expected) == expected
-        assert fix_image_uri(uri) == expected
-
-    def test_single_segment_path(self):
-        uri = "s3://bucket/image.png"
-        expected = "s3://bucket/assets/image.png"
-        assert fix_image_uri(uri) == expected
+from app.markdown import transform_markdown_images
 
 
 class TestTransformMarkdownImages:

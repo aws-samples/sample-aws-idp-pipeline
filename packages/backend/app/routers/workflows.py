@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.ddb.workflows import get_workflow_item, query_workflows
-from app.markdown import fix_image_uri, transform_markdown_images
+from app.markdown import transform_markdown_images
 from app.s3 import generate_presigned_url, get_s3_client, list_segment_keys, parse_s3_uri
 
 
@@ -113,7 +113,7 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
         if not s3_data:
             continue
 
-        image_uri = fix_image_uri(s3_data.get("image_uri", ""))
+        image_uri = s3_data.get("image_uri", "")
         bda_indexer = transform_markdown_images(s3_data.get("bda_indexer", ""), image_uri)
         paddleocr_blocks = s3_data.get("paddleocr_blocks")
         format_parser = transform_markdown_images(s3_data.get("format_parser", ""), image_uri)

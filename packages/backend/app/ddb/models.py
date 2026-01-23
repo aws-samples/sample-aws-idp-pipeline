@@ -35,6 +35,7 @@ class DocumentData(BaseModel):
     file_size: int
     status: str
     s3_key: str
+    use_bda: bool = False
 
 
 class Document(BaseModel):

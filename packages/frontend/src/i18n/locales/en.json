@@ -71,6 +71,7 @@
     "title": "Documents",
     "upload": "Upload",
     "uploadDocument": "Upload Document",
+    "uploadDocuments": "Upload Documents",
     "addDocument": "Add Document",
     "refresh": "Refresh",
     "files": "files",
@@ -86,7 +87,9 @@
     "failed": "Failed",
     "pending": "Pending",
     "deleteConfirm": "Are you sure you want to delete this document?",
-    "view": "View"
+    "view": "View",
+    "useBda": "Use BDA Analysis",
+    "useBdaDescription": "Enable Bedrock Document Analysis for advanced document understanding. Recommended for complex documents with tables, charts, or multi-column layouts."
   },
   "workflow": {
     "title": "Workflow",

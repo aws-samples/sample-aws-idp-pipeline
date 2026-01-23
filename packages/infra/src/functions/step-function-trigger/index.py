@@ -4,7 +4,7 @@ from datetime import datetime
 
 import boto3
 
-from shared.ddb_client import generate_workflow_id, create_workflow, get_project_language
+from shared.ddb_client import generate_workflow_id, create_workflow, get_project_language, get_document
 from shared.websocket import notify_workflow_started
 
 sfn_client = None
@@ -160,6 +160,11 @@ def handler(event, context):
             language = get_project_language(project_id)
             print(f'Project {project_id} language: {language}')
 
+            # Get document settings (use_bda)
+            document = get_document(project_id, document_id)
+            use_bda = document.get('use_bda', False) if document else False
+            print(f'Document {document_id} use_bda: {use_bda}')
+
             client = get_sfn_client()
             execution_name = f'{workflow_id[:16]}-{datetime.utcnow().strftime("%Y%m%d%H%M%S")}'
 
@@ -172,6 +177,7 @@ def handler(event, context):
                 'file_type': file_type,
                 'processing_type': processing_type,
                 'language': language,
+                'use_bda': use_bda,
                 'triggered_at': datetime.utcnow().isoformat()
             }
 

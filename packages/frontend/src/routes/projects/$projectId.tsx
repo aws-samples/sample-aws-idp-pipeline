@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from 'react-oidc-context';
 import { nanoid } from 'nanoid';
 import {
   useAwsClient,
@@ -39,6 +38,7 @@ import {
   ArtifactsResponse,
 } from '../../types/project';
 import AgentSelectModal from '../../components/AgentSelectModal';
+import DocumentUploadModal from '../../components/DocumentUploadModal';
 
 interface DocumentWorkflows {
   document_id: string;
@@ -62,7 +62,6 @@ function ProjectDetailPage() {
   const { t } = useTranslation();
   const { projectId } = Route.useParams();
   const { fetchApi, invokeAgent } = useAwsClient();
-  useAuth();
   const { showToast } = useToast();
   // AgentCore requires session ID >= 33 chars
   const [currentSessionId, setCurrentSessionId] = useState(() => nanoid(33));
@@ -98,6 +97,7 @@ function ProjectDetailPage() {
   const [showAgentModal, setShowAgentModal] = useState(false);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
@@ -289,21 +289,14 @@ function ProjectDetailPage() {
 
   const handleAgentUpsert = useCallback(
     async (name: string, content: string) => {
-      await fetchApi(
-        `projects/${projectId}/agents/${encodeURIComponent(name)}`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content }),
-        },
-      );
+      await fetchApi(`projects/${projectId}/agents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, content }),
+      });
       await loadAgents();
-      // Update selected agent if it was edited
-      if (selectedAgent?.name === name) {
-        setSelectedAgent((prev) => (prev ? { ...prev, content } : null));
-      }
     },
-    [fetchApi, projectId, loadAgents, selectedAgent],
+    [fetchApi, projectId, loadAgents],
   );
 
   const handleAgentDelete = useCallback(
@@ -563,7 +556,7 @@ function ProjectDetailPage() {
     await processFiles(Array.from(files));
   };
 
-  const processFiles = async (files: File[]) => {
+  const processFiles = async (files: File[], useBda = false) => {
     if (files.length === 0) return;
 
     const maxSize = 500 * 1024 * 1024; // 500MB
@@ -571,6 +564,7 @@ function ProjectDetailPage() {
 
     setUploading(true);
     setShowUploadArea(false);
+    setShowUploadModal(false);
     try {
       for (const file of Array.from(files)) {
         // Check file size
@@ -589,6 +583,7 @@ function ProjectDetailPage() {
               file_name: file.name,
               content_type: file.type || 'application/octet-stream',
               file_size: file.size,
+              use_bda: useBda,
             }),
           },
         );
@@ -921,7 +916,7 @@ function ProjectDetailPage() {
                 showUploadArea={showUploadArea}
                 isDragging={isDragging}
                 isConnected={isConnected}
-                onToggleUploadArea={() => setShowUploadArea(!showUploadArea)}
+                onToggleUploadArea={() => setShowUploadModal(true)}
                 onRefresh={loadDocuments}
                 onFileUpload={handleFileUpload}
                 onDrop={handleDrop}
@@ -1001,10 +996,7 @@ function ProjectDetailPage() {
           if (project) {
             setProject({
               ...project,
-              name: data.name,
-              description: data.description,
-              language: data.language,
-              color: data.color,
+              ...data,
             });
           }
         }}
@@ -1034,6 +1026,15 @@ function ProjectDetailPage() {
         onUpdate={handleAgentUpsert}
         onDelete={handleAgentDelete}
         onLoadDetail={loadAgentDetail}
+      />
+
+      {/* Document Upload Modal */}
+      <DocumentUploadModal
+        isOpen={showUploadModal}
+        uploading={uploading}
+        documentPrompt={project?.document_prompt || undefined}
+        onClose={() => setShowUploadModal(false)}
+        onUpload={processFiles}
       />
     </div>
   );
