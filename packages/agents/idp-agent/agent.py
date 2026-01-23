@@ -1,3 +1,4 @@
+import json
 import logging
 from contextlib import contextmanager
 
@@ -14,6 +15,30 @@ from config import get_config
 from helpers import get_project_language
 
 logger = logging.getLogger(__name__)
+
+
+def fetch_custom_agent_prompt(user_id: str, project_id: str, agent_id: str) -> str | None:
+    """Fetch custom agent prompt from S3."""
+    config = get_config()
+    if not config.agent_storage_bucket_name:
+        return None
+
+    s3 = boto3.client("s3")
+    key = f"{user_id}/{project_id}/agents/{agent_id}.json"
+
+    try:
+        response = s3.get_object(
+            Bucket=config.agent_storage_bucket_name,
+            Key=key,
+        )
+        data = json.loads(response["Body"].read().decode("utf-8"))
+        return data.get("content")
+    except s3.exceptions.NoSuchKey:
+        logger.warning(f"Agent not found: {agent_id}")
+        return None
+    except Exception as e:
+        logger.error(f"Failed to fetch agent prompt: {e}")
+        return None
 
 
 class ToolParameterEnforcerHook(HookProvider):
@@ -77,13 +102,19 @@ def get_mcp_client():
 
 
 @contextmanager
-def get_agent(session_id: str, project_id: str | None = None, user_id: str | None = None):
+def get_agent(
+    session_id: str,
+    project_id: str | None = None,
+    user_id: str | None = None,
+    agent_id: str | None = None,
+):
     """Get an agent instance with S3-based session management.
 
     Args:
         session_id: Unique identifier for the session
         project_id: Project ID for document search (optional for init)
         user_id: User ID for session isolation (optional)
+        agent_id: Custom agent ID for prompt injection (optional)
 
     Yields:
         Agent instance with session management configured
@@ -93,7 +124,6 @@ def get_agent(session_id: str, project_id: str | None = None, user_id: str | Non
 
     tools = [calculator, current_time, generate_image, http_request]
 
-    # Add code_interpreter only in AgentCore environment
     config = get_config()
     if config.is_agentcore:
         from strands_tools import code_interpreter
@@ -107,6 +137,15 @@ Provide accurate answers based on the search results and cite the source when an
 
 When using search_documents or save_artifact tools, you don't need to worry about user_id or project_id parameters -
 they will be automatically filled by the system.
+"""
+
+    if agent_id and user_id and project_id:
+        custom_prompt = fetch_custom_agent_prompt(user_id, project_id, agent_id)
+        if custom_prompt:
+            system_prompt += f"""
+
+## Custom Instructions
+{custom_prompt}
 """
 
     if project_id:
