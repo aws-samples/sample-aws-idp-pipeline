@@ -1,7 +1,12 @@
 import { useCallback, useRef } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { AwsClient } from 'aws4fetch';
 import { useRuntimeConfig } from './useRuntimeConfig';
 
@@ -294,5 +299,31 @@ export function useAwsClient() {
     [agentRuntimeArn, createAwsClient, user],
   );
 
-  return { fetchApi, uploadToS3, invokeAgent };
+  /** S3 presigned download URL 생성 */
+  const getPresignedDownloadUrl = useCallback(
+    async (bucket: string, key: string, expiresIn = 3600): Promise<string> => {
+      if (!cognitoProps) throw new Error('Cognito props not available');
+
+      const credentials = await getCredentials();
+
+      const s3Client = new S3Client({
+        region: cognitoProps.region,
+        credentials: {
+          accessKeyId: credentials.accessKeyId,
+          secretAccessKey: credentials.secretAccessKey,
+          sessionToken: credentials.sessionToken,
+        },
+      });
+
+      const command = new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+      });
+
+      return getSignedUrl(s3Client, command, { expiresIn });
+    },
+    [cognitoProps, getCredentials],
+  );
+
+  return { fetchApi, uploadToS3, invokeAgent, getPresignedDownloadUrl };
 }

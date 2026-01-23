@@ -17,6 +17,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { useAwsClient } from '../hooks/useAwsClient';
+import { useToast } from '../components/Toast';
 import { Artifact, ArtifactsResponse } from '../types/project';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -74,7 +75,8 @@ function formatFileSize(bytes: number): string {
 
 function ArtifactsPage() {
   const { t } = useTranslation();
-  const { fetchApi } = useAwsClient();
+  const { fetchApi, getPresignedDownloadUrl } = useAwsClient();
+  const { showToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,6 +87,17 @@ function ArtifactsPage() {
     null,
   );
   const [deleting, setDeleting] = useState(false);
+  const [copiedProjectId, setCopiedProjectId] = useState<string | null>(null);
+
+  const handleCopyProjectId = async (
+    projectId: string,
+    e: React.MouseEvent,
+  ) => {
+    e.stopPropagation();
+    await navigator.clipboard.writeText(projectId);
+    setCopiedProjectId(projectId);
+    setTimeout(() => setCopiedProjectId(null), 1500);
+  };
 
   const loadArtifacts = useCallback(
     async (cursor?: string) => {
@@ -134,13 +147,54 @@ function ArtifactsPage() {
   const handleDownload = async (artifact: Artifact) => {
     setOpenMenuId(null);
     try {
-      // Get presigned URL from backend
-      const response = await fetchApi<{ download_url: string }>(
-        `artifacts/${artifact.artifact_id}/download`,
+      const presignedUrl = await getPresignedDownloadUrl(
+        artifact.s3_bucket,
+        artifact.s3_key,
       );
-      window.open(response.download_url, '_blank');
+
+      const response = await fetch(presignedUrl);
+
+      if (!response.ok) {
+        if (response.status === 404 || response.status === 403) {
+          showToast(
+            'error',
+            t(
+              'chat.artifactNotFound',
+              'File not found. It may have been deleted.',
+            ),
+          );
+          return;
+        }
+        throw new Error(`Download failed: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+
+      if (blob.type.includes('xml')) {
+        const text = await blob.text();
+        if (text.includes('NoSuchKey')) {
+          showToast(
+            'error',
+            t(
+              'chat.artifactNotFound',
+              'File not found. It may have been deleted.',
+            ),
+          );
+          return;
+        }
+      }
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = artifact.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to download artifact:', error);
+      showToast('error', t('chat.downloadFailed', 'Download failed'));
     }
   };
 
@@ -305,7 +359,7 @@ function ArtifactsPage() {
                           </button>
 
                           {openMenuId === artifact.artifact_id && (
-                            <div className="absolute right-0 bottom-full mb-1 z-50 min-w-[140px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg py-1 overflow-hidden">
+                            <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg py-1 overflow-hidden">
                               <button
                                 onClick={() => handleDownload(artifact)}
                                 className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50"
@@ -332,11 +386,14 @@ function ArtifactsPage() {
                           {formatDate(artifact.created_at)}
                         </span>
                         <button
-                          onClick={() => handleDownload(artifact)}
-                          className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+                          onClick={(e) =>
+                            handleCopyProjectId(artifact.project_id, e)
+                          }
+                          className="text-xs text-slate-400 dark:text-slate-500 hover:text-blue-500 dark:hover:text-blue-400 truncate max-w-[140px] transition-colors"
                         >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>{t('common.download', 'Download')}</span>
+                          {copiedProjectId === artifact.project_id
+                            ? t('common.copied', 'Copied!')
+                            : artifact.project_id}
                         </button>
                       </div>
                     </div>

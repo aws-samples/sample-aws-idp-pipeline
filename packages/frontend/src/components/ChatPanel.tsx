@@ -14,12 +14,19 @@ import {
   Download,
   File,
   Search,
+  Loader2,
+  FileSpreadsheet,
+  FileCode,
+  type LucideIcon,
 } from 'lucide-react';
 import DOMPurify from 'isomorphic-dompurify';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
-import { ChatMessage, Agent } from '../types/project';
+import { ChatMessage, Agent, ChatArtifact } from '../types/project';
+import { useAwsClient } from '../hooks/useAwsClient';
+import { useToast } from './Toast';
+import ImageModal from './ImageModal';
 
 export interface AttachedFile {
   id: string;
@@ -48,6 +55,54 @@ const formatFileSize = (bytes: number) => {
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+const getFileTypeInfo = (
+  filename: string,
+): { icon: LucideIcon; color: string; bgColor: string } => {
+  const ext = filename.split('.').pop()?.toLowerCase() || '';
+  switch (ext) {
+    case 'pdf':
+      return {
+        icon: FileText,
+        color: 'text-red-500',
+        bgColor: 'bg-red-100 dark:bg-red-900/30',
+      };
+    case 'doc':
+    case 'docx':
+      return {
+        icon: FileText,
+        color: 'text-blue-500',
+        bgColor: 'bg-blue-100 dark:bg-blue-900/30',
+      };
+    case 'xls':
+    case 'xlsx':
+    case 'csv':
+      return {
+        icon: FileSpreadsheet,
+        color: 'text-green-500',
+        bgColor: 'bg-green-100 dark:bg-green-900/30',
+      };
+    case 'html':
+    case 'md':
+      return {
+        icon: FileCode,
+        color: 'text-purple-500',
+        bgColor: 'bg-purple-100 dark:bg-purple-900/30',
+      };
+    case 'txt':
+      return {
+        icon: File,
+        color: 'text-slate-500',
+        bgColor: 'bg-slate-100 dark:bg-slate-600',
+      };
+    default:
+      return {
+        icon: File,
+        color: 'text-slate-500',
+        bgColor: 'bg-slate-100 dark:bg-slate-600',
+      };
+  }
 };
 
 /** Prepare content for markdown parsing */
@@ -107,15 +162,97 @@ export default function ChatPanel({
   onNewChat,
 }: ChatPanelProps) {
   const { t } = useTranslation();
+  const { getPresignedDownloadUrl } = useAwsClient();
+  const { showToast } = useToast();
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isComposingRef = useRef(false);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   // Expansion levels: 0=collapsed, 1=medium, 2=large, 3=full
   const [toolResultExpandLevel, setToolResultExpandLevel] = useState<
     Map<string, number>
   >(new Map());
+  const [modalImage, setModalImage] = useState<{
+    src: string;
+    alt: string;
+  } | null>(null);
+  const [downloadingArtifact, setDownloadingArtifact] = useState<string | null>(
+    null,
+  );
+
+  const handleArtifactDownload = useCallback(
+    async (artifact: ChatArtifact) => {
+      setDownloadingArtifact(artifact.artifact_id);
+      try {
+        // Extract bucket from the original URL
+        // URL format: https://{bucket}.s3.{region}.amazonaws.com/...
+        const urlMatch = artifact.url.match(
+          /https:\/\/([^.]+)\.s3\.[^.]+\.amazonaws\.com\//,
+        );
+        if (!urlMatch || !artifact.s3_key) {
+          throw new Error('Invalid artifact URL or missing s3_key');
+        }
+        const bucket = urlMatch[1];
+
+        const presignedUrl = await getPresignedDownloadUrl(
+          bucket,
+          artifact.s3_key,
+        );
+
+        // Fetch and download as blob
+        const response = await fetch(presignedUrl);
+
+        // Check if file exists
+        if (!response.ok) {
+          if (response.status === 404 || response.status === 403) {
+            showToast(
+              'error',
+              t(
+                'chat.artifactNotFound',
+                'File not found. It may have been deleted.',
+              ),
+            );
+            return;
+          }
+          throw new Error(`Download failed: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+
+        // Check if response is XML error (S3 returns XML for errors)
+        if (blob.type.includes('xml')) {
+          const text = await blob.text();
+          if (text.includes('NoSuchKey')) {
+            showToast(
+              'error',
+              t(
+                'chat.artifactNotFound',
+                'File not found. It may have been deleted.',
+              ),
+            );
+            return;
+          }
+        }
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = artifact.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error('Failed to download artifact:', error);
+        showToast('error', t('chat.downloadFailed', 'Download failed'));
+      } finally {
+        setDownloadingArtifact(null);
+      }
+    },
+    [getPresignedDownloadUrl, showToast, t],
+  );
 
   const expandToolResult = useCallback((messageId: string) => {
     setToolResultExpandLevel((prev) => {
@@ -206,7 +343,8 @@ export default function ChatPanel({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      // Ignore Enter during IME composition (Korean, Japanese, Chinese input)
+      if (e.key === 'Enter' && !e.shiftKey && !isComposingRef.current) {
         e.preventDefault();
         handleSend();
       }
@@ -227,48 +365,52 @@ export default function ChatPanel({
           {/* Attached Files Preview */}
           {attachedFiles.length > 0 && (
             <div className="flex gap-3 overflow-x-auto pb-2 px-1">
-              {attachedFiles.map((file) => (
-                <div
-                  key={file.id}
-                  className="relative group flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-700 transition-all hover:border-slate-300 dark:hover:border-slate-500"
-                >
-                  {file.type === 'image' && file.preview ? (
-                    <img
-                      src={file.preview}
-                      alt={file.file.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full p-3 flex flex-col justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-slate-200 dark:bg-slate-600 rounded">
-                          <FileText className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                        </div>
-                        <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
-                          {file.file.name.split('.').pop()}
-                        </span>
-                      </div>
-                      <div className="space-y-0.5">
-                        <p
-                          className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate"
-                          title={file.file.name}
-                        >
-                          {file.file.name}
-                        </p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                          {formatFileSize(file.file.size)}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  <button
-                    onClick={() => removeFile(file.id)}
-                    className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-black/70 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+              {attachedFiles.map((file) => {
+                const fileInfo = getFileTypeInfo(file.file.name);
+                const FileIcon = fileInfo.icon;
+                return (
+                  <div
+                    key={file.id}
+                    className="relative group flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-700 transition-all hover:border-slate-300 dark:hover:border-slate-500"
                   >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
+                    {file.type === 'image' && file.preview ? (
+                      <img
+                        src={file.preview}
+                        alt={file.file.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full p-2 flex flex-col">
+                        <div
+                          className={`flex items-center justify-center w-full h-10 rounded-lg ${fileInfo.bgColor}`}
+                        >
+                          <FileIcon className={`w-5 h-5 ${fileInfo.color}`} />
+                        </div>
+                        <div className="flex-1 flex flex-col justify-end mt-1">
+                          <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">
+                            {file.file.name.split('.').pop()}
+                          </span>
+                          <p
+                            className="text-[10px] font-medium text-slate-700 dark:text-slate-300 truncate"
+                            title={file.file.name}
+                          >
+                            {file.file.name.split('.').slice(0, -1).join('.')}
+                          </p>
+                          <p className="text-[9px] text-slate-400 dark:text-slate-500">
+                            {formatFileSize(file.file.size)}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => removeFile(file.id)}
+                      className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-black/70 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -278,6 +420,12 @@ export default function ChatPanel({
               ref={textareaRef}
               value={inputMessage}
               onChange={(e) => onInputChange(e.target.value)}
+              onCompositionStart={() => {
+                isComposingRef.current = true;
+              }}
+              onCompositionEnd={() => {
+                isComposingRef.current = false;
+              }}
               onKeyDown={handleKeyDown}
               placeholder={t('chat.placeholder')}
               className="w-full border-0 outline-none text-base resize-none overflow-hidden py-0 leading-relaxed"
@@ -355,7 +503,7 @@ export default function ChatPanel({
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*,.pdf,.doc,.docx,.txt"
+        accept="image/*,.pdf,.csv,.doc,.docx,.xls,.xlsx,.html,.txt,.md"
         onChange={handleFileSelect}
         className="hidden"
       />
@@ -447,26 +595,45 @@ export default function ChatPanel({
                     {/* Attachments */}
                     {message.attachments && message.attachments.length > 0 && (
                       <div className="flex flex-wrap gap-2 justify-end">
-                        {message.attachments.map((attachment) =>
-                          attachment.type === 'image' && attachment.preview ? (
-                            <img
-                              key={attachment.id}
-                              src={attachment.preview}
-                              alt={attachment.name}
-                              className="max-w-48 max-h-48 rounded-xl object-cover border border-slate-200 dark:border-slate-600"
-                            />
-                          ) : (
+                        {message.attachments.map((attachment) => {
+                          if (
+                            attachment.type === 'image' &&
+                            attachment.preview
+                          ) {
+                            return (
+                              <img
+                                key={attachment.id}
+                                src={attachment.preview}
+                                alt={attachment.name}
+                                className="max-w-48 max-h-48 rounded-xl object-cover border border-slate-200 dark:border-slate-600"
+                              />
+                            );
+                          }
+                          const fileInfo = getFileTypeInfo(attachment.name);
+                          const FileIcon = fileInfo.icon;
+                          return (
                             <div
                               key={attachment.id}
-                              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600"
+                              className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800 border border-slate-200 dark:border-slate-600 shadow-sm"
                             >
-                              <FileText className="w-4 h-4 text-slate-500" />
-                              <span className="text-sm text-slate-700 dark:text-slate-300">
-                                {attachment.name}
-                              </span>
+                              <div
+                                className={`flex items-center justify-center w-10 h-10 rounded-lg ${fileInfo.bgColor}`}
+                              >
+                                <FileIcon
+                                  className={`w-5 h-5 ${fileInfo.color}`}
+                                />
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate max-w-[150px]">
+                                  {attachment.name}
+                                </span>
+                                <span className="text-xs text-slate-400 dark:text-slate-500 uppercase">
+                                  {attachment.name.split('.').pop()} file
+                                </span>
+                              </div>
                             </div>
-                          ),
-                        )}
+                          );
+                        })}
                       </div>
                     )}
                     {/* Text content */}
@@ -512,16 +679,20 @@ export default function ChatPanel({
                     {/* Artifact card */}
                     {message.toolResultType === 'artifact' &&
                       message.artifact && (
-                        <a
-                          href={message.artifact.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/30 dark:to-teal-900/30 border border-emerald-200 dark:border-emerald-500/40 hover:border-emerald-300 dark:hover:border-emerald-400/60 transition-colors group"
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleArtifactDownload(message.artifact!)
+                          }
+                          disabled={
+                            downloadingArtifact === message.artifact.artifact_id
+                          }
+                          className="w-full flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/30 dark:to-teal-900/30 border border-emerald-200 dark:border-emerald-500/40 hover:border-emerald-300 dark:hover:border-emerald-400/60 transition-colors group disabled:opacity-70 disabled:cursor-wait"
                         >
                           <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm">
                             <FileText className="w-5 h-5 text-white" />
                           </div>
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 text-left">
                             <p className="text-sm font-medium text-slate-800 dark:text-emerald-100 truncate">
                               {message.artifact.filename}
                             </p>
@@ -529,25 +700,41 @@ export default function ChatPanel({
                               {t('chat.clickToDownload', 'Click to download')}
                             </p>
                           </div>
-                          <Download className="w-5 h-5 text-emerald-500 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
-                        </a>
+                          {downloadingArtifact ===
+                          message.artifact.artifact_id ? (
+                            <Loader2 className="w-5 h-5 text-emerald-500 dark:text-emerald-400 animate-spin" />
+                          ) : (
+                            <Download className="w-5 h-5 text-emerald-500 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
+                          )}
+                        </button>
                       )}
                     {/* Generated images */}
                     {message.attachments && message.attachments.length > 0 && (
                       <div className="flex flex-wrap gap-3">
                         {message.attachments.map((attachment) =>
                           attachment.type === 'image' && attachment.preview ? (
-                            <div
+                            <button
                               key={attachment.id}
-                              className="relative group overflow-hidden rounded-xl shadow-md"
+                              type="button"
+                              onClick={() =>
+                                setModalImage({
+                                  src: attachment.preview!,
+                                  alt: attachment.name,
+                                })
+                              }
+                              className="relative group overflow-hidden rounded-xl shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2"
                             >
                               <img
                                 src={attachment.preview}
                                 alt={attachment.name}
                                 className="max-w-80 max-h-80 object-contain bg-gray-50 dark:bg-violet-950/50"
                               />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-3">
+                                <span className="text-xs text-white font-medium">
+                                  {t('chat.clickToEnlarge', 'Click to enlarge')}
+                                </span>
+                              </div>
+                            </button>
                           ) : null,
                         )}
                       </div>
@@ -637,12 +824,28 @@ export default function ChatPanel({
                     <div className="flex flex-wrap gap-2">
                       {message.attachments.map((attachment) =>
                         attachment.type === 'image' && attachment.preview ? (
-                          <img
+                          <button
                             key={attachment.id}
-                            src={attachment.preview}
-                            alt={attachment.name}
-                            className="max-w-80 max-h-80 rounded-xl object-contain border border-slate-200 dark:border-slate-600"
-                          />
+                            type="button"
+                            onClick={() =>
+                              setModalImage({
+                                src: attachment.preview!,
+                                alt: attachment.name,
+                              })
+                            }
+                            className="group relative rounded-xl overflow-hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                          >
+                            <img
+                              src={attachment.preview}
+                              alt={attachment.name}
+                              className="max-w-80 max-h-80 object-contain border border-slate-200 dark:border-slate-600"
+                            />
+                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <span className="text-xs text-white font-medium">
+                                {t('chat.clickToEnlarge', 'Click to enlarge')}
+                              </span>
+                            </div>
+                          </button>
                         ) : null,
                       )}
                     </div>
@@ -722,6 +925,15 @@ export default function ChatPanel({
         <div className="p-4 border-t border-slate-200 dark:border-slate-700">
           {inputBox}
         </div>
+      )}
+
+      {/* Image Modal */}
+      {modalImage && (
+        <ImageModal
+          src={modalImage.src}
+          alt={modalImage.alt}
+          onClose={() => setModalImage(null)}
+        />
       )}
     </div>
   );

@@ -753,7 +753,6 @@ export class WorkflowStack extends Stack {
           resources: ['*'],
         }),
       );
-
     }
 
     // Step Functions permissions for trigger

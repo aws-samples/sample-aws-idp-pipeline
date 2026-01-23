@@ -71,6 +71,14 @@ export class StorageStack extends Stack {
     // Session Storage Bucket (for agent conversation history)
     const sessionStorage = new S3Bucket(this, 'SessionStorage', {
       bucketPrefix: 'session-storage',
+      cors: [
+        {
+          allowedOrigins: ['*'],
+          allowedMethods: [HttpMethods.GET, HttpMethods.HEAD],
+          allowedHeaders: ['*'],
+          exposedHeaders: ['ETag', 'Content-Type', 'Content-Length'],
+        },
+      ],
     });
 
     new StringParameter(this, 'SessionStorageBucketNameParam', {
@@ -82,6 +90,14 @@ export class StorageStack extends Stack {
     // Structure: /{user_id}/{project_id}/agents/{agent_name}.md
     const agentStorage = new S3Bucket(this, 'AgentStorage', {
       bucketPrefix: 'agent-storage',
+      cors: [
+        {
+          allowedOrigins: ['*'],
+          allowedMethods: [HttpMethods.GET, HttpMethods.HEAD],
+          allowedHeaders: ['*'],
+          exposedHeaders: ['ETag', 'Content-Type', 'Content-Length'],
+        },
+      ],
     });
 
     new StringParameter(this, 'AgentStorageBucketNameParam', {

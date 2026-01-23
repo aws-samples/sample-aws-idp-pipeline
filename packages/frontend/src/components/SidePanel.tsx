@@ -411,7 +411,7 @@ export default function SidePanel({
 
                               {/* Dropdown Menu */}
                               {openArtifactMenuId === artifact.artifact_id && (
-                                <div className="absolute right-0 top-full mt-1 z-50 min-w-[120px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1">
+                                <div className="absolute right-0 top-full mt-1 z-50 min-w-[150px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1">
                                   {onArtifactCopy && (
                                     <button
                                       onClick={(e) => {

@@ -60,7 +60,7 @@ export const Route = createFileRoute('/projects/$projectId')({
 function ProjectDetailPage() {
   const { t } = useTranslation();
   const { projectId } = Route.useParams();
-  const { fetchApi, invokeAgent } = useAwsClient();
+  const { fetchApi, invokeAgent, getPresignedDownloadUrl } = useAwsClient();
   const { showToast } = useToast();
   // AgentCore requires session ID >= 33 chars
   const [currentSessionId, setCurrentSessionId] = useState(() => nanoid(33));
@@ -290,6 +290,7 @@ function ProjectDetailPage() {
               format?: string;
               source?: string;
               s3_url?: string | null;
+              name?: string;
               // For tool_result type
               content?: {
                 type: string;
@@ -337,6 +338,7 @@ function ProjectDetailPage() {
                       artifact_id: parsed.artifact_id,
                       filename: parsed.filename,
                       url: parsed.url,
+                      s3_key: parsed.s3_key,
                       created_at: parsed.created_at,
                     };
                     toolResultType = 'artifact';
@@ -398,12 +400,36 @@ function ProjectDetailPage() {
                     : `data:image/${item.format || 'png'};base64,${item.source}`,
                 }));
 
+              // Extract document attachments
+              const documentAttachments: ChatAttachment[] = msg.content
+                .filter((item) => item.type === 'document' && item.name)
+                .map((item, docIdx) => {
+                  const baseName = item.name || `document-${docIdx + 1}`;
+                  // If name doesn't have an extension, append format
+                  const hasExtension = /\.[a-zA-Z0-9]+$/.test(baseName);
+                  const finalName =
+                    hasExtension || !item.format
+                      ? baseName
+                      : `${baseName}.${item.format}`;
+                  return {
+                    id: `history-${idx}-doc-${docIdx}`,
+                    type: 'document' as const,
+                    name: finalName,
+                    preview: null,
+                  };
+                });
+
+              const allAttachments = [
+                ...imageAttachments,
+                ...documentAttachments,
+              ];
+
               return {
                 id: `history-${idx}`,
                 role: msg.role as 'user' | 'assistant',
                 content: textContent,
                 attachments:
-                  imageAttachments.length > 0 ? imageAttachments : undefined,
+                  allAttachments.length > 0 ? allAttachments : undefined,
                 timestamp: new Date(),
               };
             },
@@ -462,6 +488,62 @@ function ProjectDetailPage() {
       setArtifacts((prev) => prev.filter((a) => a.artifact_id !== artifactId));
     },
     [fetchApi],
+  );
+
+  const handleArtifactDownload = useCallback(
+    async (artifact: Artifact) => {
+      try {
+        const presignedUrl = await getPresignedDownloadUrl(
+          artifact.s3_bucket,
+          artifact.s3_key,
+        );
+
+        const response = await fetch(presignedUrl);
+
+        if (!response.ok) {
+          if (response.status === 404 || response.status === 403) {
+            showToast(
+              'error',
+              t(
+                'chat.artifactNotFound',
+                'File not found. It may have been deleted.',
+              ),
+            );
+            return;
+          }
+          throw new Error(`Download failed: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+
+        if (blob.type.includes('xml')) {
+          const text = await blob.text();
+          if (text.includes('NoSuchKey')) {
+            showToast(
+              'error',
+              t(
+                'chat.artifactNotFound',
+                'File not found. It may have been deleted.',
+              ),
+            );
+            return;
+          }
+        }
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = artifact.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error('Failed to download artifact:', error);
+        showToast('error', t('chat.downloadFailed', 'Download failed'));
+      }
+    },
+    [getPresignedDownloadUrl, showToast, t],
   );
 
   const loadWorkflowDetail = async (documentId: string, workflowId: string) => {
@@ -772,6 +854,24 @@ function ProjectDetailPage() {
         // Convert files to ContentBlock[]
         const contentBlocks: ContentBlock[] = [];
 
+        // Track document names to ensure uniqueness (Bedrock requires unique names)
+        const usedDocNames = new Set<string>();
+        const getUniqueDocName = (originalName: string): string => {
+          let name = originalName;
+          let counter = 1;
+          while (usedDocNames.has(name)) {
+            const dotIndex = originalName.lastIndexOf('.');
+            if (dotIndex > 0) {
+              name = `${originalName.slice(0, dotIndex)}_${counter}${originalName.slice(dotIndex)}`;
+            } else {
+              name = `${originalName}_${counter}`;
+            }
+            counter++;
+          }
+          usedDocNames.add(name);
+          return name;
+        };
+
         // Process attached files
         for (const attachedFile of files) {
           // Use FileReader for reliable base64 encoding
@@ -804,10 +904,11 @@ function ProjectDetailPage() {
             // Document type
             const format =
               attachedFile.file.name.split('.').pop()?.toLowerCase() || 'txt';
+            const uniqueName = getUniqueDocName(attachedFile.file.name);
             contentBlocks.push({
               document: {
                 format,
-                name: attachedFile.file.name,
+                name: uniqueName,
                 source: { base64 },
               },
             });
@@ -964,6 +1065,7 @@ function ProjectDetailPage() {
                 loadingMoreSessions={loadingMoreSessions}
                 onLoadMoreSessions={loadMoreSessions}
                 artifacts={artifacts}
+                onArtifactDownload={handleArtifactDownload}
                 onArtifactDelete={handleArtifactDelete}
               />
             </div>

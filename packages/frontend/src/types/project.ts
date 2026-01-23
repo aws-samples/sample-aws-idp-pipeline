@@ -97,6 +97,7 @@ export interface ChatArtifact {
   artifact_id: string;
   filename: string;
   url: string;
+  s3_key?: string;
   created_at?: string;
 }
 

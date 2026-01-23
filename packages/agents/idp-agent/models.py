@@ -1,10 +1,14 @@
 import base64
 import re
 
+from nanoid import generate
 from pydantic import BaseModel
 from strands.types.content import ContentBlock as StrandsContentBlock
 from strands.types.media import DocumentContent as StrandsDocumentContent
 from strands.types.media import ImageContent as StrandsImageContent
+
+# Alphanumeric characters only for Bedrock compatibility
+NANOID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 def sanitize_document_name(name: str) -> str:
@@ -12,9 +16,14 @@ def sanitize_document_name(name: str) -> str:
 
     Bedrock DocumentBlock name only allows: alphanumeric, spaces, hyphens, parentheses, brackets.
     Pattern: ^[a-zA-Z0-9\\s\\-\\(\\)\\[\\]]+$
+
+    A unique nanoid suffix is appended to ensure uniqueness across session history.
     """
     stem = name.rsplit(".", 1)[0] if "." in name else name
-    return re.sub(r"[^a-zA-Z0-9\s\-\(\)\[\]]", "-", stem)[:200]
+    sanitized = re.sub(r"[^a-zA-Z0-9\s\-\(\)\[\]]", "-", stem)[:180]
+    sanitized = re.sub(r"-+", "-", sanitized).strip("-") or "doc"
+    unique_id = generate(NANOID_ALPHABET, 8)
+    return f"{sanitized}-{unique_id}"
 
 
 class ContentSource(BaseModel):
