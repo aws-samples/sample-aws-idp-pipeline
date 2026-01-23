@@ -85,7 +85,23 @@ def parse_image(img: ImageDict) -> ImageContent:
     )
 
 
-def parse_content_items(content_items: list[dict]) -> list[ContentItem]:
+class ToolResultSubItemDict(TypedDict, total=False):
+    text: str
+    image: ImageDict
+
+
+class ToolResultDict(TypedDict, total=False):
+    content: list[ToolResultSubItemDict]
+
+
+class ContentItemDict(TypedDict, total=False):
+    text: str
+    image: ImageDict
+    document: DocumentDict
+    toolResult: ToolResultDict
+
+
+def parse_content_items(content_items: list[ContentItemDict]) -> list[ContentItem]:
     parsed: list[ContentItem] = []
     for item in content_items:
         if "text" in item and item["text"]:

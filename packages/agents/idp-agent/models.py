@@ -1,9 +1,20 @@
 import base64
+import re
 
 from pydantic import BaseModel
 from strands.types.content import ContentBlock as StrandsContentBlock
 from strands.types.media import DocumentContent as StrandsDocumentContent
 from strands.types.media import ImageContent as StrandsImageContent
+
+
+def sanitize_document_name(name: str) -> str:
+    """Sanitize document name for Bedrock API compatibility.
+
+    Bedrock DocumentBlock name only allows: alphanumeric, spaces, hyphens, parentheses, brackets.
+    Pattern: ^[a-zA-Z0-9\\s\\-\\(\\)\\[\\]]+$
+    """
+    stem = name.rsplit(".", 1)[0] if "." in name else name
+    return re.sub(r"[^a-zA-Z0-9\s\-\(\)\[\]]", "-", stem)[:200]
 
 
 class ContentSource(BaseModel):
@@ -41,7 +52,7 @@ class ContentBlock(BaseModel):
             return StrandsContentBlock(
                 document=StrandsDocumentContent(
                     format=self.document.format,  # type: ignore[typeddict-item]
-                    name=self.document.name,
+                    name=sanitize_document_name(self.document.name),
                     source={"bytes": base64.b64decode(self.document.source.base64)},
                 )
             )
