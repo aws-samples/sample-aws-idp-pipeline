@@ -14,7 +14,8 @@
   "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.972.0",
-    "@aws-sdk/client-s3": "^3.958.0"
+    "@aws-sdk/client-s3": "^3.958.0",
+    "ioredis": "^5.6.1"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.160",

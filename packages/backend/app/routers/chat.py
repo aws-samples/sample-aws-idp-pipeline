@@ -3,20 +3,14 @@ import json
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
+from app.cache import CacheKey, invalidate
 from app.config import get_config
 from app.duckdb import get_duckdb_connection
 from app.message import ContentItem, parse_content_items
 from app.s3 import delete_s3_prefix, get_s3_client
+from app.sessions import Session
 
 router = APIRouter(prefix="/chat", tags=["chat"])
-
-
-class Session(BaseModel):
-    session_id: str
-    session_type: str
-    created_at: str
-    updated_at: str
-    session_name: str | None = None
 
 
 class ChatMessage(BaseModel):
@@ -37,7 +31,7 @@ class SessionListResponse(BaseModel):
 
 
 @router.get("/projects/{project_id}/sessions")
-def get_project_sessions(
+async def get_project_sessions(
     project_id: str,
     x_user_id: str = Header(alias="x-user-id"),
     limit: int = Query(default=20, ge=1, le=100),
@@ -45,55 +39,21 @@ def get_project_sessions(
     after: str | None = Query(default=None, description="Filter sessions created after this ISO timestamp"),
 ) -> SessionListResponse:
     """Get sessions for a project from S3 using DuckDB."""
-    config = get_config()
-    bucket_name = config.session_storage_bucket_name
+    from app.cache import cached_query_sessions
 
-    if not bucket_name:
-        raise HTTPException(status_code=500, detail="Session storage bucket not configured")
+    sessions = await cached_query_sessions(x_user_id, project_id)
 
-    s3_path = f"s3://{bucket_name}/sessions/{x_user_id}/{project_id}/*/session.json"
-
-    after_condition = f"WHERE created_at > '{after}'" if after else ""
-
-    conn = get_duckdb_connection()
-    try:
-        result = conn.execute(f"""
-            SELECT session_id, session_type, created_at, updated_at, session_name
-            FROM read_json(
-                '{s3_path}',
-                columns={{
-                    session_id: 'VARCHAR',
-                    session_type: 'VARCHAR',
-                    created_at: 'VARCHAR',
-                    updated_at: 'VARCHAR',
-                    session_name: 'VARCHAR'
-                }}
-            )
-            {after_condition}
-            ORDER BY created_at DESC, session_id DESC
-        """).fetchall()
-    except Exception:
-        return SessionListResponse(sessions=[])
+    if after:
+        sessions = [s for s in sessions if s.created_at > after]
 
     if cursor:
-        cursor_index = next((i for i, row in enumerate(result) if row[0] == cursor), -1)
+        cursor_index = next((i for i, s in enumerate(sessions) if s.session_id == cursor), -1)
         if cursor_index >= 0:
-            result = result[cursor_index + 1 :]
+            sessions = sessions[cursor_index + 1 :]
 
-    has_more = len(result) > limit
+    has_more = len(sessions) > limit
     if has_more:
-        result = result[:limit]
-
-    sessions = [
-        Session(
-            session_id=row[0],
-            session_type=row[1],
-            created_at=row[2],
-            updated_at=row[3],
-            session_name=row[4],
-        )
-        for row in result
-    ]
+        sessions = sessions[:limit]
 
     next_cursor = sessions[-1].session_id if has_more and sessions else None
 
@@ -156,11 +116,11 @@ class DeleteSessionResponse(BaseModel):
 
 
 @router.patch("/projects/{project_id}/sessions/{session_id}")
-def update_session(
+async def update_session(
     project_id: str,
     session_id: str,
     request: UpdateSessionRequest,
-    x_user_id: str = Header(alias="x-user-id"),
+    user_id: str = Header(alias="x-user-id"),
 ) -> Session:
     """Update a session's name."""
     config = get_config()
@@ -170,7 +130,7 @@ def update_session(
         raise HTTPException(status_code=500, detail="Session storage bucket not configured")
 
     s3 = get_s3_client()
-    key = f"sessions/{x_user_id}/{project_id}/session_{session_id}/session.json"
+    key = f"sessions/{user_id}/{project_id}/session_{session_id}/session.json"
 
     try:
         response = s3.get_object(Bucket=bucket_name, Key=key)
@@ -188,6 +148,8 @@ def update_session(
         ContentType="application/json",
     )
 
+    await invalidate(CacheKey.session_list(user_id, project_id))
+
     return Session(
         session_id=session_data["session_id"],
         session_type=session_data["session_type"],
@@ -198,8 +160,8 @@ def update_session(
 
 
 @router.delete("/projects/{project_id}/sessions/{session_id}")
-def delete_session(
-    project_id: str, session_id: str, x_user_id: str = Header(alias="x-user-id")
+async def delete_session(
+    project_id: str, session_id: str, user_id: str = Header(alias="x-user-id")
 ) -> DeleteSessionResponse:
     """Delete a session from S3."""
     config = get_config()
@@ -208,7 +170,9 @@ def delete_session(
     if not bucket_name:
         raise HTTPException(status_code=500, detail="Session storage bucket not configured")
 
-    prefix = f"sessions/{x_user_id}/{project_id}/session_{session_id}/"
+    prefix = f"sessions/{user_id}/{project_id}/session_{session_id}/"
     deleted_count = delete_s3_prefix(bucket_name, prefix)
+
+    await invalidate(CacheKey.session_list(user_id, project_id))
 
     return DeleteSessionResponse(deleted_count=deleted_count)

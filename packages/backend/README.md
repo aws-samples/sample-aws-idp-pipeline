@@ -79,3 +79,28 @@ Backend Table은 Single Table Design을 사용합니다.
 - 단일 아티팩트 조회: `PK = ART#{artifact_id}, SK = META`
 - 유저별 아티팩트 목록: `GSI1PK = USR#{user_id}#ART` (시간순 정렬)
 - 유저별 프로젝트별 아티팩트 목록: `GSI2PK = USR#{user_id}#PROJ#{project_id}#ART` (시간순 정렬)
+
+## Cache
+
+[Valkey](https://valkey.io/) (ElastiCache)를 사용하여 캐싱을 구현합니다. 캐시 클라이언트는 [glide-for-redis](https://github.com/valkey-io/valkey-glide)를 사용합니다.
+
+### 구성
+
+- `elasticache_endpoint` 설정이 있을 경우 TLS를 사용하여 클러스터에 연결합니다.
+- 엔드포인트가 설정되지 않은 경우 캐시를 사용하지 않고 원본 함수를 직접 호출합니다.
+
+### 캐시 키
+
+| 키 | 대상 함수 | TTL |
+|---|---|---|
+| `query_projects` | `query_projects` | 3600초 (1시간) |
+| `session_list:{user_id}:{project_id}` | `query_sessions` | 3600초 (1시간) |
+
+### 캐시 무효화
+
+`invalidate(key)` 함수를 호출하여 특정 키의 캐시를 무효화할 수 있습니다.
+
+| 키 | 무효화 시점 |
+|---|---|
+| `query_projects` | 프로젝트 생성/수정/삭제 시 |
+| `session_list:{user_id}:{project_id}` | 세션 수정/삭제 시 |

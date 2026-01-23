@@ -4,10 +4,15 @@ import {
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
 import type { S3Event } from 'aws-lambda';
+import Redis from 'ioredis';
 import { parseSessionS3Key } from './parse-session-s3-key';
 import { generateSessionName } from './generate-session-name';
 
 const s3Client = new S3Client();
+
+const redis = process.env.ELASTICACHE_ENDPOINT
+  ? new Redis({ host: process.env.ELASTICACHE_ENDPOINT, port: 6379, tls: {} })
+  : null;
 
 export const handler = async (event: S3Event): Promise<void> => {
   for (const record of event.Records) {
@@ -64,6 +69,11 @@ export const handler = async (event: S3Event): Promise<void> => {
     });
 
     await s3Client.send(putSessionCommand);
+
+    if (redis) {
+      const cacheKey = `session_list:${keyInfo.userId}:${keyInfo.projectId}`;
+      await redis.del(cacheKey);
+    }
 
     console.log(`Updated session_name for ${sessionJsonKey}`);
   }

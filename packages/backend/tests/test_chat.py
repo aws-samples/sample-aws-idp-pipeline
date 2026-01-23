@@ -10,19 +10,26 @@ client = TestClient(app)
 
 
 class TestGetProjectSessions:
-    @patch("app.routers.chat.get_duckdb_connection")
-    @patch("app.routers.chat.get_config")
-    def test_get_project_sessions_success(self, mock_get_config, mock_get_duckdb):
-        mock_config = MagicMock()
-        mock_config.session_storage_bucket_name = "test-bucket"
-        mock_get_config.return_value = mock_config
+    @patch("app.cache.cached_query_sessions")
+    def test_get_project_sessions_success(self, mock_cached_query_sessions):
+        from app.sessions import Session
 
-        mock_conn = MagicMock()
-        mock_conn.execute.return_value.fetchall.return_value = [
-            ("session-1", "chat", "2024-01-01T00:00:00Z", "2024-01-01T00:00:00Z", "My Session"),
-            ("session-2", "chat", "2024-01-02T00:00:00Z", "2024-01-02T00:00:00Z", None),
+        mock_cached_query_sessions.return_value = [
+            Session(
+                session_id="session-1",
+                session_type="chat",
+                created_at="2024-01-01T00:00:00Z",
+                updated_at="2024-01-01T00:00:00Z",
+                session_name="My Session",
+            ),
+            Session(
+                session_id="session-2",
+                session_type="chat",
+                created_at="2024-01-02T00:00:00Z",
+                updated_at="2024-01-02T00:00:00Z",
+                session_name=None,
+            ),
         ]
-        mock_get_duckdb.return_value = mock_conn
 
         response = client.get("/chat/projects/proj-1/sessions", headers={"x-user-id": "user-1"})
 
@@ -35,20 +42,33 @@ class TestGetProjectSessions:
         assert data["sessions"][1]["session_name"] is None
         assert data["next_cursor"] is None
 
-    @patch("app.routers.chat.get_duckdb_connection")
-    @patch("app.routers.chat.get_config")
-    def test_get_project_sessions_with_pagination(self, mock_get_config, mock_get_duckdb):
-        mock_config = MagicMock()
-        mock_config.session_storage_bucket_name = "test-bucket"
-        mock_get_config.return_value = mock_config
+    @patch("app.cache.cached_query_sessions")
+    def test_get_project_sessions_with_pagination(self, mock_cached_query_sessions):
+        from app.sessions import Session
 
-        mock_conn = MagicMock()
-        mock_conn.execute.return_value.fetchall.return_value = [
-            ("session-1", "chat", "2024-01-03T00:00:00Z", "2024-01-03T00:00:00Z", None),
-            ("session-2", "chat", "2024-01-02T00:00:00Z", "2024-01-02T00:00:00Z", None),
-            ("session-3", "chat", "2024-01-01T00:00:00Z", "2024-01-01T00:00:00Z", None),
+        mock_cached_query_sessions.return_value = [
+            Session(
+                session_id="session-1",
+                session_type="chat",
+                created_at="2024-01-03T00:00:00Z",
+                updated_at="2024-01-03T00:00:00Z",
+                session_name=None,
+            ),
+            Session(
+                session_id="session-2",
+                session_type="chat",
+                created_at="2024-01-02T00:00:00Z",
+                updated_at="2024-01-02T00:00:00Z",
+                session_name=None,
+            ),
+            Session(
+                session_id="session-3",
+                session_type="chat",
+                created_at="2024-01-01T00:00:00Z",
+                updated_at="2024-01-01T00:00:00Z",
+                session_name=None,
+            ),
         ]
-        mock_get_duckdb.return_value = mock_conn
 
         response = client.get("/chat/projects/proj-1/sessions?limit=2", headers={"x-user-id": "user-1"})
 
@@ -57,20 +77,33 @@ class TestGetProjectSessions:
         assert len(data["sessions"]) == 2
         assert data["next_cursor"] == "session-2"
 
-    @patch("app.routers.chat.get_duckdb_connection")
-    @patch("app.routers.chat.get_config")
-    def test_get_project_sessions_with_cursor(self, mock_get_config, mock_get_duckdb):
-        mock_config = MagicMock()
-        mock_config.session_storage_bucket_name = "test-bucket"
-        mock_get_config.return_value = mock_config
+    @patch("app.cache.cached_query_sessions")
+    def test_get_project_sessions_with_cursor(self, mock_cached_query_sessions):
+        from app.sessions import Session
 
-        mock_conn = MagicMock()
-        mock_conn.execute.return_value.fetchall.return_value = [
-            ("session-1", "chat", "2024-01-03T00:00:00Z", "2024-01-03T00:00:00Z", None),
-            ("session-2", "chat", "2024-01-02T00:00:00Z", "2024-01-02T00:00:00Z", None),
-            ("session-3", "chat", "2024-01-01T00:00:00Z", "2024-01-01T00:00:00Z", None),
+        mock_cached_query_sessions.return_value = [
+            Session(
+                session_id="session-1",
+                session_type="chat",
+                created_at="2024-01-03T00:00:00Z",
+                updated_at="2024-01-03T00:00:00Z",
+                session_name=None,
+            ),
+            Session(
+                session_id="session-2",
+                session_type="chat",
+                created_at="2024-01-02T00:00:00Z",
+                updated_at="2024-01-02T00:00:00Z",
+                session_name=None,
+            ),
+            Session(
+                session_id="session-3",
+                session_type="chat",
+                created_at="2024-01-01T00:00:00Z",
+                updated_at="2024-01-01T00:00:00Z",
+                session_name=None,
+            ),
         ]
-        mock_get_duckdb.return_value = mock_conn
 
         response = client.get("/chat/projects/proj-1/sessions?cursor=session-2", headers={"x-user-id": "user-1"})
 
@@ -80,16 +113,16 @@ class TestGetProjectSessions:
         assert data["sessions"][0]["session_id"] == "session-3"
         assert data["next_cursor"] is None
 
-    @patch("app.routers.chat.get_config")
-    def test_get_project_sessions_bucket_not_configured(self, mock_get_config):
-        mock_config = MagicMock()
-        mock_config.session_storage_bucket_name = None
-        mock_get_config.return_value = mock_config
+    @patch("app.cache.cached_query_sessions")
+    def test_get_project_sessions_empty(self, mock_cached_query_sessions):
+        mock_cached_query_sessions.return_value = []
 
         response = client.get("/chat/projects/proj-1/sessions", headers={"x-user-id": "user-1"})
 
-        assert response.status_code == 500
-        assert response.json()["detail"] == "Session storage bucket not configured"
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["sessions"]) == 0
+        assert data["next_cursor"] is None
 
 
 class TestGetChatHistory:

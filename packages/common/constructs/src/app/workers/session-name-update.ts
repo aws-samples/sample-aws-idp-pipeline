@@ -1,4 +1,5 @@
 import { Duration, Stack } from 'aws-cdk-lib';
+import { IVpc } from 'aws-cdk-lib/aws-ec2';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Runtime, Architecture } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -9,6 +10,8 @@ import * as path from 'path';
 
 export interface SessionNameUpdateProps {
   bucket: IBucket;
+  vpc: IVpc;
+  elasticacheEndpoint: string;
 }
 
 export class SessionNameUpdate extends Construct {
@@ -26,6 +29,13 @@ export class SessionNameUpdate extends Construct {
       runtime: Runtime.NODEJS_22_X,
       architecture: Architecture.ARM_64,
       timeout: Duration.seconds(30),
+      vpc: props.vpc,
+      environment: {
+        ELASTICACHE_ENDPOINT: props.elasticacheEndpoint,
+      },
+      bundling: {
+        nodeModules: ['ioredis'],
+      },
     });
 
     props.bucket.grantReadWrite(this.function);

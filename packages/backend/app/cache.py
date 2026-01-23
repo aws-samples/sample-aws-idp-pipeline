@@ -8,12 +8,17 @@ from pydantic import TypeAdapter
 
 from app.config import get_config
 from app.ddb.projects import query_projects
+from app.sessions import query_sessions
 
 T = TypeVar("T")
 
 
 class CacheKey:
     QUERY_PROJECTS = "query_projects"
+
+    @staticmethod
+    def session_list(user_id: str, project_id: str) -> str:
+        return f"session_list:{user_id}:{project_id}"
 
 
 _cache_client: GlideClusterClient | None = None
@@ -34,7 +39,7 @@ async def _get_cache_client() -> GlideClusterClient | None:
 
 
 def _cached(
-    key: str, expire: int
+    key_fn: Callable[..., str], expire: int
 ) -> Callable[[Callable[..., Coroutine[Any, Any, T]]], Callable[..., Coroutine[Any, Any, T]]]:
     def wrapper(fn: Callable[..., Coroutine[Any, Any, T]]) -> Callable[..., Coroutine[Any, Any, T]]:
         return_type = get_type_hints(fn).get("return")
@@ -50,6 +55,7 @@ def _cached(
             if client is None:
                 return await _call_fn(*args, **kwargs)
 
+            key = key_fn(*args, **kwargs)
             cached_value = await client.get(key)
             if cached_value is not None:
                 if type_adapter:
@@ -74,4 +80,11 @@ async def invalidate(key: str) -> None:
     await client.delete([key])
 
 
-cached_query_projects = _cached(CacheKey.QUERY_PROJECTS, expire=3600)(query_projects)
+cached_query_projects = _cached(lambda: CacheKey.QUERY_PROJECTS, expire=3600)(query_projects)
+
+
+def _session_list_key(user_id: str, project_id: str) -> str:
+    return CacheKey.session_list(user_id, project_id)
+
+
+cached_query_sessions = _cached(_session_list_key, expire=3600)(query_sessions)
