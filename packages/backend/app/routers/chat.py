@@ -5,10 +5,9 @@ from pydantic import BaseModel
 
 from app.cache import CacheKey, invalidate
 from app.config import get_config
-from app.duckdb import get_duckdb_connection
+from app.duckdb import Session, get_duckdb_connection
 from app.message import ContentItem, parse_content_items
 from app.s3 import delete_s3_prefix, get_s3_client
-from app.sessions import Session
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 

@@ -8,7 +8,7 @@ from pydantic import TypeAdapter
 
 from app.config import get_config
 from app.ddb.projects import query_projects
-from app.sessions import query_sessions
+from app.duckdb import query_agents, query_sessions
 
 T = TypeVar("T")
 
@@ -19,6 +19,10 @@ class CacheKey:
     @staticmethod
     def session_list(user_id: str, project_id: str) -> str:
         return f"session_list:{user_id}:{project_id}"
+
+    @staticmethod
+    def agent_list(user_id: str, project_id: str) -> str:
+        return f"agent_list:{user_id}:{project_id}"
 
 
 _cache_client: GlideClusterClient | None = None
@@ -88,3 +92,10 @@ def _session_list_key(user_id: str, project_id: str) -> str:
 
 
 cached_query_sessions = _cached(_session_list_key, expire=3600)(query_sessions)
+
+
+def _agent_list_key(user_id: str, project_id: str) -> str:
+    return CacheKey.agent_list(user_id, project_id)
+
+
+cached_query_agents = _cached(_agent_list_key, expire=3600)(query_agents)

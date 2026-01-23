@@ -12,7 +12,7 @@ client = TestClient(app)
 class TestGetProjectSessions:
     @patch("app.cache.cached_query_sessions")
     def test_get_project_sessions_success(self, mock_cached_query_sessions):
-        from app.sessions import Session
+        from app.duckdb import Session
 
         mock_cached_query_sessions.return_value = [
             Session(
@@ -44,7 +44,7 @@ class TestGetProjectSessions:
 
     @patch("app.cache.cached_query_sessions")
     def test_get_project_sessions_with_pagination(self, mock_cached_query_sessions):
-        from app.sessions import Session
+        from app.duckdb import Session
 
         mock_cached_query_sessions.return_value = [
             Session(
@@ -79,7 +79,7 @@ class TestGetProjectSessions:
 
     @patch("app.cache.cached_query_sessions")
     def test_get_project_sessions_with_cursor(self, mock_cached_query_sessions):
-        from app.sessions import Session
+        from app.duckdb import Session
 
         mock_cached_query_sessions.return_value = [
             Session(
