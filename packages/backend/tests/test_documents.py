@@ -150,8 +150,9 @@ class TestCreateDocumentUpload:
 
 
 class TestUpdateDocumentStatus:
+    @patch("app.routers.documents.mark_project_updated")
     @patch("app.ddb.documents.get_table")
-    def test_update_status_success(self, mock_get_table):
+    def test_update_status_success(self, mock_get_table, mock_mark_updated):
         mock_table = MagicMock()
         mock_table.get_item.side_effect = [
             {

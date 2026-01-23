@@ -51,6 +51,17 @@ def update_project_data(project_id: str, data: ProjectData) -> None:
     )
 
 
+def mark_project_updated(project_id: str) -> None:
+    """Update only updated_at timestamp (for sorting by recent activity)."""
+    table = get_table()
+    now = now_iso()
+    table.update_item(
+        Key=make_project_key(project_id),
+        UpdateExpression="SET updated_at = :updated_at",
+        ExpressionAttributeValues={":updated_at": now},
+    )
+
+
 def query_all_project_items(project_id: str) -> list[DdbKey]:
     """Query all items under PROJ#{project_id} with pagination."""
     table = get_table()

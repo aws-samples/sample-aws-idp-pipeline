@@ -49,10 +49,10 @@ export default function WorkflowDetailModal({
         };
       } else {
         // Determine which content type is being viewed from the title
-        const contentType = prev.title.split(' ')[0]; // 'BDA' or 'PDF'
+        const contentType = prev.title.split(' ')[0]; // 'BDA' or 'Parser'
         const contentMap: Record<string, string> = {
           BDA: currentSegment?.bda_indexer || '',
-          PDF: currentSegment?.format_parser || '',
+          Parser: currentSegment?.format_parser || '',
         };
         return {
           ...prev,
@@ -158,14 +158,14 @@ export default function WorkflowDetailModal({
                     </svg>
                   </button>
                   <div className="flex gap-1 flex-1">
-                    {['BDA', 'OCR', 'PDF', 'AI']
+                    {['BDA', 'OCR', 'Parser', 'AI']
                       .filter((type) => {
                         if (type === 'BDA')
                           return !!currentSegment?.bda_indexer;
                         if (type === 'OCR')
                           return !!currentSegment?.paddleocr_blocks?.blocks
                             ?.length;
-                        if (type === 'PDF')
+                        if (type === 'Parser')
                           return !!currentSegment?.format_parser;
                         if (type === 'AI')
                           return (currentSegment?.ai_analysis?.length ?? 0) > 0;
@@ -197,7 +197,7 @@ export default function WorkflowDetailModal({
                             } else {
                               const contentMap: Record<string, string> = {
                                 BDA: currentSegment?.bda_indexer || '',
-                                PDF: currentSegment?.format_parser || '',
+                                Parser: currentSegment?.format_parser || '',
                               };
                               setAnalysisPopup({
                                 type: 'bda',
@@ -468,15 +468,37 @@ export default function WorkflowDetailModal({
                         },
                         {
                           type: 'bda',
-                          label: 'PDF',
+                          label: 'Parser',
                           content: currentSegment?.format_parser,
                         },
-                      ].map(({ type, label, content, hasBlocks }) => (
-                        <button
-                          key={label}
-                          onClick={() => {
-                            if (content) {
-                              if (type === 'ocr') {
+                        {
+                          type: 'ai',
+                          label: 'AI',
+                          content:
+                            (currentSegment?.ai_analysis?.length ?? 0) > 0
+                              ? 'ai'
+                              : '',
+                          count: currentSegment?.ai_analysis?.length ?? 0,
+                        },
+                      ]
+                        .filter(({ content }) => !!content)
+                        .map(({ type, label, content, hasBlocks, count }) => (
+                          <button
+                            key={label}
+                            onClick={() => {
+                              if (type === 'ai') {
+                                const qaItems =
+                                  currentSegment?.ai_analysis?.map((a) => ({
+                                    question: a.analysis_query,
+                                    answer: a.content,
+                                  })) || [];
+                                setAnalysisPopup({
+                                  type: 'ai',
+                                  content: '',
+                                  title: `AI Analysis - Segment ${currentSegmentIndex + 1}`,
+                                  qaItems,
+                                });
+                              } else if (type === 'ocr') {
                                 setAnalysisPopup({
                                   type: 'ocr',
                                   content: hasBlocks ? '' : (content as string),
@@ -491,42 +513,15 @@ export default function WorkflowDetailModal({
                                   qaItems: [],
                                 });
                               }
-                            }
-                          }}
-                          disabled={!content}
-                          className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-center hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <p className="text-xs text-slate-500">{label}</p>
-                          <p className="text-lg font-semibold text-slate-800">
-                            {content ? 1 : 0}
-                          </p>
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => {
-                          if (currentSegment?.ai_analysis?.length > 0) {
-                            const qaItems = currentSegment.ai_analysis.map(
-                              (a) => ({
-                                question: a.analysis_query,
-                                answer: a.content,
-                              }),
-                            );
-                            setAnalysisPopup({
-                              type: 'ai',
-                              content: '',
-                              title: `AI Analysis - Segment ${currentSegmentIndex + 1}`,
-                              qaItems,
-                            });
-                          }
-                        }}
-                        disabled={!currentSegment?.ai_analysis?.length}
-                        className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-center hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <p className="text-xs text-slate-500">AI</p>
-                        <p className="text-lg font-semibold text-slate-800">
-                          {currentSegment?.ai_analysis?.length || 0}
-                        </p>
-                      </button>
+                            }}
+                            className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-center hover:bg-slate-50 hover:border-slate-300 transition-colors"
+                          >
+                            <p className="text-xs text-slate-500">{label}</p>
+                            <p className="text-lg font-semibold text-slate-800">
+                              {type === 'ai' ? count : 1}
+                            </p>
+                          </button>
+                        ))}
                     </div>
                   </div>
                 )}

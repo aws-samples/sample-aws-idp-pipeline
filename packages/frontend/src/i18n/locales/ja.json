@@ -71,6 +71,7 @@
     "title": "ドキュメント",
     "upload": "アップロード",
     "uploadDocument": "ドキュメントをアップロード",
+    "uploadDocuments": "ドキュメントをアップロード",
     "addDocument": "ドキュメント追加",
     "refresh": "更新",
     "files": "件のファイル",
@@ -86,7 +87,9 @@
     "failed": "失敗",
     "pending": "保留中",
     "deleteConfirm": "このドキュメントを削除しますか？",
-    "view": "表示"
+    "view": "表示",
+    "useBda": "BDA分析を使用",
+    "useBdaDescription": "Bedrock Document Analysisを使用して高度なドキュメント分析を行います。表、チャート、マルチカラムレイアウトを含む複雑なドキュメントに推奨されます。"
   },
   "workflow": {
     "title": "ワークフロー",

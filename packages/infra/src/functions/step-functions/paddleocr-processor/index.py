@@ -1,8 +1,10 @@
 """PaddleOCR Processor Lambda
 
 Processes entire document using PaddleOCR via SageMaker Async Inference.
-Runs after DocumentIndexer, processes the whole file (not individual segments).
+Saves result to paddleocr/result.json for SegmentBuilder to merge later.
 Supports: PNG, TIFF, JPEG, PDF (multi-page)
+
+Output: s3://bucket/{base_path}/paddleocr/result.json
 """
 import json
 import os
@@ -22,9 +24,6 @@ from shared.ddb_client import (
 from shared.s3_analysis import (
     get_s3_client,
     parse_s3_uri,
-    update_segment_analysis,
-    update_segment_status,
-    SegmentStatus,
 )
 from shared.websocket import notify_step_start, notify_step_complete, notify_step_error
 
@@ -130,56 +129,6 @@ def save_ocr_output(file_uri: str, ocr_result: dict) -> str:
     return output_uri
 
 
-def save_ocr_to_segments(file_uri: str, ocr_result: dict) -> int:
-    """Save OCR result to segment analysis files.
-
-    For single image: saves to segment_0000.json
-    For PDF: saves each page result to corresponding segment file
-
-    Saves both:
-    - paddleocr: text content for LanceDB indexing
-    - paddleocr_blocks: block array with bbox for frontend visualization
-    """
-    pages = ocr_result.get('pages', [])
-
-    if not pages:
-        # Fallback: no pages array, use top-level content
-        content = ocr_result.get('content', '')
-        if content:
-            update_segment_analysis(
-                file_uri, 0,
-                paddleocr=content,
-                paddleocr_blocks=[],
-                status=SegmentStatus.OCR_PROCESSING
-            )
-            print(f'OCR content saved to segment 0')
-        return 1
-
-    # Process each page (both single image and multi-page PDF have pages array)
-    for i, page in enumerate(pages):
-        page_content = page.get('content', '')
-        page_blocks = page.get('blocks', [])
-        page_width = page.get('width')
-        page_height = page.get('height')
-
-        # Build blocks data with image dimensions for frontend
-        blocks_data = {
-            'blocks': page_blocks,
-            'width': page_width,
-            'height': page_height
-        }
-
-        update_segment_analysis(
-            file_uri, i,
-            paddleocr=page_content,
-            paddleocr_blocks=blocks_data,
-            status=SegmentStatus.OCR_PROCESSING
-        )
-        print(f'OCR content saved to segment {i} ({len(page_blocks)} blocks)')
-
-    return len(pages)
-
-
 def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
@@ -253,16 +202,16 @@ def handler(event, _context):
         result = wait_for_async_result(output_location, timeout=600)
 
         if result.get('success'):
-            # Save OCR result to paddleocr/ folder
+            # Save OCR result to paddleocr/ folder (SegmentBuilder will merge later)
             ocr_output_uri = save_ocr_output(file_uri, result)
 
-            # Save OCR text to segment analysis files
-            page_count = save_ocr_to_segments(file_uri, result)
+            # Count pages for reporting
+            page_count = len(result.get('pages', [])) or 1
 
             record_step_complete(workflow_id, StepName.PADDLEOCR_PROCESSOR)
             notify_step_complete(workflow_id, 'PaddleOcrProcessor')
 
-            print(f'OCR completed: {page_count} pages processed')
+            print(f'OCR completed: {page_count} pages processed, saved to {ocr_output_uri}')
 
             return {
                 **event,

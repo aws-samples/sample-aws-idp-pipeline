@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAwsClient } from './useAwsClient';
+import { useRuntimeConfig } from './useRuntimeConfig';
 
 export type EventType =
   | 'WORKFLOW_STARTED'
@@ -34,10 +34,6 @@ interface UseWebSocketOptions {
   onError?: (error: Event) => void;
 }
 
-interface Config {
-  websocket_endpoint: string;
-}
-
 export function useWebSocket({
   workflowId,
   onMessage,
@@ -45,29 +41,21 @@ export function useWebSocket({
   onDisconnect,
   onError,
 }: UseWebSocketOptions) {
-  const { fetchApi } = useAwsClient();
+  const runtimeConfig = useRuntimeConfig();
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [wsEndpoint, setWsEndpoint] = useState<string | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        const config = await fetchApi<Config>('etc/config');
-        if (config.websocket_endpoint) {
-          const httpEndpoint = config.websocket_endpoint;
-          const wsEndpointUrl = httpEndpoint
-            .replace('https://', 'wss://')
-            .replace('http://', 'ws://');
-          setWsEndpoint(wsEndpointUrl);
-        }
-      } catch (error) {
-        console.error('Failed to load WebSocket config:', error);
-      }
-    };
-    loadConfig();
-  }, [fetchApi]);
+    if (runtimeConfig?.websocketEndpoint) {
+      const httpEndpoint = runtimeConfig.websocketEndpoint;
+      const wsEndpointUrl = httpEndpoint
+        .replace('https://', 'wss://')
+        .replace('http://', 'ws://');
+      setWsEndpoint(wsEndpointUrl);
+    }
+  }, [runtimeConfig]);
 
   const connect = useCallback(() => {
     if (!wsEndpoint || !workflowId) return;

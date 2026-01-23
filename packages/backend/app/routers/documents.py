@@ -11,6 +11,7 @@ from app.ddb import (
     delete_document_item,
     get_document_item,
     get_project_item,
+    mark_project_updated,
     put_document_item,
     query_documents,
     update_document_data,
@@ -25,6 +26,7 @@ class DocumentUploadRequest(BaseModel):
     file_name: str
     content_type: str
     file_size: int
+    use_bda: bool = False
 
 
 class DocumentUploadResponse(BaseModel):
@@ -41,6 +43,7 @@ class DocumentResponse(BaseModel):
     file_size: int
     status: str
     s3_key: str
+    use_bda: bool
     created_at: str
     updated_at: str
 
@@ -54,6 +57,7 @@ class DocumentResponse(BaseModel):
             file_size=doc.data.file_size,
             status=doc.data.status,
             s3_key=doc.data.s3_key,
+            use_bda=doc.data.use_bda,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
         )
@@ -113,6 +117,7 @@ def create_document_upload(project_id: str, request: DocumentUploadRequest) -> D
         file_size=request.file_size,
         status="uploading",
         s3_key=s3_key,
+        use_bda=request.use_bda,
     )
     put_document_item(project_id, document_id, data)
 
@@ -145,6 +150,9 @@ def update_document_status(project_id: str, document_id: str, request: DocumentS
     data.status = request.status
 
     update_document_data(project_id, document_id, data)
+
+    # Update project's updated_at for sorting by recent activity
+    mark_project_updated(project_id)
 
     # Get updated document
     doc = get_document_item(project_id, document_id)

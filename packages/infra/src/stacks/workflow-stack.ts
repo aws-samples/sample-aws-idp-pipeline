@@ -234,14 +234,12 @@ export class WorkflowStack extends Stack {
             name: [documentBucketName],
           },
           object: {
-            // Exclude intermediate output files:
-            // - *bda-output/*  : BDA processing output
-            // - */analysis/*   : Segment analysis results (stored in S3)
-            // - */paddleocr/*  : PaddleOCR processing output
+            // Only trigger for direct files under document_id/
+            // Exclude: projects/*/documents/*/{subfolder}/* (6+ segments)
             key: [
               {
                 'anything-but': {
-                  wildcard: ['*bda-output/*', '*/analysis/*', '*/paddleocr/*'],
+                  wildcard: 'projects/*/documents/*/*/*',
                 },
               },
             ],
@@ -295,10 +293,10 @@ export class WorkflowStack extends Stack {
 
     const coreLayer = new lambda.LayerVersion(this, 'CoreLibsLayer', {
       layerVersionName: 'idp-v2-core-libs',
-      description: 'boto3, pillow, PyMuPDF, PyPDF2',
+      description: 'boto3, pillow, PyMuPDF, pypdf',
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_14],
       compatibleArchitectures: [lambda.Architecture.X86_64],
-      code: createLayerCode('boto3 pillow pymupdf pypdf2', 'core'),
+      code: createLayerCode('boto3 pillow pymupdf pypdf', 'core'),
     });
 
     const strandsLayer = new lambda.LayerVersion(this, 'StrandsLayer', {
@@ -372,6 +370,18 @@ export class WorkflowStack extends Stack {
       },
     };
 
+    const preprocessor = new lambda.Function(this, 'Preprocessor', {
+      ...commonLambdaProps,
+      functionName: 'idp-v2-preprocessor',
+      handler: 'index.handler',
+      timeout: Duration.minutes(10),
+      memorySize: 2048,
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, '../functions/step-functions/preprocessor'),
+      ),
+      layers: [coreLayer, sharedLayer],
+    });
+
     const bdaProcessor = new lambda.Function(this, 'BdaProcessor', {
       ...commonLambdaProps,
       functionName: 'idp-v2-bda-processor',
@@ -392,18 +402,6 @@ export class WorkflowStack extends Stack {
       layers: [coreLayer, sharedLayer],
     });
 
-    const documentIndexer = new lambda.Function(this, 'DocumentIndexer', {
-      ...commonLambdaProps,
-      functionName: 'idp-v2-document-indexer',
-      handler: 'index.handler',
-      timeout: Duration.minutes(10),
-      memorySize: 2048,
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, '../functions/step-functions/document-indexer'),
-      ),
-      layers: [coreLayer, sharedLayer],
-    });
-
     const formatParser = new lambda.Function(this, 'FormatParser', {
       ...commonLambdaProps,
       functionName: 'idp-v2-format-parser',
@@ -416,22 +414,17 @@ export class WorkflowStack extends Stack {
       layers: [coreLayer, sharedLayer],
     });
 
-    const getDocumentSegments = new lambda.Function(
-      this,
-      'GetDocumentSegments',
-      {
-        ...commonLambdaProps,
-        functionName: 'idp-v2-get-document-segments',
-        handler: 'index.handler',
-        code: lambda.Code.fromAsset(
-          path.join(
-            __dirname,
-            '../functions/step-functions/get-document-segments',
-          ),
-        ),
-        layers: [sharedLayer],
-      },
-    );
+    const segmentBuilder = new lambda.Function(this, 'SegmentBuilder', {
+      ...commonLambdaProps,
+      functionName: 'idp-v2-segment-builder',
+      handler: 'index.handler',
+      timeout: Duration.minutes(10),
+      memorySize: 2048,
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, '../functions/step-functions/segment-builder'),
+      ),
+      layers: [coreLayer, sharedLayer],
+    });
 
     const segmentAnalyzer = new lambda.Function(this, 'SegmentAnalyzer', {
       ...commonLambdaProps,
@@ -529,6 +522,12 @@ export class WorkflowStack extends Stack {
     // Step Functions
     // ========================================
 
+    // Task definitions
+    const preprocessorTask = new tasks.LambdaInvoke(this, 'Preprocess', {
+      lambdaFunction: preprocessor,
+      outputPath: '$.Payload',
+    });
+
     const startBdaTask = new tasks.LambdaInvoke(this, 'StartBdaProcessing', {
       lambdaFunction: bdaProcessor,
       outputPath: '$.Payload',
@@ -539,24 +538,24 @@ export class WorkflowStack extends Stack {
       outputPath: '$.Payload',
     });
 
-    const documentIndexerTask = new tasks.LambdaInvoke(this, 'IndexDocument', {
-      lambdaFunction: documentIndexer,
-      outputPath: '$.Payload',
-    });
-
     const formatParserTask = new tasks.LambdaInvoke(this, 'ParseFormat', {
       lambdaFunction: formatParser,
       outputPath: '$.Payload',
     });
 
-    const getDocumentSegmentsTask = new tasks.LambdaInvoke(
+    const paddleocrProcessorTask = new tasks.LambdaInvoke(
       this,
-      'GetDocumentSegmentsTask',
+      'ProcessPaddleOcr',
       {
-        lambdaFunction: getDocumentSegments,
+        lambdaFunction: paddleocrProcessor,
         outputPath: '$.Payload',
       },
     );
+
+    const segmentBuilderTask = new tasks.LambdaInvoke(this, 'BuildSegments', {
+      lambdaFunction: segmentBuilder,
+      outputPath: '$.Payload',
+    });
 
     const segmentAnalyzerTask = new tasks.LambdaInvoke(this, 'AnalyzeSegment', {
       lambdaFunction: segmentAnalyzer,
@@ -568,15 +567,6 @@ export class WorkflowStack extends Stack {
       'FinalizeAnalysis',
       {
         lambdaFunction: analysisFinalizer,
-        outputPath: '$.Payload',
-      },
-    );
-
-    const paddleocrProcessorTask = new tasks.LambdaInvoke(
-      this,
-      'ProcessPaddleOcr',
-      {
-        lambdaFunction: paddleocrProcessor,
         outputPath: '$.Payload',
       },
     );
@@ -595,14 +585,14 @@ export class WorkflowStack extends Stack {
       time: sfn.WaitTime.duration(Duration.seconds(30)),
     });
 
-    // Choice states
+    // BDA complete pass state
+    const bdaCompletePass = new sfn.Pass(this, 'BdaComplete');
+
+    // BDA status choice
     const bdaStatusChoice = new sfn.Choice(this, 'BdaStatusChoice')
       .when(sfn.Condition.stringEquals('$.status', 'InProgress'), waitForBda)
       .when(sfn.Condition.stringEquals('$.status', 'Created'), waitForBda)
-      .when(
-        sfn.Condition.stringEquals('$.status', 'Success'),
-        documentIndexerTask,
-      )
+      .when(sfn.Condition.stringEquals('$.status', 'Success'), bdaCompletePass)
       .when(
         sfn.Condition.stringEquals('$.status', 'Failed'),
         new sfn.Fail(this, 'BdaFailed', {
@@ -610,9 +600,71 @@ export class WorkflowStack extends Stack {
           error: 'BDA_FAILED',
         }),
       )
-      .otherwise(documentIndexerTask);
+      .otherwise(bdaCompletePass);
 
-    // Segment processing chain: Analyze → Finalize (PaddleOCR moved before parallel)
+    // BDA branch (only runs if use_bda=true)
+    waitForBda.next(checkBdaStatusTask);
+    checkBdaStatusTask.next(bdaStatusChoice);
+    const bdaBranch = startBdaTask.next(checkBdaStatusTask);
+
+    // Skip BDA pass state
+    const skipBdaPass = new sfn.Pass(this, 'SkipBda');
+
+    // BDA choice (check use_bda flag)
+    const useBdaChoice = new sfn.Choice(this, 'UseBdaChoice')
+      .when(sfn.Condition.booleanEquals('$.use_bda', true), bdaBranch)
+      .otherwise(skipBdaPass);
+
+    // OCR branch - runs for PDF and image files
+    const ocrSupportedChoice = new sfn.Choice(this, 'OcrSupportedChoice')
+      .when(
+        sfn.Condition.stringEquals('$.file_type', 'application/pdf'),
+        paddleocrProcessorTask,
+      )
+      .when(
+        sfn.Condition.stringEquals('$.file_type', 'image/png'),
+        paddleocrProcessorTask,
+      )
+      .when(
+        sfn.Condition.stringEquals('$.file_type', 'image/jpeg'),
+        paddleocrProcessorTask,
+      )
+      .when(
+        sfn.Condition.stringEquals('$.file_type', 'image/tiff'),
+        paddleocrProcessorTask,
+      )
+      .otherwise(new sfn.Pass(this, 'SkipOcr'));
+
+    // Parser branch - runs for PDF files
+    const parserSupportedChoice = new sfn.Choice(this, 'ParserSupportedChoice')
+      .when(
+        sfn.Condition.stringEquals('$.file_type', 'application/pdf'),
+        formatParserTask,
+      )
+      .otherwise(new sfn.Pass(this, 'SkipParser'));
+
+    // Parallel processing: BDA (optional), OCR, and Parser run in parallel
+    const parallelProcessing = new sfn.Parallel(this, 'ParallelProcessing', {
+      resultSelector: {
+        // Take the first result that has all the needed fields
+        // The parallel branches return the same base event with their specific additions
+        'workflow_id.$': '$[0].workflow_id',
+        'document_id.$': '$[0].document_id',
+        'project_id.$': '$[0].project_id',
+        'file_uri.$': '$[0].file_uri',
+        'file_type.$': '$[0].file_type',
+        'use_bda.$': '$[0].use_bda',
+        'language.$': '$[0].language',
+        'segment_count.$': '$[0].segment_count',
+        // BDA results are read directly from S3 by SegmentBuilder
+      },
+    });
+
+    parallelProcessing.branch(useBdaChoice);
+    parallelProcessing.branch(ocrSupportedChoice);
+    parallelProcessing.branch(parserSupportedChoice);
+
+    // Segment processing chain: Analyze → Finalize
     const segmentProcessing = segmentAnalyzerTask.next(analysisFinalizerTask);
 
     // Distributed Map for parallel segment processing
@@ -635,36 +687,13 @@ export class WorkflowStack extends Stack {
     );
     parallelSegmentProcessing.itemProcessor(segmentProcessing);
 
-    // Choice state for PaddleOCR (only for image/PDF MIME types)
-    const needsOcrChoice = new sfn.Choice(this, 'NeedsOcrChoice')
-      .when(
-        sfn.Condition.stringEquals('$.file_type', 'application/pdf'),
-        paddleocrProcessorTask,
-      )
-      .when(
-        sfn.Condition.stringEquals('$.file_type', 'image/png'),
-        paddleocrProcessorTask,
-      )
-      .when(
-        sfn.Condition.stringEquals('$.file_type', 'image/jpeg'),
-        paddleocrProcessorTask,
-      )
-      .when(
-        sfn.Condition.stringEquals('$.file_type', 'image/tiff'),
-        paddleocrProcessorTask,
-      )
-      .otherwise(formatParserTask);
-
-    // Build the state machine
-    waitForBda.next(checkBdaStatusTask);
-    checkBdaStatusTask.next(bdaStatusChoice);
-    documentIndexerTask.next(needsOcrChoice);
-    paddleocrProcessorTask.next(formatParserTask);
-    formatParserTask.next(getDocumentSegmentsTask);
-    getDocumentSegmentsTask.next(parallelSegmentProcessing);
-    parallelSegmentProcessing.next(documentSummarizerTask);
-
-    const definition = startBdaTask.next(checkBdaStatusTask);
+    // Build the state machine chain
+    // Preprocessor → Parallel(BDA, OCR, Parser) → SegmentBuilder → Map(Analyze) → Summarize
+    const definition = preprocessorTask
+      .next(parallelProcessing)
+      .next(segmentBuilderTask)
+      .next(parallelSegmentProcessing)
+      .next(documentSummarizerTask);
 
     this.stateMachine = new sfn.StateMachine(
       this,
@@ -702,11 +731,11 @@ export class WorkflowStack extends Stack {
     // ========================================
 
     const allFunctions = [
+      preprocessor,
       bdaProcessor,
       bdaStatusChecker,
-      documentIndexer,
       formatParser,
-      getDocumentSegments,
+      segmentBuilder,
       segmentAnalyzer,
       analysisFinalizer,
       documentSummarizer,

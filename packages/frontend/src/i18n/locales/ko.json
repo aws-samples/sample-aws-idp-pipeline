@@ -71,6 +71,7 @@
     "title": "문서",
     "upload": "업로드",
     "uploadDocument": "문서 업로드",
+    "uploadDocuments": "문서 업로드",
     "addDocument": "문서 추가",
     "refresh": "새로고침",
     "files": "개 파일",
@@ -86,7 +87,9 @@
     "failed": "실패",
     "pending": "대기 중",
     "deleteConfirm": "이 문서를 삭제하시겠습니까?",
-    "view": "보기"
+    "view": "보기",
+    "useBda": "BDA 분석 사용",
+    "useBdaDescription": "Bedrock Document Analysis를 사용하여 고급 문서 분석을 수행합니다. 표, 차트, 다단 레이아웃이 포함된 복잡한 문서에 권장됩니다."
   },
   "workflow": {
     "title": "워크플로우",

@@ -4,6 +4,7 @@ export interface Document {
   file_type: string;
   file_size: number;
   status: string;
+  use_bda: boolean;
   started_at: string;
   ended_at: string | null;
 }
