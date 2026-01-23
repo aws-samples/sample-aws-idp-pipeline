@@ -10,18 +10,19 @@ interface AttachmentSource {
   bytes: {
     data: string;
   };
-  s3_url?: string;
 }
 
 interface ImageValue {
   format: string;
   source: AttachmentSource;
+  s3_url?: string;
 }
 
 interface DocumentValue {
   format: string;
   name: string;
   source: AttachmentSource;
+  s3_url?: string;
 }
 
 interface ToolResultItem {
@@ -51,18 +52,18 @@ interface MessageData {
 
 function hasUnprocessedAttachments(messageData: MessageData): boolean {
   for (const content of messageData.message.content) {
-    if (content.image && !content.image.source.s3_url) {
+    if (content.image && !content.image.s3_url) {
       return true;
     }
-    if (content.document && !content.document.source.s3_url) {
+    if (content.document && !content.document.s3_url) {
       return true;
     }
     if (content.toolResult?.content) {
       for (const item of content.toolResult.content) {
-        if (item.image && !item.image.source.s3_url) {
+        if (item.image && !item.image.s3_url) {
           return true;
         }
-        if (item.document && !item.document.source.s3_url) {
+        if (item.document && !item.document.s3_url) {
           return true;
         }
       }
@@ -95,7 +96,7 @@ export async function handleAttachmentUpload(
 
   for (const content of messageData.message.content) {
     if (content.image) {
-      content.image.source.s3_url = await uploadAttachment(
+      content.image.s3_url = await uploadAttachment(
         s3Client,
         bucket,
         artifactsPrefix,
@@ -106,7 +107,7 @@ export async function handleAttachmentUpload(
     }
 
     if (content.document) {
-      content.document.source.s3_url = await uploadAttachment(
+      content.document.s3_url = await uploadAttachment(
         s3Client,
         bucket,
         artifactsPrefix,
@@ -119,7 +120,7 @@ export async function handleAttachmentUpload(
     if (content.toolResult?.content) {
       for (const item of content.toolResult.content) {
         if (item.image) {
-          item.image.source.s3_url = await uploadAttachment(
+          item.image.s3_url = await uploadAttachment(
             s3Client,
             bucket,
             artifactsPrefix,
@@ -129,7 +130,7 @@ export async function handleAttachmentUpload(
           );
         }
         if (item.document) {
-          item.document.source.s3_url = await uploadAttachment(
+          item.document.s3_url = await uploadAttachment(
             s3Client,
             bucket,
             artifactsPrefix,
