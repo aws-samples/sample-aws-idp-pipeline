@@ -15,6 +15,7 @@ import {
   File,
   Search,
 } from 'lucide-react';
+import DOMPurify from 'isomorphic-dompurify';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
@@ -89,7 +90,7 @@ const prepareMarkdown = (content: string): string => {
   // Restore escaped asterisks
   result = result.replace(/___ESCAPED_ASTERISK___/g, '*');
 
-  return result;
+  return DOMPurify.sanitize(result);
 };
 
 export default function ChatPanel({

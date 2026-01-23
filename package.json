@@ -34,6 +34,7 @@
     "hono-openapi": "^1.1.2",
     "i18next": "^25.7.4",
     "i18next-browser-languagedetector": "^8.2.0",
+    "isomorphic-dompurify": "^2.35.0",
     "lucide-react": "^0.562.0",
     "nanoid": "^5.1.6",
     "oidc-client-ts": "3.4.1",
@@ -50,7 +51,6 @@
   },
   "devDependencies": {
     "@aws-cdk/aws-bedrock-agentcore-alpha": "2.235.1-alpha.0",
-    "@types/aws-lambda": "^8.10.147",
     "@eslint/js": "^9.39.2",
     "@nx/eslint": "22.1.3",
     "@nx/eslint-plugin": "22.1.3",
@@ -72,6 +72,7 @@
     "@tanstack/virtual-file-routes": "1.139.0",
     "@testing-library/dom": "10.4.0",
     "@testing-library/react": "16.3.0",
+    "@types/aws-lambda": "^8.10.147",
     "@types/node": "22.19.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
