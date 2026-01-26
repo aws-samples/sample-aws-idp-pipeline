@@ -8,6 +8,7 @@ import {
   ContentBlock,
 } from '../../hooks/useAwsClient';
 import { useToast } from '../../components/Toast';
+import { useWebSocketMessage } from '../../contexts/WebSocketContext';
 import CubeLoader from '../../components/CubeLoader';
 import ConfirmModal from '../../components/ConfirmModal';
 import ProjectSettingsModal, {
@@ -97,6 +98,11 @@ function ProjectDetailPage() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // WebSocket 메시지 구독 예시
+  useWebSocketMessage<{ message: string }>('sessions', (data) => {
+    console.log('WebSocket message received:', data);
+  });
 
   const loadProject = useCallback(async () => {
     try {

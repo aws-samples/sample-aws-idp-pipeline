@@ -96,6 +96,12 @@ export class ApplicationStack extends Stack {
       this,
       SSM_KEYS.WEBSOCKET_API_ID,
     );
+    const websocketCallbackUrl = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.WEBSOCKET_CALLBACK_URL,
+    );
+    RuntimeConfig.ensure(this).config.websocketUrl = websocketCallbackUrl.replace('https://', 'wss://');
+
     userIdentity.identityPool.authenticatedRole.addToPrincipalPolicy(
       new PolicyStatement({
         actions: ['execute-api:Invoke', 'execute-api:ManageConnections'],
