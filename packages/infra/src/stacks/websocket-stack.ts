@@ -1,9 +1,5 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
-import {
-  WebSocketApi,
-  WebSocketStage,
-  WebSocketApiKeySelectionExpression,
-} from 'aws-cdk-lib/aws-apigatewayv2';
+import { WebSocketApi, WebSocketStage } from 'aws-cdk-lib/aws-apigatewayv2';
 import { WebSocketIamAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { WebSocketLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Vpc } from 'aws-cdk-lib/aws-ec2';
