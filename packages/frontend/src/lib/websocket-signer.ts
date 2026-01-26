@@ -1,6 +1,7 @@
 import { SignatureV4 } from '@aws-sdk/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-browser';
 import { HttpRequest } from '@smithy/protocol-http';
+import { formatUrl } from '@aws-sdk/util-format-url';
 
 interface Credentials {
   accessKeyId: string;
@@ -17,8 +18,8 @@ interface SignedUrlParams {
 /**
  * AWS SigV4 서명된 WebSocket URL 생성
  *
- * WebSocket은 HTTP 업그레이드 요청이므로 GET 메서드로 서명
- * 브라우저 WebSocket은 헤더를 지원하지 않아 쿼리 스트링 방식 사용
+ * API Gateway WebSocket은 Session Token을 서명에 포함하지 않고
+ * 서명 후에 쿼리 파라미터로 추가해야 함
  */
 export async function createSignedWebSocketUrl({
   websocketUrl,
@@ -27,34 +28,41 @@ export async function createSignedWebSocketUrl({
 }: SignedUrlParams): Promise<string> {
   const url = new URL(websocketUrl);
 
-  const signer = new SignatureV4({
-    credentials,
+  const httpRequest = new HttpRequest({
+    headers: {
+      host: url.hostname,
+    },
+    hostname: url.hostname,
+    path: url.pathname || '/',
+    protocol: url.protocol,
+    method: 'GET',
+  });
+
+  // Session Token을 제외한 credentials로 서명
+  const signatureV4 = new SignatureV4({
+    credentials: {
+      accessKeyId: credentials.accessKeyId,
+      secretAccessKey: credentials.secretAccessKey,
+      // sessionToken 제외!
+    },
     region,
     service: 'execute-api',
     sha256: Sha256,
   });
 
-  const request = new HttpRequest({
-    method: 'GET',
-    protocol: 'wss:',
-    hostname: url.hostname,
-    path: url.pathname,
-    headers: {
-      host: url.hostname,
-    },
+  const signedHttpRequest = await signatureV4.presign(httpRequest, {
+    expiresIn: 300,
   });
 
-  const signedRequest = await signer.presign(request, {
-    expiresIn: 300, // 5분
-  });
-
-  // 서명된 쿼리 파라미터로 URL 생성
-  const signedUrl = new URL(websocketUrl);
-  if (signedRequest.query) {
-    for (const [key, value] of Object.entries(signedRequest.query)) {
-      signedUrl.searchParams.set(key, value as string);
-    }
+  // Session Token이 있으면 서명 후에 query에 추가
+  if (credentials.sessionToken && signedHttpRequest.query) {
+    (signedHttpRequest.query as Record<string, string>)[
+      'X-Amz-Security-Token'
+    ] = credentials.sessionToken;
   }
 
-  return signedUrl.toString();
+  const signedUrl = formatUrl(signedHttpRequest);
+  console.log('Signed WebSocket URL:', signedUrl);
+
+  return signedUrl;
 }

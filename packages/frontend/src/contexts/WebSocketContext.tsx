@@ -118,11 +118,17 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
     setStatus('connecting');
 
     const credentials = await getCredentials();
+    console.log('WebSocket credentials:', {
+      accessKeyId: credentials.accessKeyId,
+      hasSessionToken: !!credentials.sessionToken,
+    });
+
     const signedUrl = await createSignedWebSocketUrl({
       websocketUrl,
       credentials,
       region: cognitoProps.region,
     });
+    console.log('WebSocket signed URL:', signedUrl);
 
     const ws = new WebSocket(signedUrl);
     wsRef.current = ws;
