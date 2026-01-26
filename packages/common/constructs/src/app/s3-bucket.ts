@@ -5,6 +5,7 @@ import { Construct } from 'constructs';
 export interface S3BucketProps {
   readonly bucketPrefix: string;
   readonly cors?: CorsRule[];
+  readonly versioned?: boolean;
 }
 
 export class S3Bucket extends Construct {
@@ -31,6 +32,7 @@ export class S3Bucket extends Construct {
       serverAccessLogsBucket: this.logBucket,
       serverAccessLogsPrefix: 'access-logs/',
       cors: props.cors,
+      versioned: props.versioned,
     });
   }
 }

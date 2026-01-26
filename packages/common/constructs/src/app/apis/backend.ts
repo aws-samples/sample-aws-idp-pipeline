@@ -70,11 +70,6 @@ export class Backend extends Construct {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
-    const lancedbStorage = getBucketFromSsm(
-      this,
-      'LancedbStorageBucket',
-      SSM_KEYS.LANCEDB_STORAGE_BUCKET_NAME,
-    );
     const documentStorage = getBucketFromSsm(
       this,
       'DocumentStorageBucket',
@@ -121,7 +116,6 @@ export class Backend extends Construct {
           streamPrefix: 'backend',
         }),
         environment: {
-          LANCEDB_STORAGE_BUCKET_NAME: lancedbStorage.bucketName,
           LANCEDB_LOCK_TABLE_NAME: lancedbLockTable.tableName,
           DOCUMENT_STORAGE_BUCKET_NAME: documentStorage.bucketName,
           BACKEND_TABLE_NAME: backendTable.tableName,
@@ -142,7 +136,6 @@ export class Backend extends Construct {
     });
 
     const taskRole = this.service.taskDefinition.taskRole;
-    lancedbStorage.bucket.grantReadWrite(taskRole);
     documentStorage.bucket.grantReadWrite(taskRole);
     sessionStorage.bucket.grantReadWrite(taskRole);
     agentStorage.bucket.grantReadWrite(taskRole);
