@@ -86,22 +86,22 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
     return pendingCredentialsRef.current;
   }, [cognitoProps, user]);
 
-  /** 재연결 스케줄링 */
-  const scheduleReconnect = useCallback(() => {
-    if (isManualDisconnectRef.current) return;
-    if (reconnectAttemptsRef.current >= DEFAULT_MAX_RECONNECT_ATTEMPTS) {
-      setStatus('error');
-      return;
+  /** WebSocket 연결 종료 */
+  const disconnect = useCallback(() => {
+    isManualDisconnectRef.current = true;
+
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     }
 
-    const delay =
-      DEFAULT_RECONNECT_INTERVAL *
-      Math.pow(DEFAULT_BACKOFF_MULTIPLIER, reconnectAttemptsRef.current);
+    if (wsRef.current) {
+      wsRef.current.close(1000, 'Manual disconnect');
+      wsRef.current = null;
+    }
 
-    reconnectTimeoutRef.current = setTimeout(() => {
-      reconnectAttemptsRef.current += 1;
-      connect();
-    }, delay);
+    setStatus('disconnected');
+    reconnectAttemptsRef.current = 0;
   }, []);
 
   /** WebSocket 연결 */
@@ -148,28 +148,22 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
 
       // 비정상 종료 시 재연결 시도
       if (!isManualDisconnectRef.current && event.code !== 1000) {
-        scheduleReconnect();
+        if (reconnectAttemptsRef.current >= DEFAULT_MAX_RECONNECT_ATTEMPTS) {
+          setStatus('error');
+          return;
+        }
+
+        const delay =
+          DEFAULT_RECONNECT_INTERVAL *
+          Math.pow(DEFAULT_BACKOFF_MULTIPLIER, reconnectAttemptsRef.current);
+
+        reconnectTimeoutRef.current = setTimeout(() => {
+          reconnectAttemptsRef.current += 1;
+          connect();
+        }, delay);
       }
     };
-  }, [websocketUrl, cognitoProps, getCredentials, scheduleReconnect]);
-
-  /** WebSocket 연결 종료 */
-  const disconnect = useCallback(() => {
-    isManualDisconnectRef.current = true;
-
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-
-    if (wsRef.current) {
-      wsRef.current.close(1000, 'Manual disconnect');
-      wsRef.current = null;
-    }
-
-    setStatus('disconnected');
-    reconnectAttemptsRef.current = 0;
-  }, []);
+  }, [websocketUrl, cognitoProps, getCredentials]);
 
   /** 메시지 구독 */
   const subscribe = useCallback(
@@ -177,7 +171,8 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
       if (!subscribersRef.current.has(action)) {
         subscribersRef.current.set(action, new Set());
       }
-      subscribersRef.current.get(action)!.add(callback as MessageCallback);
+      const callbacks = subscribersRef.current.get(action);
+      callbacks?.add(callback as MessageCallback);
 
       return () => {
         subscribersRef.current.get(action)?.delete(callback as MessageCallback);
@@ -204,7 +199,7 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
     return () => {
       disconnect();
     };
-  }, [user?.id_token, websocketUrl]);
+  }, [user?.id_token, websocketUrl, connect, disconnect]);
 
   const value: WebSocketContextValue = {
     status,
