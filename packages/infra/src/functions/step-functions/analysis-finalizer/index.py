@@ -54,6 +54,16 @@ def handler(event, _context):
     if format_parser:
         parts.append(f'## Format Parser\n{format_parser}')
 
+    transcribe_segments = segment_data.get('transcribe_segments', [])
+    if transcribe_segments:
+        segments_text = []
+        for seg in transcribe_segments:
+            start = seg.get('start_time', '')
+            end = seg.get('end_time', '')
+            transcript = seg.get('transcript', '')
+            segments_text.append(f'[{start}s - {end}s] {transcript}')
+        parts.append(f'## Transcribe Segments\n' + '\n'.join(segments_text))
+
     ai_analysis = segment_data.get('ai_analysis', [])
     for analysis in ai_analysis:
         query = analysis.get('analysis_query', '')

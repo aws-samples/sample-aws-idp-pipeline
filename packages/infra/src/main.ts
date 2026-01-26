@@ -3,7 +3,10 @@ import { AgentStack } from './stacks/agent-stack.js';
 import { McpStack } from './stacks/mcp-stack.js';
 import { App } from ':idp-v2/common-constructs';
 import { StorageStack } from './stacks/storage-stack.js';
-import { PaddleOcrStack } from './stacks/paddleocr-stack.js';
+import { EventStack } from './stacks/event-stack.js';
+import { BdaStack } from './stacks/bda-stack.js';
+import { OcrStack } from './stacks/ocr-stack.js';
+import { TranscribeStack } from './stacks/transcribe-stack.js';
 import { WorkflowStack } from './stacks/workflow-stack.js';
 import { VpcStack } from './stacks/vpc-stack.js';
 import { WorkerStack } from './stacks/worker-stack.js';
@@ -23,10 +26,25 @@ new StorageStack(app, 'IDP-V2-Storage', {
   env,
 });
 
-new PaddleOcrStack(app, 'IDP-V2-PaddleOcr', {
+// Event Stack - S3 EventBridge, SQS queues, type-detection
+new EventStack(app, 'IDP-V2-Event', {
   env,
 });
 
+// Preprocessing consumer stacks (depend on EventStack for queue ARNs)
+new BdaStack(app, 'IDP-V2-Bda', {
+  env,
+});
+
+new OcrStack(app, 'IDP-V2-Ocr', {
+  env,
+});
+
+new TranscribeStack(app, 'IDP-V2-Transcribe', {
+  env,
+});
+
+// Workflow Stack - Step Functions for AI analysis (depends on EventStack for workflow queue)
 new WorkflowStack(app, 'IDP-V2-Workflow', {
   env,
 });

@@ -134,8 +134,6 @@ class VisionReactAgent:
         if is_video:
             analyze_video = create_video_analyzer_tool(
                 video_uri_getter=self._get_video_uri,
-                timecode_getter=self._get_timecode,
-                previous_context_getter=self._get_previous_context,
                 analysis_steps=self.analysis_steps,
                 model_id=self.video_model_id,
                 bedrock_client=self.bedrock_client,
@@ -190,14 +188,10 @@ When analyzing:
                 user_query = user_query.format(
                     segment_index=segment_index + 1,
                     context=context,
-                    language=language_name,
-                    start_timecode=start_timecode,
-                    end_timecode=end_timecode
+                    language=language_name
                 )
             else:
                 user_query = f"""Please analyze the following video segment (chapter {segment_index + 1}).
-
-Timecode: {start_timecode} to {end_timecode}
 
 Previous analysis context:
 {context}

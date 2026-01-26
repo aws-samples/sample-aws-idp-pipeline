@@ -20,11 +20,11 @@ from shared.ddb_client import (
     record_step_start,
     record_step_complete,
     record_step_error,
-    update_workflow_total_segments,
     StepName,
 )
 from shared.s3_analysis import (
     save_segment_analysis,
+    get_segment_analysis,
     get_s3_client,
     parse_s3_uri,
     SegmentStatus,
@@ -238,6 +238,72 @@ def parse_format_parser_result(file_uri: str) -> dict:
     return parser_results
 
 
+def find_transcribe_result(file_uri: str) -> Optional[str]:
+    """Find transcribe result JSON file from S3.
+
+    Transcribe output is stored at: s3://bucket/.../transcribe/{workflow_id}-{timestamp}.json
+    Returns the S3 URI of the transcribe result file, or None if not found.
+    """
+    client = get_s3_client()
+    bucket, base_path = get_document_base_path(file_uri)
+    prefix = f'{base_path}/transcribe/'
+
+    try:
+        paginator = client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if key.endswith('.json'):
+                    transcribe_uri = f's3://{bucket}/{key}'
+                    print(f'Found transcribe result: {transcribe_uri}')
+                    return transcribe_uri
+    except Exception as e:
+        print(f'Error finding transcribe result: {e}')
+
+    return None
+
+
+def parse_transcribe_result(file_uri: str) -> dict:
+    """Read transcribe result and return transcript + audio_segments.
+
+    Returns dict with:
+    - transcribe: full transcript text
+    - transcribe_segments: audio_segments array with timing info
+    """
+    transcribe_uri = find_transcribe_result(file_uri)
+    if not transcribe_uri:
+        return {}
+
+    result = download_json_from_s3(transcribe_uri)
+    if not result:
+        return {}
+
+    transcribe_data = {}
+
+    # Extract full transcript from results.transcripts[0].transcript
+    results = result.get('results', {})
+    transcripts = results.get('transcripts', [])
+    if transcripts:
+        transcribe_data['transcribe'] = transcripts[0].get('transcript', '')
+
+    # Extract audio_segments array (without items field)
+    audio_segments = results.get('audio_segments', [])
+    if audio_segments:
+        # Filter out 'items' field from each segment
+        filtered_segments = []
+        for seg in audio_segments:
+            filtered_seg = {
+                'id': seg.get('id'),
+                'transcript': seg.get('transcript', ''),
+                'start_time': seg.get('start_time', ''),
+                'end_time': seg.get('end_time', '')
+            }
+            filtered_segments.append(filtered_seg)
+        transcribe_data['transcribe_segments'] = filtered_segments
+
+    return transcribe_data
+
+
 def parse_preprocessor_metadata(file_uri: str) -> list:
     """Read preprocessor metadata."""
     bucket, base_path = get_document_base_path(file_uri)
@@ -288,6 +354,22 @@ def is_video_file(file_type: str) -> bool:
     return file_type_lower in video_extensions
 
 
+def is_audio_file(file_type: str) -> bool:
+    """Check if file type is audio."""
+    if not file_type:
+        return False
+    file_type_lower = file_type.lower()
+    if file_type_lower.startswith('audio/'):
+        return True
+    audio_extensions = ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'wma']
+    return file_type_lower in audio_extensions
+
+
+def is_media_file(file_type: str) -> bool:
+    """Check if file type is video or audio (media that can be transcribed)."""
+    return is_video_file(file_type) or is_audio_file(file_type)
+
+
 def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
@@ -302,6 +384,7 @@ def handler(event, _context):
     record_step_start(workflow_id, StepName.SEGMENT_BUILDER)
 
     is_video = is_video_file(file_type)
+    is_media = is_media_file(file_type)  # video or audio
 
     try:
         # 1. Read preprocessor metadata (always required)
@@ -343,40 +426,50 @@ def handler(event, _context):
             parser_results = parse_format_parser_result(file_uri)
             print(f'Parser: {len(parser_results)} pages')
 
-        # 5. Merge and create segment files
+        # 5. Read transcribe results (for video/audio)
+        transcribe_data = {}
+        if is_media:
+            print('Reading transcribe results...')
+            transcribe_data = parse_transcribe_result(file_uri)
+            if transcribe_data:
+                print(f'Transcribe: found transcript with {len(transcribe_data.get("transcribe_segments", []))} segments')
+            else:
+                print('Transcribe: no result found')
+
+        # 5. Merge preprocessing results into existing segment files
         segment_count = len(preprocessor_segments)
         for seg in preprocessor_segments:
             i = seg['segment_index']
 
-            # Base segment data from preprocessor
-            segment_data = {
-                'segment_index': i,
-                'segment_type': seg.get('segment_type', 'PAGE'),
-                'image_uri': seg.get('image_uri', ''),
-                'status': SegmentStatus.ANALYZING,
-            }
+            # Read existing segment data (created by segment-prep)
+            segment_data = get_segment_analysis(file_uri, i)
+            if segment_data is None:
+                # Fallback: create new if not exists
+                segment_data = {
+                    'segment_index': i,
+                    'segment_type': seg.get('segment_type', 'PAGE'),
+                    'image_uri': seg.get('image_uri', ''),
+                    'ai_analysis': [],
+                }
+                # Media-specific fields (video/audio)
+                if is_media:
+                    segment_data['file_uri'] = seg.get('file_uri', file_uri)
 
-            # Video-specific fields
-            if is_video:
+            # Update status to ANALYZING
+            segment_data['status'] = SegmentStatus.ANALYZING
+
+            # Ensure media has file_uri
+            if is_media and 'file_uri' not in segment_data:
                 segment_data['file_uri'] = seg.get('file_uri', file_uri)
-                segment_data['start_timecode_smpte'] = seg.get('start_timecode_smpte', '')
-                segment_data['end_timecode_smpte'] = seg.get('end_timecode_smpte', '')
 
             # Merge BDA results (only when use_bda=true and BDA produced results)
             if use_bda and i in bda_results:
                 bda_data = bda_results[i]
                 segment_data['bda_indexer'] = bda_data.get('bda_indexer', '')
-                # Use BDA rectified image (better quality: de-skewed, corrected)
-                if bda_data.get('bda_image_uri'):
-                    segment_data['image_uri'] = bda_data['bda_image_uri']
                 # Override segment type from BDA if present
                 if bda_data.get('segment_type'):
                     segment_data['segment_type'] = bda_data['segment_type']
-                if bda_data.get('start_timecode_smpte'):
-                    segment_data['start_timecode_smpte'] = bda_data['start_timecode_smpte']
-                if bda_data.get('end_timecode_smpte'):
-                    segment_data['end_timecode_smpte'] = bda_data['end_timecode_smpte']
-            else:
+            elif 'bda_indexer' not in segment_data:
                 segment_data['bda_indexer'] = ''
 
             # Merge OCR results
@@ -384,7 +477,7 @@ def handler(event, _context):
                 ocr_data = ocr_results[i]
                 segment_data['paddleocr'] = ocr_data.get('paddleocr', '')
                 segment_data['paddleocr_blocks'] = ocr_data.get('paddleocr_blocks')
-            else:
+            elif 'paddleocr' not in segment_data:
                 segment_data['paddleocr'] = ''
                 segment_data['paddleocr_blocks'] = None
 
@@ -392,18 +485,22 @@ def handler(event, _context):
             if i in parser_results:
                 parser_data = parser_results[i]
                 segment_data['format_parser'] = parser_data.get('format_parser', '')
-            else:
+            elif 'format_parser' not in segment_data:
                 segment_data['format_parser'] = ''
 
-            # Initialize AI analysis
-            segment_data['ai_analysis'] = []
+            # Merge transcribe results (for video/audio - applies to all segments)
+            if is_media and transcribe_data:
+                segment_data['transcribe'] = transcribe_data.get('transcribe', '')
+                segment_data['transcribe_segments'] = transcribe_data.get('transcribe_segments', [])
+            elif is_media:
+                if 'transcribe' not in segment_data:
+                    segment_data['transcribe'] = ''
+                if 'transcribe_segments' not in segment_data:
+                    segment_data['transcribe_segments'] = []
 
-            # Save to S3
+            # Save merged segment to S3
             save_segment_analysis(file_uri, i, segment_data)
-            print(f'Created segment {i}')
-
-        # Update workflow total segments
-        update_workflow_total_segments(document_id, workflow_id, segment_count)
+            print(f'Merged segment {i}')
 
         record_step_complete(
             workflow_id,

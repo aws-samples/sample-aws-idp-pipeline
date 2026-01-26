@@ -60,8 +60,50 @@ class WorkflowStatus:
     FAILED = 'failed'
 
 
+class PreprocessStatus:
+    PENDING = 'pending'
+    PROCESSING = 'processing'
+    COMPLETED = 'completed'
+    FAILED = 'failed'
+    SKIPPED = 'skipped'
+
+
+class PreprocessType:
+    OCR = 'ocr'
+    BDA = 'bda'
+    TRANSCRIBE = 'transcribe'
+
+    ALL = ['ocr', 'bda', 'transcribe']
+
+
+def determine_preprocess_required(file_type: str, use_bda: bool = False) -> dict:
+    """Determine which preprocessors are required based on file type and options.
+
+    Note: Parser is handled in Step Functions workflow, not as async preprocessing.
+    """
+    is_pdf = file_type == 'application/pdf'
+    is_image = file_type.startswith('image/')
+    is_video = file_type.startswith('video/')
+    is_audio = file_type.startswith('audio/')
+
+    return {
+        PreprocessType.OCR: {
+            'required': is_pdf or is_image,
+            'status': PreprocessStatus.PENDING if (is_pdf or is_image) else PreprocessStatus.SKIPPED
+        },
+        PreprocessType.BDA: {
+            'required': use_bda,
+            'status': PreprocessStatus.PENDING if use_bda else PreprocessStatus.SKIPPED
+        },
+        PreprocessType.TRANSCRIBE: {
+            'required': is_video or is_audio,
+            'status': PreprocessStatus.PENDING if (is_video or is_audio) else PreprocessStatus.SKIPPED
+        }
+    }
+
+
 class StepName:
-    PREPROCESSOR = 'preprocessor'
+    SEGMENT_PREP = 'segment_prep'
     BDA_PROCESSOR = 'bda_processor'
     BDA_STATUS_CHECKER = 'bda_status_checker'
     FORMAT_PARSER = 'format_parser'
@@ -71,7 +113,7 @@ class StepName:
     DOCUMENT_SUMMARIZER = 'document_summarizer'
 
     ORDER = [
-        'preprocessor',
+        'segment_prep',
         'bda_processor',
         'bda_status_checker',
         'format_parser',
@@ -82,7 +124,7 @@ class StepName:
     ]
 
     LABELS = {
-        'preprocessor': 'Preprocessing',
+        'segment_prep': 'Segment Prep',
         'bda_processor': 'BDA Processing',
         'bda_status_checker': 'BDA Status Check',
         'format_parser': 'Format Parsing',
@@ -101,10 +143,14 @@ def create_workflow(
     file_name: str,
     file_type: str,
     execution_arn: str,
-    language: str = 'en'
+    language: str = 'en',
+    use_bda: bool = False
 ) -> dict:
     table = get_table()
     now = now_iso()
+
+    # Determine required preprocessors based on file type and options
+    preprocess = determine_preprocess_required(file_type, use_bda)
 
     # Main workflow item under document
     workflow_item = {
@@ -118,7 +164,8 @@ def create_workflow(
             'execution_arn': execution_arn,
             'status': WorkflowStatus.PENDING,
             'language': language,
-            'total_segments': 0
+            'total_segments': 0,
+            'preprocess': preprocess
         },
         'created_at': now,
         'updated_at': now
@@ -184,6 +231,98 @@ def get_workflow(document_id: str, workflow_id: str) -> Optional[dict]:
     )
     item = response.get('Item')
     return decimal_to_python(item) if item else None
+
+
+def update_preprocess_status(
+    document_id: str,
+    workflow_id: str,
+    processor: str,
+    status: str,
+    **kwargs
+) -> dict:
+    """Update preprocess status for a specific processor.
+
+    Args:
+        document_id: Document ID
+        workflow_id: Workflow ID
+        processor: One of 'ocr', 'parser', 'bda', 'transcribe'
+        status: One of 'pending', 'processing', 'completed', 'failed', 'skipped'
+        **kwargs: Additional fields to update (e.g., error, output_uri)
+    """
+    table = get_table()
+    now = now_iso()
+
+    workflow = get_workflow(document_id, workflow_id)
+    if not workflow:
+        return {}
+
+    data = workflow.get('data', {})
+    preprocess = data.get('preprocess', {})
+    processor_data = preprocess.get(processor, {})
+
+    processor_data['status'] = status
+    if status == PreprocessStatus.PROCESSING:
+        processor_data['started_at'] = now
+    elif status in [PreprocessStatus.COMPLETED, PreprocessStatus.FAILED]:
+        processor_data['ended_at'] = now
+
+    for key, value in kwargs.items():
+        processor_data[key] = value
+
+    preprocess[processor] = processor_data
+    data['preprocess'] = preprocess
+
+    response = table.update_item(
+        Key={'PK': f'DOC#{document_id}', 'SK': f'WF#{workflow_id}'},
+        UpdateExpression='SET #data = :data, updated_at = :updated_at',
+        ExpressionAttributeNames={'#data': 'data'},
+        ExpressionAttributeValues={':data': data, ':updated_at': now},
+        ReturnValues='ALL_NEW'
+    )
+    return decimal_to_python(response.get('Attributes', {}))
+
+
+def is_preprocess_complete(document_id: str, workflow_id: str) -> dict:
+    """Check if all required preprocessing is complete.
+
+    Returns:
+        dict with keys:
+        - all_completed: True if all required preprocessors are completed/skipped
+        - any_failed: True if any required preprocessor has failed
+        - status: dict of each preprocessor's status
+    """
+    workflow = get_workflow(document_id, workflow_id)
+    if not workflow:
+        return {'all_completed': False, 'any_failed': False, 'status': {}}
+
+    data = workflow.get('data', {})
+    preprocess = data.get('preprocess', {})
+
+    all_completed = True
+    any_failed = False
+    status = {}
+
+    for processor in PreprocessType.ALL:
+        proc_data = preprocess.get(processor, {})
+        proc_status = proc_data.get('status', PreprocessStatus.SKIPPED)
+        is_required = proc_data.get('required', False)
+
+        status[processor] = {
+            'required': is_required,
+            'status': proc_status
+        }
+
+        if is_required:
+            if proc_status == PreprocessStatus.FAILED:
+                any_failed = True
+            if proc_status not in [PreprocessStatus.COMPLETED, PreprocessStatus.SKIPPED]:
+                all_completed = False
+
+    return {
+        'all_completed': all_completed,
+        'any_failed': any_failed,
+        'status': status
+    }
 
 
 def get_steps(workflow_id: str) -> Optional[dict]:

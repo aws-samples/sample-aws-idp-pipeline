@@ -8,10 +8,6 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as events from 'aws-cdk-lib/aws-events';
-import * as targets from 'aws-cdk-lib/aws-events-targets';
-import * as cr from 'aws-cdk-lib/custom-resources';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Platform } from 'aws-cdk-lib/aws-ecr-assets';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -22,6 +18,16 @@ import { SSM_KEYS } from ':idp-v2/common-constructs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/**
+ * WorkflowStack - Step Functions Workflow for Document Analysis
+ *
+ * This stack handles the AI analysis phase after preprocessing is complete.
+ * Preprocessing (OCR, BDA, Parser, Transcribe) is handled by separate stacks
+ * and this workflow polls for their completion before proceeding.
+ *
+ * Flow: Workflow Queue → Trigger → Step Functions
+ *       → Wait for Preprocess → SegmentBuilder → Map(Analyze) → Summarize
+ */
 export class WorkflowStack extends Stack {
   public readonly stateMachine: sfn.StateMachine;
   public readonly documentBucket: s3.IBucket;
@@ -73,108 +79,21 @@ export class WorkflowStack extends Stack {
       documentBucketName,
     );
 
-    // PaddleOCR EC2 configuration (from PaddleOcrStack)
-    // EC2 lifecycle is now managed by Step Functions directly
-    const paddleOcrEc2InstanceId = ssm.StringParameter.valueForStringParameter(
+    // Workflow Queue (from EventStack) - Step Functions trigger consumes from this
+    const workflowQueueArn = ssm.StringParameter.valueForStringParameter(
       this,
-      SSM_KEYS.PADDLEOCR_EC2_INSTANCE_ID,
+      '/idp-v2/preprocess/workflow/queue-arn',
     );
-
-    // Get VPC for Lambda to access EC2 (valueFromLookup for concrete value at synth time)
-    const vpcId = ssm.StringParameter.valueFromLookup(this, SSM_KEYS.VPC_ID);
-    const vpc = ec2.Vpc.fromLookup(this, 'Vpc', { vpcId });
-
-    // Security group for PaddleOCR processor Lambda (to access EC2)
-    const paddleOcrLambdaSg = new ec2.SecurityGroup(
+    const workflowQueue = sqs.Queue.fromQueueArn(
       this,
-      'PaddleOcrProcessorSg',
-      {
-        vpc,
-        description: 'Security group for PaddleOCR processor Lambda',
-        allowAllOutbound: true,
-      },
+      'WorkflowQueue',
+      workflowQueueArn,
     );
-
-    // Enable EventBridge notifications on existing S3 bucket
-    new cr.AwsCustomResource(this, 'EnableS3EventBridge', {
-      onCreate: {
-        service: 'S3',
-        action: 'putBucketNotificationConfiguration',
-        parameters: {
-          Bucket: documentBucketName,
-          NotificationConfiguration: {
-            EventBridgeConfiguration: {},
-          },
-        },
-        physicalResourceId: cr.PhysicalResourceId.of(
-          `${documentBucketName}-eventbridge`,
-        ),
-      },
-      onUpdate: {
-        service: 'S3',
-        action: 'putBucketNotificationConfiguration',
-        parameters: {
-          Bucket: documentBucketName,
-          NotificationConfiguration: {
-            EventBridgeConfiguration: {},
-          },
-        },
-        physicalResourceId: cr.PhysicalResourceId.of(
-          `${documentBucketName}-eventbridge`,
-        ),
-      },
-      policy: cr.AwsCustomResourcePolicy.fromStatements([
-        new iam.PolicyStatement({
-          actions: [
-            's3:PutBucketNotification',
-            's3:PutBucketNotificationConfiguration',
-            's3:GetBucketNotification',
-            's3:GetBucketNotificationConfiguration',
-          ],
-          resources: [this.documentBucket.bucketArn],
-        }),
-      ]),
-    });
-
-    // SQS Queue for S3 event triggers
-    const triggerQueue = new sqs.Queue(this, 'TriggerQueue', {
-      visibilityTimeout: Duration.minutes(15),
-    });
 
     // SQS Queue for LanceDB write operations
     const lancedbWriteQueue = new sqs.Queue(this, 'LanceDBWriteQueue', {
       queueName: 'idp-v2-lancedb-write-queue',
       visibilityTimeout: Duration.minutes(5),
-    });
-
-    // ========================================
-    // EventBridge Rule for S3 Upload Trigger
-    // ========================================
-
-    new events.Rule(this, 'S3UploadTriggerRule', {
-      ruleName: 'idp-v2-s3-upload-trigger',
-      description: 'Trigger document analysis workflow on S3 upload',
-      eventPattern: {
-        source: ['aws.s3'],
-        detailType: ['Object Created'],
-        detail: {
-          bucket: {
-            name: [documentBucketName],
-          },
-          object: {
-            // Only trigger for direct files under document_id/
-            // Exclude: projects/*/documents/*/{subfolder}/* (6+ segments)
-            key: [
-              {
-                'anything-but': {
-                  wildcard: 'projects/*/documents/*/*/*',
-                },
-              },
-            ],
-          },
-        },
-      },
-      targets: [new targets.SqsQueue(triggerQueue)],
     });
 
     // ========================================
@@ -294,56 +213,58 @@ export class WorkflowStack extends Stack {
       },
     };
 
-    const preprocessor = new lambda.Function(this, 'Preprocessor', {
+    // Segment Prep (prepares segment metadata for downstream processing)
+    const segmentPrep = new lambda.Function(this, 'SegmentPrep', {
       ...commonLambdaProps,
-      functionName: 'idp-v2-preprocessor',
+      functionName: 'idp-v2-segment-prep',
       handler: 'index.handler',
-      timeout: Duration.minutes(10),
-      memorySize: 2048,
+      timeout: Duration.minutes(15),
+      memorySize: 1024,
       code: lambda.Code.fromAsset(
-        path.join(__dirname, '../functions/step-functions/preprocessor'),
+        path.join(__dirname, '../functions/step-functions/segment-prep'),
       ),
       layers: [coreLayer, sharedLayer],
     });
 
-    const bdaProcessor = new lambda.Function(this, 'BdaProcessor', {
-      ...commonLambdaProps,
-      functionName: 'idp-v2-bda-processor',
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, '../functions/step-functions/bda-processor'),
-      ),
-      layers: [coreLayer, sharedLayer],
-    });
-
-    const bdaStatusChecker = new lambda.Function(this, 'BdaStatusChecker', {
-      ...commonLambdaProps,
-      functionName: 'idp-v2-bda-status-checker',
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, '../functions/step-functions/bda-status-checker'),
-      ),
-      layers: [coreLayer, sharedLayer],
-    });
-
+    // Format Parser (extracts text from PDF, runs before waiting for async preprocessing)
     const formatParser = new lambda.Function(this, 'FormatParser', {
       ...commonLambdaProps,
       functionName: 'idp-v2-format-parser',
       handler: 'index.handler',
       timeout: Duration.minutes(10),
-      memorySize: 2048,
+      memorySize: 256,
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/format-parser'),
       ),
       layers: [coreLayer, sharedLayer],
     });
 
+    // Check preprocess status (called in polling loop)
+    const checkPreprocessStatus = new lambda.Function(
+      this,
+      'CheckPreprocessStatus',
+      {
+        ...commonLambdaProps,
+        functionName: 'idp-v2-check-preprocess-status',
+        handler: 'index.handler',
+        timeout: Duration.minutes(1),
+        memorySize: 256,
+        code: lambda.Code.fromAsset(
+          path.join(
+            __dirname,
+            '../functions/step-functions/check-preprocess-status',
+          ),
+        ),
+        layers: [sharedLayer],
+      },
+    );
+
     const segmentBuilder = new lambda.Function(this, 'SegmentBuilder', {
       ...commonLambdaProps,
       functionName: 'idp-v2-segment-builder',
       handler: 'index.handler',
       timeout: Duration.minutes(10),
-      memorySize: 2048,
+      memorySize: 256,
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/segment-builder'),
       ),
@@ -355,7 +276,7 @@ export class WorkflowStack extends Stack {
       functionName: 'idp-v2-segment-analyzer',
       handler: 'index.handler',
       timeout: Duration.minutes(15),
-      memorySize: 3008,
+      memorySize: 256,
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/segment-analyzer'),
       ),
@@ -373,7 +294,7 @@ export class WorkflowStack extends Stack {
       functionName: 'idp-v2-analysis-finalizer',
       handler: 'index.handler',
       timeout: Duration.minutes(10),
-      memorySize: 1024,
+      memorySize: 256,
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/analysis-finalizer'),
       ),
@@ -389,7 +310,7 @@ export class WorkflowStack extends Stack {
       functionName: 'idp-v2-document-summarizer',
       handler: 'index.handler',
       timeout: Duration.minutes(15),
-      memorySize: 1024,
+      memorySize: 256,
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/document-summarizer'),
       ),
@@ -401,59 +322,13 @@ export class WorkflowStack extends Stack {
       },
     });
 
-    // PaddleOCR Prepare Lambda (record step start, get OCR settings)
-    const paddleocrPrepare = new lambda.Function(this, 'PaddleOcrPrepare', {
-      ...commonLambdaProps,
-      functionName: 'idp-v2-paddleocr-prepare',
-      handler: 'index.handler',
-      timeout: Duration.seconds(30),
-      memorySize: 256,
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, '../functions/step-functions/paddleocr-prepare'),
-      ),
-      layers: [sharedLayer],
-    });
-
-    // PaddleOCR Execute Lambda (health check, HTTP predict, S3 save)
-    const paddleocrExecute = new lambda.Function(this, 'PaddleOcrExecute', {
-      ...commonLambdaProps,
-      functionName: 'idp-v2-paddleocr-execute',
-      handler: 'index.handler',
-      timeout: Duration.minutes(10),
-      memorySize: 1024,
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, '../functions/step-functions/paddleocr-execute'),
-      ),
-      layers: [coreLayer, sharedLayer],
-      vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      securityGroups: [paddleOcrLambdaSg],
-      environment: {
-        ...commonLambdaProps.environment,
-        DOCUMENT_BUCKET_NAME: this.documentBucket.bucketName,
-      },
-    });
-
-    // PaddleOCR Complete Lambda (record step complete)
-    const paddleocrComplete = new lambda.Function(this, 'PaddleOcrComplete', {
-      ...commonLambdaProps,
-      functionName: 'idp-v2-paddleocr-complete',
-      handler: 'index.handler',
-      timeout: Duration.seconds(30),
-      memorySize: 256,
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, '../functions/step-functions/paddleocr-complete'),
-      ),
-      layers: [sharedLayer],
-    });
-
     // LanceDB Writer Lambda (consumes from SQS, concurrency=1)
     const lancedbWriter = new lambda.Function(this, 'LanceDBWriter', {
       ...commonLambdaProps,
       functionName: 'idp-v2-lancedb-writer',
       handler: 'index.handler',
       timeout: Duration.minutes(5),
-      memorySize: 1024,
+      memorySize: 256,
       reservedConcurrentExecutions: 1,
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/lancedb-writer'),
@@ -472,22 +347,12 @@ export class WorkflowStack extends Stack {
     });
 
     // ========================================
-    // Step Functions
+    // Step Functions Definition
     // ========================================
 
     // Task definitions
-    const preprocessorTask = new tasks.LambdaInvoke(this, 'Preprocess', {
-      lambdaFunction: preprocessor,
-      outputPath: '$.Payload',
-    });
-
-    const startBdaTask = new tasks.LambdaInvoke(this, 'StartBdaProcessing', {
-      lambdaFunction: bdaProcessor,
-      outputPath: '$.Payload',
-    });
-
-    const checkBdaStatusTask = new tasks.LambdaInvoke(this, 'CheckBdaStatus', {
-      lambdaFunction: bdaStatusChecker,
+    const segmentPrepTask = new tasks.LambdaInvoke(this, 'PrepareSegments', {
+      lambdaFunction: segmentPrep,
       outputPath: '$.Payload',
     });
 
@@ -496,196 +361,14 @@ export class WorkflowStack extends Stack {
       outputPath: '$.Payload',
     });
 
-    // ========================================
-    // PaddleOCR Sub-workflow (EC2 lifecycle + OCR)
-    // ========================================
-
-    // 1. Prepare: record step start, get OCR settings
-    const paddleocrPrepareTask = new tasks.LambdaInvoke(this, 'OcrPrepare', {
-      lambdaFunction: paddleocrPrepare,
-      outputPath: '$.Payload',
-    });
-
-    // 2. EC2 Describe Instances (check state)
-    const ec2DescribeTask = new tasks.CallAwsService(this, 'OcrEc2Describe', {
-      service: 'ec2',
-      action: 'describeInstances',
-      parameters: {
-        InstanceIds: [paddleOcrEc2InstanceId],
-      },
-      iamResources: ['*'],
-      resultSelector: {
-        'state.$': '$.Reservations[0].Instances[0].State.Name',
-        'privateIp.$': '$.Reservations[0].Instances[0].PrivateIpAddress',
-      },
-      resultPath: '$.ec2',
-    });
-
-    // 3. EC2 Start Instances
-    const ec2StartTask = new tasks.CallAwsService(this, 'OcrEc2Start', {
-      service: 'ec2',
-      action: 'startInstances',
-      parameters: {
-        InstanceIds: [paddleOcrEc2InstanceId],
-      },
-      iamResources: ['*'],
-      resultPath: sfn.JsonPath.DISCARD,
-    });
-
-    // Retry on capacity errors
-    ec2StartTask.addRetry({
-      errors: ['Ec2.InsufficientInstanceCapacityException', 'Ec2.Ec2Exception'],
-      interval: Duration.minutes(1),
-      maxAttempts: 5,
-      backoffRate: 2,
-    });
-
-    // Wait states for EC2 lifecycle (each state can only have one next)
-    const waitForEc2Stop = new sfn.Wait(this, 'WaitForEc2Stop', {
-      time: sfn.WaitTime.duration(Duration.seconds(30)),
-    });
-
-    const waitAfterEc2Start = new sfn.Wait(this, 'WaitAfterEc2Start', {
-      time: sfn.WaitTime.duration(Duration.seconds(15)),
-    });
-
-    const waitForEc2Pending = new sfn.Wait(this, 'WaitForEc2Pending', {
-      time: sfn.WaitTime.duration(Duration.seconds(15)),
-    });
-
-    const waitForEc2Boot = new sfn.Wait(this, 'WaitForEc2Boot', {
-      time: sfn.WaitTime.duration(Duration.seconds(30)),
-    });
-
-    // Additional EC2 Describe for polling loops (each describe can only be used once in chain)
-    const ec2DescribeAfterStop = new tasks.CallAwsService(
+    const checkPreprocessStatusTask = new tasks.LambdaInvoke(
       this,
-      'OcrEc2DescribeAfterStop',
+      'CheckPreprocessStatusTask',
       {
-        service: 'ec2',
-        action: 'describeInstances',
-        parameters: {
-          InstanceIds: [paddleOcrEc2InstanceId],
-        },
-        iamResources: ['*'],
-        resultSelector: {
-          'state.$': '$.Reservations[0].Instances[0].State.Name',
-          'privateIp.$': '$.Reservations[0].Instances[0].PrivateIpAddress',
-        },
-        resultPath: '$.ec2',
+        lambdaFunction: checkPreprocessStatus,
+        outputPath: '$.Payload',
       },
     );
-
-    const ec2DescribeAfterStart = new tasks.CallAwsService(
-      this,
-      'OcrEc2DescribeAfterStart',
-      {
-        service: 'ec2',
-        action: 'describeInstances',
-        parameters: {
-          InstanceIds: [paddleOcrEc2InstanceId],
-        },
-        iamResources: ['*'],
-        resultSelector: {
-          'state.$': '$.Reservations[0].Instances[0].State.Name',
-          'privateIp.$': '$.Reservations[0].Instances[0].PrivateIpAddress',
-        },
-        resultPath: '$.ec2',
-      },
-    );
-
-    const ec2DescribeAfterPending = new tasks.CallAwsService(
-      this,
-      'OcrEc2DescribeAfterPending',
-      {
-        service: 'ec2',
-        action: 'describeInstances',
-        parameters: {
-          InstanceIds: [paddleOcrEc2InstanceId],
-        },
-        iamResources: ['*'],
-        resultSelector: {
-          'state.$': '$.Reservations[0].Instances[0].State.Name',
-          'privateIp.$': '$.Reservations[0].Instances[0].PrivateIpAddress',
-        },
-        resultPath: '$.ec2',
-      },
-    );
-
-    // Pass state to extract private IP for running state
-    const ec2RunningPass = new sfn.Pass(this, 'Ec2Running', {
-      parameters: {
-        'workflow_id.$': '$.workflow_id',
-        'document_id.$': '$.document_id',
-        'project_id.$': '$.project_id',
-        'file_uri.$': '$.file_uri',
-        'file_name.$': '$.file_name',
-        'file_type.$': '$.file_type',
-        'processing_type.$': '$.processing_type',
-        'language.$': '$.language',
-        'use_bda.$': '$.use_bda',
-        'segment_count.$': '$.segment_count',
-        'ocr_model.$': '$.ocr_model',
-        'ocr_options.$': '$.ocr_options',
-        'ec2_private_ip.$': '$.ec2.privateIp',
-      },
-    });
-
-    // EC2 state choice
-    const ec2StateChoice = new sfn.Choice(this, 'Ec2StateChoice')
-      .when(
-        sfn.Condition.stringEquals('$.ec2.state', 'running'),
-        ec2RunningPass,
-      )
-      .when(
-        sfn.Condition.stringEquals('$.ec2.state', 'stopping'),
-        waitForEc2Stop,
-      )
-      .when(
-        sfn.Condition.stringEquals('$.ec2.state', 'stopped'),
-        ec2StartTask.next(waitAfterEc2Start),
-      )
-      .when(
-        sfn.Condition.stringEquals('$.ec2.state', 'pending'),
-        waitForEc2Pending,
-      )
-      .otherwise(
-        new sfn.Fail(this, 'Ec2UnknownState', {
-          cause: 'EC2 instance in unknown state',
-          error: 'EC2_UNKNOWN_STATE',
-        }),
-      );
-
-    // Chain the polling loops (after choice is defined)
-    waitForEc2Stop.next(ec2DescribeAfterStop);
-    ec2DescribeAfterStop.next(ec2StateChoice);
-
-    waitAfterEc2Start.next(ec2DescribeAfterStart);
-    ec2DescribeAfterStart.next(ec2StateChoice);
-
-    waitForEc2Pending.next(ec2DescribeAfterPending);
-    ec2DescribeAfterPending.next(ec2StateChoice);
-
-    // 4. Execute: health check, HTTP predict, S3 save
-    const paddleocrExecuteTask = new tasks.LambdaInvoke(this, 'OcrExecute', {
-      lambdaFunction: paddleocrExecute,
-      outputPath: '$.Payload',
-    });
-
-    // 5. Complete: record step complete
-    const paddleocrCompleteTask = new tasks.LambdaInvoke(this, 'OcrComplete', {
-      lambdaFunction: paddleocrComplete,
-      outputPath: '$.Payload',
-    });
-
-    // Chain: Prepare → Describe → Choice → (lifecycle) → Boot Wait → Execute → Complete
-    ec2DescribeTask.next(ec2StateChoice);
-    ec2RunningPass.next(waitForEc2Boot);
-    waitForEc2Boot.next(paddleocrExecuteTask);
-    paddleocrExecuteTask.next(paddleocrCompleteTask);
-
-    // Full OCR sub-workflow chain
-    const ocrSubWorkflow = paddleocrPrepareTask.next(ec2DescribeTask);
 
     const segmentBuilderTask = new tasks.LambdaInvoke(this, 'BuildSegments', {
       lambdaFunction: segmentBuilder,
@@ -715,89 +398,9 @@ export class WorkflowStack extends Stack {
       },
     );
 
-    // Wait state for BDA polling
-    const waitForBda = new sfn.Wait(this, 'WaitForBda', {
-      time: sfn.WaitTime.duration(Duration.seconds(30)),
-    });
-
-    // BDA complete pass state
-    const bdaCompletePass = new sfn.Pass(this, 'BdaComplete');
-
-    // BDA status choice
-    const bdaStatusChoice = new sfn.Choice(this, 'BdaStatusChoice')
-      .when(sfn.Condition.stringEquals('$.status', 'InProgress'), waitForBda)
-      .when(sfn.Condition.stringEquals('$.status', 'Created'), waitForBda)
-      .when(sfn.Condition.stringEquals('$.status', 'Success'), bdaCompletePass)
-      .when(
-        sfn.Condition.stringEquals('$.status', 'Failed'),
-        new sfn.Fail(this, 'BdaFailed', {
-          cause: 'BDA processing failed',
-          error: 'BDA_FAILED',
-        }),
-      )
-      .otherwise(bdaCompletePass);
-
-    // BDA branch (only runs if use_bda=true)
-    waitForBda.next(checkBdaStatusTask);
-    checkBdaStatusTask.next(bdaStatusChoice);
-    const bdaBranch = startBdaTask.next(checkBdaStatusTask);
-
-    // Skip BDA pass state
-    const skipBdaPass = new sfn.Pass(this, 'SkipBda');
-
-    // BDA choice (check use_bda flag)
-    const useBdaChoice = new sfn.Choice(this, 'UseBdaChoice')
-      .when(sfn.Condition.booleanEquals('$.use_bda', true), bdaBranch)
-      .otherwise(skipBdaPass);
-
-    // OCR branch - runs for PDF and image files
-    const ocrSupportedChoice = new sfn.Choice(this, 'OcrSupportedChoice')
-      .when(
-        sfn.Condition.stringEquals('$.file_type', 'application/pdf'),
-        ocrSubWorkflow,
-      )
-      .when(
-        sfn.Condition.stringEquals('$.file_type', 'image/png'),
-        ocrSubWorkflow,
-      )
-      .when(
-        sfn.Condition.stringEquals('$.file_type', 'image/jpeg'),
-        ocrSubWorkflow,
-      )
-      .when(
-        sfn.Condition.stringEquals('$.file_type', 'image/tiff'),
-        ocrSubWorkflow,
-      )
-      .otherwise(new sfn.Pass(this, 'SkipOcr'));
-
-    // Parser branch - runs for PDF files
-    const parserSupportedChoice = new sfn.Choice(this, 'ParserSupportedChoice')
-      .when(
-        sfn.Condition.stringEquals('$.file_type', 'application/pdf'),
-        formatParserTask,
-      )
-      .otherwise(new sfn.Pass(this, 'SkipParser'));
-
-    // Parallel processing: BDA (optional), OCR, and Parser run in parallel
-    const parallelProcessing = new sfn.Parallel(this, 'ParallelProcessing', {
-      resultSelector: {
-        // Take the first result that has all the needed fields
-        // The parallel branches return the same base event with their specific additions
-        'workflow_id.$': '$[0].workflow_id',
-        'document_id.$': '$[0].document_id',
-        'project_id.$': '$[0].project_id',
-        'file_uri.$': '$[0].file_uri',
-        'file_type.$': '$[0].file_type',
-        'use_bda.$': '$[0].use_bda',
-        'language.$': '$[0].language',
-        'segment_count.$': '$[0].segment_count',
-        // BDA results are read directly from S3 by SegmentBuilder
-      },
-    });
-
-    parallelProcessing.branch(useBdaChoice);
-    parallelProcessing.branch(ocrSupportedChoice);
-    parallelProcessing.branch(parserSupportedChoice);
+    // ========================================
+    // Segment Processing
+    // ========================================
 
     // Segment processing chain: Analyze → Finalize
     const segmentProcessing = segmentAnalyzerTask.next(analysisFinalizerTask);
@@ -822,13 +425,74 @@ export class WorkflowStack extends Stack {
     );
     parallelSegmentProcessing.itemProcessor(segmentProcessing);
 
-    // Build the state machine chain
-    // Preprocessor → Parallel(BDA, OCR, Parser) → SegmentBuilder → Map(Analyze) → Summarize
-    const definition = preprocessorTask
-      .next(parallelProcessing)
-      .next(segmentBuilderTask)
+    // ========================================
+    // Preprocess Polling Loop
+    // ========================================
+
+    // Wait state before checking preprocess status
+    const waitForPreprocess = new sfn.Wait(this, 'WaitForPreprocess', {
+      time: sfn.WaitTime.duration(Duration.seconds(10)),
+    });
+
+    // Fail state when preprocessing fails
+    const preprocessFailed = new sfn.Fail(this, 'PreprocessFailed', {
+      cause: 'One or more preprocessing tasks failed',
+      error: 'PREPROCESS_FAILED',
+    });
+
+    // Choice: check if preprocess is complete
+    // Routes to: fail, continue to analysis, or loop back to wait
+    const preprocessStatusChoice = new sfn.Choice(
+      this,
+      'PreprocessStatusChoice',
+    )
+      .when(
+        sfn.Condition.booleanEquals('$.preprocess_check.any_failed', true),
+        preprocessFailed,
+      )
+      .when(
+        sfn.Condition.booleanEquals('$.preprocess_check.all_completed', true),
+        segmentBuilderTask,
+      )
+      .otherwise(waitForPreprocess);
+
+    // Chain: Wait → Check → Choice (which loops back or continues)
+    waitForPreprocess.next(checkPreprocessStatusTask);
+    checkPreprocessStatusTask.next(preprocessStatusChoice);
+
+    // Chain: SegmentBuilder → Map(Analyze) → Summarize
+    segmentBuilderTask
       .next(parallelSegmentProcessing)
       .next(documentSummarizerTask);
+
+    // ========================================
+    // Main Workflow Definition
+    // ========================================
+
+    // Parallel execution of Preprocessor and FormatParser
+    // Both run concurrently, then wait for async preprocessing (OCR, BDA, Transcribe)
+    const parallelPreprocessing = new sfn.Parallel(
+      this,
+      'ParallelPreprocessing',
+      {
+        resultSelector: {
+          'workflow_id.$': '$[0].workflow_id',
+          'project_id.$': '$[0].project_id',
+          'document_id.$': '$[0].document_id',
+          'file_uri.$': '$[0].file_uri',
+          'file_type.$': '$[0].file_type',
+          'preprocessor_metadata_uri.$': '$[0].preprocessor_metadata_uri',
+          'segment_count.$': '$[0].segment_count',
+          'format_parser.$': '$[1].format_parser',
+        },
+      },
+    );
+    parallelPreprocessing.branch(segmentPrepTask);
+    parallelPreprocessing.branch(formatParserTask);
+
+    // Flow: Parallel(Preprocessor, FormatParser) → Check → Choice → (loop or continue) → SegmentBuilder → Map(Analyze) → Summarize
+    parallelPreprocessing.next(checkPreprocessStatusTask);
+    const definition = parallelPreprocessing;
 
     this.stateMachine = new sfn.StateMachine(
       this,
@@ -840,11 +504,15 @@ export class WorkflowStack extends Stack {
       },
     );
 
+    // ========================================
     // Step Function Trigger Lambda
+    // ========================================
+
     const triggerFunction = new lambda.Function(this, 'StepFunctionTrigger', {
       ...commonLambdaProps,
       functionName: 'idp-v2-step-function-trigger',
       handler: 'index.handler',
+      memorySize: 128,
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-function-trigger'),
       ),
@@ -855,28 +523,24 @@ export class WorkflowStack extends Stack {
       },
     });
 
-    // SQS Event Source for trigger
-    triggerFunction.addEventSourceMapping('SqsTrigger', {
-      eventSourceArn: triggerQueue.queueArn,
+    // SQS Event Source for trigger (from Workflow Queue)
+    triggerFunction.addEventSourceMapping('WorkflowQueueTrigger', {
+      eventSourceArn: workflowQueue.queueArn,
       batchSize: 1,
     });
 
     // ========================================
-    // IAM Permissions (Individual per Lambda)
+    // IAM Permissions
     // ========================================
 
     const allFunctions = [
-      preprocessor,
-      bdaProcessor,
-      bdaStatusChecker,
+      segmentPrep,
       formatParser,
+      checkPreprocessStatus,
       segmentBuilder,
       segmentAnalyzer,
       analysisFinalizer,
       documentSummarizer,
-      paddleocrPrepare,
-      paddleocrExecute,
-      paddleocrComplete,
       triggerFunction,
       lancedbService,
       lancedbWriter,
@@ -889,8 +553,7 @@ export class WorkflowStack extends Stack {
     // SQS permissions
     lancedbWriteQueue.grantSendMessages(analysisFinalizer);
     lancedbWriteQueue.grantConsumeMessages(lancedbWriter);
-
-    // EC2 permissions are now handled by Step Functions State Machine (see below)
+    workflowQueue.grantConsumeMessages(triggerFunction);
 
     for (const fn of allFunctions) {
       // S3 permissions (Document bucket)
@@ -935,31 +598,14 @@ export class WorkflowStack extends Stack {
           actions: [
             'bedrock:InvokeModel',
             'bedrock:InvokeModelWithResponseStream',
-            'bedrock:CreateDataAutomationProject',
-            'bedrock:UpdateDataAutomationProject',
-            'bedrock:GetDataAutomationProject',
-            'bedrock:ListDataAutomationProjects',
-            'bedrock:InvokeDataAutomationAsync',
-            'bedrock:GetDataAutomationStatus',
           ],
           resources: ['*'],
         }),
       );
     }
 
-    // EC2 permissions for Step Functions State Machine (PaddleOCR EC2 lifecycle)
-    this.stateMachine.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ['ec2:DescribeInstances', 'ec2:StartInstances'],
-        resources: ['*'],
-      }),
-    );
-
     // Step Functions permissions for trigger
     this.stateMachine.grantStartExecution(triggerFunction);
-
-    // SQS permissions for trigger
-    triggerQueue.grantConsumeMessages(triggerFunction);
 
     // Store State Machine ARN in SSM
     new ssm.StringParameter(this, 'StateMachineArn', {
