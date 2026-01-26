@@ -15,4 +15,6 @@ export const SSM_KEYS = {
   SEARCH_MCP_FUNCTION_ARN: '/idp-v2/mcp/search/function-arn',
   SEARCH_MCP_ROLE_ARN: '/idp-v2/mcp/search/role-arn',
   ELASTICACHE_ENDPOINT: '/idp-v2/elasticache/endpoint',
+  WEBSOCKET_API_ID: '/idp-v2/websocket/api-id',
+  WEBSOCKET_CALLBACK_URL: '/idp-v2/websocket/callback-url',
 } as const;

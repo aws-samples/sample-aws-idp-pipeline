@@ -90,5 +90,19 @@ export class ApplicationStack extends Stack {
 
     // Grant agent storage bucket read access for artifacts
     agentStorageBucket.grantRead(userIdentity.identityPool.authenticatedRole);
+
+    // Grant WebSocket API manage connections permission
+    const websocketApiId = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.WEBSOCKET_API_ID,
+    );
+    userIdentity.identityPool.authenticatedRole.addToPrincipalPolicy(
+      new PolicyStatement({
+        actions: ['execute-api:Invoke', 'execute-api:ManageConnections'],
+        resources: [
+          `arn:aws:execute-api:${this.region}:${this.account}:${websocketApiId}/*`,
+        ],
+      }),
+    );
   }
 }

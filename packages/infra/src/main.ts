@@ -7,6 +7,7 @@ import { PaddleOcrStack } from './stacks/paddleocr-stack.js';
 import { WorkflowStack } from './stacks/workflow-stack.js';
 import { VpcStack } from './stacks/vpc-stack.js';
 import { WorkerStack } from './stacks/worker-stack.js';
+import { WebsocketStack } from './stacks/websocket-stack.js';
 
 const app = new App();
 
@@ -28,6 +29,10 @@ new PaddleOcrStack(app, 'IDP-V2-PaddleOcr', {
 });
 
 new WorkflowStack(app, 'IDP-V2-Workflow', {
+  env,
+});
+
+new WebsocketStack(app, 'IDP-V2-Websocket', {
   env,
 });
 
