@@ -40,18 +40,6 @@ export class WorkflowStack extends Stack {
         SSM_KEYS.LANCEDB_EXPRESS_BUCKET_NAME,
       );
 
-    // LanceDB Storage Bucket (Standard S3)
-    const lancedbStorageBucketName =
-      ssm.StringParameter.valueForStringParameter(
-        this,
-        SSM_KEYS.LANCEDB_STORAGE_BUCKET_NAME,
-      );
-    const lancedbStorageBucket = s3.Bucket.fromBucketName(
-      this,
-      'LanceDBStorageBucket',
-      lancedbStorageBucketName,
-    );
-
     // LanceDB Lock Table (DynamoDB)
     const lancedbLockTableName = ssm.StringParameter.valueForStringParameter(
       this,
@@ -924,9 +912,6 @@ export class WorkflowStack extends Stack {
           ],
         }),
       );
-
-      // S3 Standard permissions (LanceDB Storage)
-      lancedbStorageBucket.grantReadWrite(fn);
 
       // DynamoDB permissions for LanceDB Lock table
       lancedbLockTable.grantReadWriteData(fn);

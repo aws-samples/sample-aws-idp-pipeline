@@ -18,16 +18,6 @@ export class StorageStack extends Stack {
     const vpcId = StringParameter.valueFromLookup(this, SSM_KEYS.VPC_ID);
     const vpc = Vpc.fromLookup(this, 'Vpc', { vpcId });
 
-    // LanceDB Storage Bucket
-    const lancedbStorage = new S3Bucket(this, 'LancedbStorage', {
-      bucketPrefix: 'lancedb-storage',
-    });
-
-    new StringParameter(this, 'LancedbStorageBucketNameParam', {
-      parameterName: SSM_KEYS.LANCEDB_STORAGE_BUCKET_NAME,
-      stringValue: lancedbStorage.bucket.bucketName,
-    });
-
     // LanceDB Lock Table
     const lancedbLockTable = new TableV2(this, 'LancedbLockTable', {
       partitionKey: { name: 'base_uri', type: AttributeType.STRING },
@@ -79,6 +69,7 @@ export class StorageStack extends Stack {
           exposedHeaders: ['ETag', 'Content-Type', 'Content-Length'],
         },
       ],
+      versioned: true,
     });
 
     new StringParameter(this, 'SessionStorageBucketNameParam', {
