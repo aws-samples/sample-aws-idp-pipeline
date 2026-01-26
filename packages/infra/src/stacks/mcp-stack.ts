@@ -93,5 +93,18 @@ export class McpStack extends Stack {
         ),
       ),
     });
+
+    this.gateway.addLambdaTarget('EditArtifactTarget', {
+      gatewayTargetName: 'edit-artifact',
+      description:
+        'Edit an existing artifact. Use this tool when you need to update the content of a previously saved artifact.',
+      lambdaFunction: this.artifactMcp.editFunction,
+      toolSchema: agentcore.ToolSchema.fromLocalAsset(
+        path.resolve(
+          process.cwd(),
+          '../../packages/lambda/artifact-mcp/edit_artifact.json',
+        ),
+      ),
+    });
   }
 }
