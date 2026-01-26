@@ -1,5 +1,10 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
-import { WebSocketApi, WebSocketStage } from 'aws-cdk-lib/aws-apigatewayv2';
+import {
+  WebSocketApi,
+  WebSocketStage,
+  WebSocketApiKeySelectionExpression,
+} from 'aws-cdk-lib/aws-apigatewayv2';
+import { WebSocketIamAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { WebSocketLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Vpc } from 'aws-cdk-lib/aws-ec2';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
@@ -26,6 +31,8 @@ export class WebsocketStack extends Stack {
       elasticacheEndpoint,
     });
 
+    const iamAuthorizer = new WebSocketIamAuthorizer();
+
     this.api = new WebSocketApi(this, 'WebSocketApi', {
       apiName: 'idp-websocket-api',
       connectRouteOptions: {
@@ -33,6 +40,7 @@ export class WebsocketStack extends Stack {
           'ConnectIntegration',
           functions.connectFunction,
         ),
+        authorizer: iamAuthorizer,
       },
       disconnectRouteOptions: {
         integration: new WebSocketLambdaIntegration(
