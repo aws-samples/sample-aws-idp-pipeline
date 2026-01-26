@@ -14,6 +14,7 @@ export interface ArtifactMcpProps {
 export class ArtifactMcp extends Construct {
   public readonly saveFunction: NodejsFunction;
   public readonly loadFunction: NodejsFunction;
+  public readonly editFunction: NodejsFunction;
 
   constructor(scope: Construct, id: string, props: ArtifactMcpProps) {
     super(scope, id);
@@ -56,5 +57,21 @@ export class ArtifactMcp extends Construct {
 
     backendTable.grantReadData(this.loadFunction);
     storageBucket.grantRead(this.loadFunction);
+
+    // Edit Artifact Function
+    this.editFunction = new NodejsFunction(this, 'EditFunction', {
+      entry: path.resolve(
+        process.cwd(),
+        '../../packages/lambda/artifact-mcp/src/edit_artifact.ts',
+      ),
+      handler: 'handler',
+      runtime: Runtime.NODEJS_22_X,
+      architecture: Architecture.ARM_64,
+      timeout: Duration.seconds(30),
+      environment: commonEnv,
+    });
+
+    backendTable.grantReadWriteData(this.editFunction);
+    storageBucket.grantPut(this.editFunction);
   }
 }

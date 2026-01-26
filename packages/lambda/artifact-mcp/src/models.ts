@@ -27,3 +27,17 @@ export interface LoadArtifactOutput {
   encoding: 'text' | 'base64';
   created_at: string;
 }
+
+export interface EditArtifactInput {
+  artifact_id: string;
+  content: string;
+  encoding?: 'text' | 'base64';
+}
+
+export interface EditArtifactOutput {
+  artifact_id: string;
+  filename: string;
+  s3_bucket: string;
+  s3_key: string;
+  updated_at: string;
+}

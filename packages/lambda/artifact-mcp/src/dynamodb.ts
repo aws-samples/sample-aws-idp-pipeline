@@ -3,6 +3,7 @@ import {
   DynamoDBDocumentClient,
   PutCommand,
   GetCommand,
+  UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient();
@@ -63,4 +64,31 @@ export async function getArtifactMetadata(
   }
 
   return result.Item as ArtifactMetadata;
+}
+
+export async function updateArtifactMetadata(
+  table: string,
+  artifactId: string,
+  fileSize: number,
+  updatedAt: string,
+): Promise<void> {
+  await docClient.send(
+    new UpdateCommand({
+      TableName: table,
+      Key: {
+        PK: `ART#${artifactId}`,
+        SK: 'META',
+      },
+      UpdateExpression:
+        'SET #data.#fileSize = :fileSize, updated_at = :updatedAt',
+      ExpressionAttributeNames: {
+        '#data': 'data',
+        '#fileSize': 'file_size',
+      },
+      ExpressionAttributeValues: {
+        ':fileSize': fileSize,
+        ':updatedAt': updatedAt,
+      },
+    }),
+  );
 }
