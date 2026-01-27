@@ -45,6 +45,12 @@ export class WebsocketStack extends Stack {
           functions.disconnectFunction,
         ),
       },
+      defaultRouteOptions: {
+        integration: new WebSocketLambdaIntegration(
+          'DefaultIntegration',
+          functions.defaultFunction,
+        ),
+      },
     });
 
     this.stage = new WebSocketStage(this, 'WebSocketStage', {

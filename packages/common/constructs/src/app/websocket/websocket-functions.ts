@@ -12,6 +12,7 @@ export interface WebsocketFunctionsProps {
 
 export class WebsocketFunctions extends Construct {
   public readonly connectFunction: NodejsFunction;
+  public readonly defaultFunction: NodejsFunction;
   public readonly disconnectFunction: NodejsFunction;
 
   constructor(scope: Construct, id: string, props: WebsocketFunctionsProps) {
@@ -25,6 +26,21 @@ export class WebsocketFunctions extends Construct {
         '../../packages/lambda/websocket/src/connect.ts',
       ),
       handler: 'connectHandler',
+      runtime: Runtime.NODEJS_22_X,
+      architecture: Architecture.ARM_64,
+      timeout: Duration.seconds(10),
+      vpc,
+      environment: {
+        ELASTICACHE_ENDPOINT: elasticacheEndpoint,
+      },
+    });
+
+    this.defaultFunction = new NodejsFunction(this, 'DefaultFunction', {
+      entry: path.resolve(
+        process.cwd(),
+        '../../packages/lambda/websocket/src/default.ts',
+      ),
+      handler: 'defaultHandler',
       runtime: Runtime.NODEJS_22_X,
       architecture: Architecture.ARM_64,
       timeout: Duration.seconds(10),
