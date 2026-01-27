@@ -1,3 +1,25 @@
+# WebSocket Messages
+
+## Actions
+
+### sessions
+
+세션 생성/수정/삭제 이벤트
+
+```json
+{
+  "action": "sessions",
+  "data": {
+    "event": "created" | "updated" | "deleted",
+    "sessionId": "string",
+    "sessionName": "string",
+    "timestamp": "string (ISO 8601)"
+  }
+}
+```
+
+---
+
 # Valkey Keys
 
 ## 키 구조

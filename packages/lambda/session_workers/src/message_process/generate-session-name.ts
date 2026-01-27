@@ -3,6 +3,9 @@ import {
   ConverseCommand,
 } from '@aws-sdk/client-bedrock-runtime';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { parseMessageS3Key } from '../parse-session-s3-key.js';
+import { getConnectionIdsByUsername } from './valkey.js';
+import { sendToConnection } from './websocket.js';
 
 const bedrockClient = new BedrockRuntimeClient();
 
@@ -34,6 +37,12 @@ export async function generateSessionName(
   bucket: string,
   messageKey: string,
 ): Promise<string | null> {
+  const keyInfo = parseMessageS3Key(messageKey);
+  if (!keyInfo) {
+    return null;
+  }
+
+  const { userId, sessionId } = keyInfo;
   const message0Key = messageKey.replace('message_1.json', 'message_0.json');
 
   const [userResponse, assistantResponse] = await Promise.all([
@@ -55,10 +64,11 @@ export async function generateSessionName(
   const assistantText = extractTextFromMessage(assistantData).slice(0, 500);
 
   const prompt = [
-    'Generate a short session name based on the following conversation.',
-    'The session name should be no more than 20 characters and concisely express the main topic of the conversation.',
-    'Detect the language used in the conversation and write the session name in that same language.',
-    'Output only the session name.',
+    'Generate a natural and descriptive session title based on the following conversation.',
+    'The title should be 3-6 words that capture the essence or goal of the conversation.',
+    'Make it sound like a natural conversation topic, not just keywords.',
+    'Detect the language used in the conversation and write the title in that same language.',
+    'Output only the title, nothing else.',
     '',
     `User: ${userText}`,
     '',
@@ -76,5 +86,25 @@ export async function generateSessionName(
   const response = await bedrockClient.send(command);
   const sessionName = response.output?.message?.content?.[0]?.text?.trim();
 
-  return sessionName ?? null;
+  if (!sessionName) {
+    return null;
+  }
+
+  const connectionIds = await getConnectionIdsByUsername(userId);
+  const message = JSON.stringify({
+    action: 'sessions',
+    data: {
+      event: 'created',
+      sessionId,
+      sessionName,
+      timestamp: new Date().toISOString(),
+    },
+  });
+  await Promise.all(
+    connectionIds.map((connectionId) =>
+      sendToConnection(connectionId, message),
+    ),
+  );
+
+  return sessionName;
 }

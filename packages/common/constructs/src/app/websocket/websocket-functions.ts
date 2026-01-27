@@ -36,11 +36,14 @@ export class WebsocketFunctions extends Construct {
       handler: 'connectHandler',
       runtime: Runtime.NODEJS_22_X,
       architecture: Architecture.ARM_64,
-      timeout: Duration.seconds(10),
+      timeout: Duration.seconds(2),
       vpc,
       environment: {
         ELASTICACHE_ENDPOINT: elasticacheEndpoint,
         BACKEND_TABLE_NAME: backendTableName,
+      },
+      bundling: {
+        nodeModules: ['iovalkey'],
       },
     });
 
@@ -54,10 +57,13 @@ export class WebsocketFunctions extends Construct {
       handler: 'defaultHandler',
       runtime: Runtime.NODEJS_22_X,
       architecture: Architecture.ARM_64,
-      timeout: Duration.seconds(10),
+      timeout: Duration.seconds(2),
       vpc,
       environment: {
         ELASTICACHE_ENDPOINT: elasticacheEndpoint,
+      },
+      bundling: {
+        nodeModules: ['iovalkey'],
       },
     });
 
@@ -73,6 +79,9 @@ export class WebsocketFunctions extends Construct {
       vpc,
       environment: {
         ELASTICACHE_ENDPOINT: elasticacheEndpoint,
+      },
+      bundling: {
+        nodeModules: ['iovalkey'],
       },
     });
   }

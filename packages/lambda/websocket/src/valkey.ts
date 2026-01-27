@@ -1,5 +1,7 @@
-import { Cluster } from 'iovalkey';
+import Valkey from 'iovalkey';
 
-export const valkey = new Cluster([
-  { host: process.env.ELASTICACHE_ENDPOINT, port: 6379 },
-]);
+export const valkey = new Valkey({
+  host: process.env.ELASTICACHE_ENDPOINT,
+  port: 6379,
+  tls: {},
+});

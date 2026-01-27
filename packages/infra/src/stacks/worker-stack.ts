@@ -28,10 +28,22 @@ export class WorkerStack extends Stack {
       SSM_KEYS.ELASTICACHE_ENDPOINT,
     );
 
+    const websocketCallbackUrl = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.WEBSOCKET_CALLBACK_URL,
+    );
+
+    const websocketApiId = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.WEBSOCKET_API_ID,
+    );
+
     new MessageProcess(this, 'MessageProcess', {
       bucket: sessionStorageBucket,
       vpc,
       elasticacheEndpoint,
+      websocketCallbackUrl,
+      websocketApiId,
     });
   }
 }

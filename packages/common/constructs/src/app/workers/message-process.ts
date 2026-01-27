@@ -12,6 +12,8 @@ export interface MessageProcessProps {
   bucket: IBucket;
   vpc: IVpc;
   elasticacheEndpoint: string;
+  websocketCallbackUrl: string;
+  websocketApiId: string;
 }
 
 export class MessageProcess extends Construct {
@@ -32,9 +34,10 @@ export class MessageProcess extends Construct {
       vpc: props.vpc,
       environment: {
         ELASTICACHE_ENDPOINT: props.elasticacheEndpoint,
+        WEBSOCKET_CALLBACK_URL: props.websocketCallbackUrl,
       },
       bundling: {
-        nodeModules: ['ioredis'],
+        nodeModules: ['iovalkey'],
       },
     });
 
@@ -47,6 +50,15 @@ export class MessageProcess extends Construct {
         resources: [
           'arn:aws:bedrock:*::foundation-model/*',
           `arn:aws:bedrock:*:${stack.account}:inference-profile/*`,
+        ],
+      }),
+    );
+
+    this.function.addToRolePolicy(
+      new PolicyStatement({
+        actions: ['execute-api:ManageConnections'],
+        resources: [
+          `arn:aws:execute-api:${stack.region}:${stack.account}:${props.websocketApiId}/*/@connections/*`,
         ],
       }),
     );
