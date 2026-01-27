@@ -271,6 +271,19 @@ export class WorkflowStack extends Stack {
       layers: [coreLayer, sharedLayer],
     });
 
+    // Reanalysis Prep (prepares segments for re-analysis)
+    const reanalysisPrep = new lambda.Function(this, 'ReanalysisPrep', {
+      ...commonLambdaProps,
+      functionName: 'idp-v2-reanalysis-prep',
+      handler: 'index.handler',
+      timeout: Duration.minutes(5),
+      memorySize: 256,
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, '../functions/step-functions/reanalysis-prep'),
+      ),
+      layers: [coreLayer, sharedLayer],
+    });
+
     const segmentAnalyzer = new lambda.Function(this, 'SegmentAnalyzer', {
       ...commonLambdaProps,
       functionName: 'idp-v2-segment-analyzer',
@@ -302,6 +315,7 @@ export class WorkflowStack extends Stack {
       environment: {
         ...commonLambdaProps.environment,
         LANCEDB_WRITE_QUEUE_URL: lancedbWriteQueue.queueUrl,
+        LANCEDB_FUNCTION_NAME: lancedbService.functionName,
       },
     });
 
@@ -375,6 +389,15 @@ export class WorkflowStack extends Stack {
       outputPath: '$.Payload',
     });
 
+    const reanalysisPrepTask = new tasks.LambdaInvoke(
+      this,
+      'PrepareReanalysis',
+      {
+        lambdaFunction: reanalysisPrep,
+        outputPath: '$.Payload',
+      },
+    );
+
     const segmentAnalyzerTask = new tasks.LambdaInvoke(this, 'AnalyzeSegment', {
       lambdaFunction: segmentAnalyzer,
       outputPath: '$.Payload',
@@ -403,6 +426,7 @@ export class WorkflowStack extends Stack {
     // ========================================
 
     // Segment processing chain: Analyze → Finalize
+    // For re-analysis, pass is_reanalysis flag to AnalysisFinalizer
     const segmentProcessing = segmentAnalyzerTask.next(analysisFinalizerTask);
 
     // Distributed Map for parallel segment processing
@@ -420,6 +444,7 @@ export class WorkflowStack extends Stack {
           'file_type.$': '$.file_type',
           'segment_count.$': '$.segment_count',
           'segment_index.$': '$$.Map.Item.Value',
+          'is_reanalysis.$': '$.is_reanalysis',
         },
       },
     );
@@ -492,7 +517,20 @@ export class WorkflowStack extends Stack {
 
     // Flow: Parallel(Preprocessor, FormatParser) → Check → Choice → (loop or continue) → SegmentBuilder → Map(Analyze) → Summarize
     parallelPreprocessing.next(checkPreprocessStatusTask);
-    const definition = parallelPreprocessing;
+
+    // Re-analysis flow: Skip preprocessing, go directly to analysis
+    // ReanalysisPrep → Map(Analyze) → Summarize
+    reanalysisPrepTask.next(parallelSegmentProcessing);
+
+    // Choice at workflow start: check if this is a re-analysis request
+    const isReanalysisChoice = new sfn.Choice(this, 'IsReanalysis')
+      .when(
+        sfn.Condition.booleanEquals('$.is_reanalysis', true),
+        reanalysisPrepTask,
+      )
+      .otherwise(parallelPreprocessing);
+
+    const definition = isReanalysisChoice;
 
     this.stateMachine = new sfn.StateMachine(
       this,
@@ -538,6 +576,7 @@ export class WorkflowStack extends Stack {
       formatParser,
       checkPreprocessStatus,
       segmentBuilder,
+      reanalysisPrep,
       segmentAnalyzer,
       analysisFinalizer,
       documentSummarizer,
@@ -549,6 +588,7 @@ export class WorkflowStack extends Stack {
     // Grant invoke permissions for LanceDB service
     lancedbService.grantInvoke(lancedbWriter);
     lancedbService.grantInvoke(documentSummarizer);
+    lancedbService.grantInvoke(analysisFinalizer);
 
     // SQS permissions
     lancedbWriteQueue.grantSendMessages(analysisFinalizer);

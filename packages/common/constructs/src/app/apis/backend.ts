@@ -103,6 +103,10 @@ export class Backend extends Construct {
       this,
       SSM_KEYS.ELASTICACHE_ENDPOINT,
     );
+    const stepFunctionArn = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.STEP_FUNCTION_ARN,
+    );
 
     this.service = new ApplicationLoadBalancedFargateService(this, 'Service', {
       cluster,
@@ -123,6 +127,7 @@ export class Backend extends Construct {
           SESSION_STORAGE_BUCKET_NAME: sessionStorage.bucketName,
           AGENT_STORAGE_BUCKET_NAME: agentStorage.bucketName,
           ELASTICACHE_ENDPOINT: elasticacheEndpoint,
+          STEP_FUNCTION_ARN: stepFunctionArn,
         },
       },
       runtimePlatform: {
@@ -169,6 +174,14 @@ export class Backend extends Construct {
           'bedrock:Rerank',
         ],
         resources: ['*'],
+      }),
+    );
+
+    // Grant Step Functions start execution permission for re-analysis
+    taskRole.addToPrincipalPolicy(
+      new PolicyStatement({
+        actions: ['states:StartExecution'],
+        resources: [stepFunctionArn],
       }),
     );
 

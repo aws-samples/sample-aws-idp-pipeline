@@ -281,7 +281,6 @@ def handler(event, context):
             # Get document settings (use_bda)
             document = get_document(project_id, document_id)
             use_bda = document.get('use_bda', False) if document else False
-            print(f'Document {document_id} use_bda: {use_bda}')
 
             # Create workflow record with preprocess field
             # execution_arn will be empty initially, updated by Step Functions trigger

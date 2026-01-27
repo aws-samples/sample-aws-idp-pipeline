@@ -657,7 +657,7 @@ export default function ChatPanel({
                   <div className="hidden dark:block absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-fuchsia-300/20 to-transparent rounded-full translate-y-1/2 -translate-x-1/2" />
 
                   {/* Header */}
-                  <div className="relative flex items-center gap-2 px-4 py-2.5 border-b border-slate-200 dark:border-violet-400/50 bg-gray-50 dark:bg-violet-500/20">
+                  <div className="tool-result-header relative flex items-center gap-2 px-4 py-2.5 border-b border-slate-200 dark:border-violet-400/50">
                     <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm">
                       {message.toolResultType === 'artifact' ? (
                         <File className="w-3.5 h-3.5 text-white" />

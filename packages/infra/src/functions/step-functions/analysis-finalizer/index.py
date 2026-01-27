@@ -7,7 +7,9 @@ import boto3
 from shared.s3_analysis import get_segment_analysis, update_segment_status, SegmentStatus
 
 sqs_client = None
+lambda_client = None
 LANCEDB_WRITE_QUEUE_URL = os.environ.get('LANCEDB_WRITE_QUEUE_URL')
+LANCEDB_FUNCTION_NAME = os.environ.get('LANCEDB_FUNCTION_NAME', 'idp-v2-lancedb-service')
 
 
 def get_sqs_client():
@@ -15,6 +17,32 @@ def get_sqs_client():
     if sqs_client is None:
         sqs_client = boto3.client('sqs', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
     return sqs_client
+
+
+def get_lambda_client():
+    global lambda_client
+    if lambda_client is None:
+        lambda_client = boto3.client('lambda', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
+    return lambda_client
+
+
+def invoke_lancedb(action: str, params: dict) -> dict:
+    """Invoke LanceDB service Lambda."""
+    client = get_lambda_client()
+    response = client.invoke(
+        FunctionName=LANCEDB_FUNCTION_NAME,
+        InvocationType='RequestResponse',
+        Payload=json.dumps({'action': action, 'params': params})
+    )
+
+    payload = response['Payload'].read().decode('utf-8')
+
+    if 'FunctionError' in response:
+        print(f'LanceDB Lambda error: {response["FunctionError"]}, payload: {payload}')
+        return {'statusCode': 500, 'error': f'Lambda error: {payload}'}
+
+    result = json.loads(payload)
+    return result
 
 
 def handler(event, _context):
@@ -25,9 +53,20 @@ def handler(event, _context):
     segment_index = event.get('segment_index', 0)
     file_uri = event.get('file_uri', '')
     file_type = event.get('file_type', '')
+    is_reanalysis = event.get('is_reanalysis', False)
 
     if isinstance(segment_index, dict):
         segment_index = segment_index.get('segment_index', 0)
+
+    # For re-analysis, delete existing LanceDB record first
+    if is_reanalysis:
+        print(f'Re-analysis mode: deleting existing record for segment {segment_index}')
+        delete_result = invoke_lancedb('delete_record', {
+            'project_id': project_id,
+            'workflow_id': workflow_id,
+            'segment_index': segment_index
+        })
+        print(f'Delete result: {delete_result}')
 
     # Get segment data from S3
     segment_data = get_segment_analysis(file_uri, segment_index)

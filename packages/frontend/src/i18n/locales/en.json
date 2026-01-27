@@ -116,7 +116,17 @@
     "noSegments": "No segments available",
     "loadingImage": "Loading image...",
     "noVideoAvailable": "No video available for this segment",
-    "noImageAvailable": "No image available for this segment"
+    "noImageAvailable": "No image available for this segment",
+    "reanalyze": "Re-analyze",
+    "reanalyzeTitle": "Re-run AI Analysis",
+    "reanalyzeDescription": "Only AI analysis will be re-run. OCR, BDA, and Transcribe results will be preserved.",
+    "reanalyzeInstructions": "Analysis Instructions",
+    "reanalyzeInstructionsPlaceholder": "Enter additional instructions for AI analysis (optional)\n\nExample:\n- Focus on numerical data in tables\n- Extract dates and amounts accurately\n- Summarize contract terms",
+    "reanalyzeStart": "Start Re-analysis",
+    "reanalyzeStarting": "Starting re-analysis...",
+    "reanalyzeStarted": "Re-analysis has started",
+    "reanalyzeFailed": "Failed to start re-analysis",
+    "reanalyzeNotAllowed": "Only completed or failed workflows can be re-analyzed"
   },
   "ocr": {
     "title": "OCR Settings",

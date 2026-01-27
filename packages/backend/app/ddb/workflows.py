@@ -33,6 +33,34 @@ def query_workflow_segments(workflow_id: str) -> list[Segment]:
     return [Segment(**item) for item in response.get("Items", [])]
 
 
+def update_workflow_status(
+    document_id: str,
+    workflow_id: str,
+    status: str,
+    execution_arn: str | None = None,
+) -> None:
+    """Update workflow status and optionally execution ARN."""
+    from datetime import UTC, datetime
+
+    table = get_table()
+    update_expression = "SET #data.#status = :status, updated_at = :updated_at"
+    expression_values: dict = {
+        ":status": status,
+        ":updated_at": datetime.now(UTC).isoformat(),
+    }
+
+    if execution_arn:
+        update_expression += ", #data.execution_arn = :execution_arn"
+        expression_values[":execution_arn"] = execution_arn
+
+    table.update_item(
+        Key=make_workflow_key(document_id, workflow_id),
+        UpdateExpression=update_expression,
+        ExpressionAttributeNames={"#data": "data", "#status": "status"},
+        ExpressionAttributeValues=expression_values,
+    )
+
+
 def delete_workflow_item(document_id: str, workflow_id: str) -> int:
     """Delete workflow item and all related items (STEP, SEG#*, CONN#*, etc.)."""
     table = get_table()

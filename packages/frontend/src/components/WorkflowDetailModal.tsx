@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { RefreshCw, Loader2 } from 'lucide-react';
 import { WorkflowDetail, AnalysisPopup } from '../types/project';
 import { LANGUAGES, CARD_COLORS } from './ProjectSettingsModal';
 import OcrDocumentView from './OcrDocumentView';
@@ -11,6 +12,8 @@ interface WorkflowDetailModalProps {
   projectColor: number;
   loadingWorkflow: boolean;
   onClose: () => void;
+  onReanalyze?: (userInstructions: string) => Promise<void>;
+  reanalyzing?: boolean;
 }
 
 export default function WorkflowDetailModal({
@@ -18,6 +21,8 @@ export default function WorkflowDetailModal({
   projectColor,
   loadingWorkflow,
   onClose,
+  onReanalyze,
+  reanalyzing = false,
 }: WorkflowDetailModalProps) {
   const { t } = useTranslation();
   const [currentSegmentIndex, setCurrentSegmentIndex] = useState(0);
@@ -28,6 +33,27 @@ export default function WorkflowDetailModal({
     title: '',
     qaItems: [],
   });
+  const [showReanalyzeModal, setShowReanalyzeModal] = useState(false);
+  const [reanalyzeInstructions, setReanalyzeInstructions] = useState('');
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const seekVideo = (time: number) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = time;
+      videoRef.current.play();
+    }
+  };
+
+  const canReanalyze =
+    onReanalyze &&
+    (workflow.status === 'completed' || workflow.status === 'failed');
+
+  const handleReanalyze = async () => {
+    if (!onReanalyze) return;
+    await onReanalyze(reanalyzeInstructions);
+    setShowReanalyzeModal(false);
+    setReanalyzeInstructions('');
+  };
 
   const currentSegment = workflow.segments[currentSegmentIndex];
 
@@ -158,7 +184,7 @@ export default function WorkflowDetailModal({
                     </svg>
                   </button>
                   <div className="flex gap-1 flex-1">
-                    {['BDA', 'OCR', 'Parser', 'AI']
+                    {['BDA', 'OCR', 'Parser', 'STT', 'AI']
                       .filter((type) => {
                         if (type === 'BDA')
                           return !!currentSegment?.bda_indexer;
@@ -167,6 +193,11 @@ export default function WorkflowDetailModal({
                             ?.length;
                         if (type === 'Parser')
                           return !!currentSegment?.format_parser;
+                        if (type === 'STT')
+                          return (
+                            (currentSegment?.transcribe_segments?.length ?? 0) >
+                            0
+                          );
                         if (type === 'AI')
                           return (currentSegment?.ai_analysis?.length ?? 0) > 0;
                         return false;
@@ -194,6 +225,13 @@ export default function WorkflowDetailModal({
                                 title: `OCR Content - Segment ${currentSegmentIndex + 1}`,
                                 qaItems: [],
                               });
+                            } else if (type === 'STT') {
+                              setAnalysisPopup({
+                                type: 'stt',
+                                content: '',
+                                title: `Transcribe - Segment ${currentSegmentIndex + 1}`,
+                                qaItems: [],
+                              });
                             } else {
                               const contentMap: Record<string, string> = {
                                 BDA: currentSegment?.bda_indexer || '',
@@ -210,8 +248,10 @@ export default function WorkflowDetailModal({
                           className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                             (type === 'AI' && analysisPopup.type === 'ai') ||
                             (type === 'OCR' && analysisPopup.type === 'ocr') ||
+                            (type === 'STT' && analysisPopup.type === 'stt') ||
                             (type !== 'AI' &&
                               type !== 'OCR' &&
+                              type !== 'STT' &&
                               analysisPopup.title.includes(type))
                               ? 'bg-blue-500 text-white'
                               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -320,6 +360,32 @@ export default function WorkflowDetailModal({
                         </div>
                       </>
                     )
+                  ) : analysisPopup.type === 'stt' &&
+                    currentSegment?.transcribe_segments?.length ? (
+                    <div className="flex-1 overflow-y-auto space-y-2">
+                      {currentSegment.transcribe_segments.map((seg, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => seekVideo(seg.start_time)}
+                          className="w-full text-left bg-white rounded-lg border border-slate-200 p-3 hover:bg-purple-50 hover:border-purple-300 transition-colors cursor-pointer"
+                        >
+                          <div className="inline-flex items-center gap-1.5 px-2 py-1 mb-1.5 bg-purple-50 dark:bg-purple-900/30 rounded">
+                            <span className="text-xs font-mono text-purple-600 dark:text-purple-400">
+                              {seg.start_time.toFixed(1)}s
+                            </span>
+                            <span className="text-xs text-purple-300 dark:text-purple-500">
+                              ~
+                            </span>
+                            <span className="text-xs font-mono text-purple-400 dark:text-purple-500">
+                              {seg.end_time.toFixed(1)}s
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-800">
+                            {seg.transcript}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
                   ) : !analysisPopup.content ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
                       <svg
@@ -366,9 +432,25 @@ export default function WorkflowDetailModal({
                 {/* Basic Information */}
                 <div className="space-y-4">
                   <div>
-                    <p className="text-xs text-slate-500 mb-1">
-                      {t('workflow.fileName')}
-                    </p>
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-xs text-slate-500">
+                        {t('workflow.fileName')}
+                      </p>
+                      {canReanalyze && (
+                        <button
+                          onClick={() => setShowReanalyzeModal(true)}
+                          disabled={reanalyzing}
+                          className="flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {reanalyzing ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-3 w-3" />
+                          )}
+                          {t('workflow.reanalyze')}
+                        </button>
+                      )}
+                    </div>
                     <p
                       className="text-sm text-slate-800 truncate"
                       title={workflow.file_name}
@@ -472,6 +554,17 @@ export default function WorkflowDetailModal({
                           content: currentSegment?.format_parser,
                         },
                         {
+                          type: 'stt',
+                          label: 'STT',
+                          content:
+                            (currentSegment?.transcribe_segments?.length ?? 0) >
+                            0
+                              ? 'stt'
+                              : '',
+                          count:
+                            currentSegment?.transcribe_segments?.length ?? 0,
+                        },
+                        {
                           type: 'ai',
                           label: 'AI',
                           content:
@@ -505,6 +598,13 @@ export default function WorkflowDetailModal({
                                   title: `OCR Content - Segment ${currentSegmentIndex + 1}`,
                                   qaItems: [],
                                 });
+                              } else if (type === 'stt') {
+                                setAnalysisPopup({
+                                  type: 'stt',
+                                  content: '',
+                                  title: `Transcribe - Segment ${currentSegmentIndex + 1}`,
+                                  qaItems: [],
+                                });
                               } else {
                                 setAnalysisPopup({
                                   type: type as 'bda',
@@ -518,7 +618,7 @@ export default function WorkflowDetailModal({
                           >
                             <p className="text-xs text-slate-500">{label}</p>
                             <p className="text-lg font-semibold text-slate-800">
-                              {type === 'ai' ? count : 1}
+                              {type === 'ai' || type === 'stt' ? count : 1}
                             </p>
                           </button>
                         ))}
@@ -622,6 +722,7 @@ export default function WorkflowDetailModal({
                   return (
                     <div className="w-full h-full flex items-center justify-center">
                       <video
+                        ref={videoRef}
                         key={currentSegment.video_url}
                         controls
                         className="max-w-full max-h-full rounded-lg shadow-lg"
@@ -702,6 +803,61 @@ export default function WorkflowDetailModal({
           </div>
         </div>
       </div>
+
+      {/* Re-analyze Modal */}
+      {showReanalyzeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+          <div className="bg-white dark:bg-slate-800 rounded-xl w-full max-w-lg mx-4 overflow-hidden shadow-xl">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                {t('workflow.reanalyzeTitle')}
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                {t('workflow.reanalyzeDescription')}
+              </p>
+            </div>
+            <div className="p-6">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                {t('workflow.reanalyzeInstructions')}
+              </label>
+              <textarea
+                value={reanalyzeInstructions}
+                onChange={(e) => setReanalyzeInstructions(e.target.value)}
+                placeholder={t('workflow.reanalyzeInstructionsPlaceholder')}
+                className="w-full h-40 px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+              <button
+                onClick={() => {
+                  setShowReanalyzeModal(false);
+                  setReanalyzeInstructions('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={handleReanalyze}
+                disabled={reanalyzing}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {reanalyzing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {t('workflow.reanalyzeStarting')}
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" />
+                    {t('workflow.reanalyzeStart')}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

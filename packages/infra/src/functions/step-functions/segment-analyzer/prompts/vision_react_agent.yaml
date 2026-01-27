@@ -608,7 +608,6 @@ video_user_query: |
   - **Type**: [Content classification - tutorial, presentation, documentary, etc.]
   - **Setting**: [Location/environment description]
   - **Participants**: [People/subjects visible]
-  - **Timecode Range**: [{start_timecode} to {end_timecode}]
 
   ## Primary Content
 

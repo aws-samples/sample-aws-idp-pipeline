@@ -15,6 +15,7 @@ class Config(BaseSettings):
     session_storage_bucket_name: str = ""
     agent_storage_bucket_name: str = ""
     elasticache_endpoint: str = ""
+    step_function_arn: str = ""
 
 
 @lru_cache
