@@ -18,6 +18,7 @@ export interface IRuntimeConfig {
   apis?: Record<string, unknown>;
   documentStorageBucketName?: string;
   agentRuntimeArn?: string;
+  websocketUrl?: string;
 }
 
 /**

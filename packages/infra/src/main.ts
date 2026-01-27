@@ -10,6 +10,7 @@ import { TranscribeStack } from './stacks/transcribe-stack.js';
 import { WorkflowStack } from './stacks/workflow-stack.js';
 import { VpcStack } from './stacks/vpc-stack.js';
 import { WorkerStack } from './stacks/worker-stack.js';
+import { WebsocketStack } from './stacks/websocket-stack.js';
 
 const app = new App();
 
@@ -46,6 +47,10 @@ new TranscribeStack(app, 'IDP-V2-Transcribe', {
 
 // Workflow Stack - Step Functions for AI analysis (depends on EventStack for workflow queue)
 new WorkflowStack(app, 'IDP-V2-Workflow', {
+  env,
+});
+
+new WebsocketStack(app, 'IDP-V2-Websocket', {
   env,
 });
 

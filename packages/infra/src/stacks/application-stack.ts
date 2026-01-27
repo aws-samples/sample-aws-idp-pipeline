@@ -48,6 +48,12 @@ export class ApplicationStack extends Stack {
       agentStorageBucketName,
     );
 
+    const websocketCallbackUrl = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.WEBSOCKET_CALLBACK_URL,
+    );
+    RuntimeConfig.ensure(this).config.websocketUrl = websocketCallbackUrl;
+
     const userIdentity = new UserIdentity(this, 'UserIdentity');
 
     const backend = new Backend(this, 'Backend', { vpc });
@@ -90,5 +96,36 @@ export class ApplicationStack extends Stack {
 
     // Grant agent storage bucket read access for artifacts
     agentStorageBucket.grantRead(userIdentity.identityPool.authenticatedRole);
+
+    // Grant WebSocket API manage connections permission
+    const websocketApiId = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.WEBSOCKET_API_ID,
+    );
+
+    userIdentity.identityPool.authenticatedRole.addToPrincipalPolicy(
+      new PolicyStatement({
+        actions: ['execute-api:Invoke', 'execute-api:ManageConnections'],
+        resources: [
+          `arn:aws:execute-api:${this.region}:${this.account}:${websocketApiId}/*`,
+        ],
+      }),
+    );
+
+    // Grant WebSocket connect Lambda access to Cognito AdminGetUser
+    const websocketConnectRoleArn = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.WEBSOCKET_CONNECT_ROLE_ARN,
+    );
+    const websocketConnectRole = Role.fromRoleArn(
+      this,
+      'WebSocketConnectRole',
+      websocketConnectRoleArn,
+      { mutable: true },
+    );
+    userIdentity.userPool.grant(
+      websocketConnectRole,
+      'cognito-idp:AdminGetUser',
+    );
   }
 }

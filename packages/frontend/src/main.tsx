@@ -3,6 +3,7 @@ import CognitoAuth from './components/CognitoAuth';
 import { useRuntimeConfig } from './hooks/useRuntimeConfig';
 import RuntimeConfigProvider from './components/RuntimeConfig';
 import { ToastProvider } from './components/Toast';
+import { WebSocketProvider } from './contexts/WebSocketContext';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider, createRouter } from '@tanstack/react-router';
@@ -41,9 +42,11 @@ if (root) {
     <React.StrictMode>
       <RuntimeConfigProvider>
         <CognitoAuth>
-          <ToastProvider>
-            <App />
-          </ToastProvider>
+          <WebSocketProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </WebSocketProvider>
         </CognitoAuth>
       </RuntimeConfigProvider>
     </React.StrictMode>,

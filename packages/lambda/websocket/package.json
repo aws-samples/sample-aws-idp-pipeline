@@ -1,0 +1,23 @@
+{
+  "name": "@idp-v2/websocket",
+  "version": "1.0.0",
+  "description": "WebSocket Lambda handlers for connect and disconnect",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^22.19.1",
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "packageManager": "pnpm@10.12.4"
+}
