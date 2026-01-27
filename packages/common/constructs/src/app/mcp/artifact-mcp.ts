@@ -1,5 +1,7 @@
-import { Duration } from 'aws-cdk-lib';
+import { Duration, Stack } from 'aws-cdk-lib';
 import { ITable } from 'aws-cdk-lib/aws-dynamodb';
+import { IVpc } from 'aws-cdk-lib/aws-ec2';
+import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Runtime, Architecture } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { IBucket } from 'aws-cdk-lib/aws-s3';
@@ -9,6 +11,10 @@ import * as path from 'path';
 export interface ArtifactMcpProps {
   backendTable: ITable;
   storageBucket: IBucket;
+  vpc: IVpc;
+  elasticacheEndpoint: string;
+  websocketCallbackUrl: string;
+  websocketApiId: string;
 }
 
 export class ArtifactMcp extends Construct {
@@ -19,7 +25,15 @@ export class ArtifactMcp extends Construct {
   constructor(scope: Construct, id: string, props: ArtifactMcpProps) {
     super(scope, id);
 
-    const { backendTable, storageBucket } = props;
+    const {
+      backendTable,
+      storageBucket,
+      vpc,
+      elasticacheEndpoint,
+      websocketCallbackUrl,
+      websocketApiId,
+    } = props;
+    const stack = Stack.of(this);
 
     const commonEnv = {
       BACKEND_TABLE_NAME: backendTable.tableName,
@@ -36,11 +50,27 @@ export class ArtifactMcp extends Construct {
       runtime: Runtime.NODEJS_22_X,
       architecture: Architecture.ARM_64,
       timeout: Duration.seconds(30),
-      environment: commonEnv,
+      vpc,
+      environment: {
+        ...commonEnv,
+        ELASTICACHE_ENDPOINT: elasticacheEndpoint,
+        WEBSOCKET_CALLBACK_URL: websocketCallbackUrl,
+      },
+      bundling: {
+        nodeModules: ['iovalkey'],
+      },
     });
 
     backendTable.grantWriteData(this.saveFunction);
     storageBucket.grantPut(this.saveFunction);
+    this.saveFunction.addToRolePolicy(
+      new PolicyStatement({
+        actions: ['execute-api:ManageConnections'],
+        resources: [
+          `arn:aws:execute-api:${stack.region}:${stack.account}:${websocketApiId}/*/@connections/*`,
+        ],
+      }),
+    );
 
     // Load Artifact Function
     this.loadFunction = new NodejsFunction(this, 'LoadFunction', {

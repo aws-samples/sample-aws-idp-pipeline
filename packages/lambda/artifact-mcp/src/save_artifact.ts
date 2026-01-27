@@ -2,6 +2,8 @@ import { nanoid } from 'nanoid';
 import { SaveArtifactInput, SaveArtifactOutput } from './models.js';
 import { uploadToS3 } from './s3.js';
 import { saveArtifactMetadata } from './dynamodb.js';
+import { getConnectionIdsByUsername } from './valkey.js';
+import { sendToConnection, ArtifactsMessage } from './websocket.js';
 
 function generateArtifactId(): string {
   return `art_${nanoid()}`;
@@ -55,6 +57,23 @@ export const handler = async (
       file_size: fileSize,
     },
   });
+
+  // Send WebSocket notification
+  const connectionIds = await getConnectionIdsByUsername(user_id);
+  const message: ArtifactsMessage = {
+    action: 'artifacts',
+    data: {
+      event: 'created',
+      artifactId,
+      artifactFileName: filename,
+      timestamp: createdAt,
+    },
+  };
+  await Promise.all(
+    connectionIds.map((connectionId) =>
+      sendToConnection(connectionId, JSON.stringify(message)),
+    ),
+  );
 
   return {
     artifact_id: artifactId,

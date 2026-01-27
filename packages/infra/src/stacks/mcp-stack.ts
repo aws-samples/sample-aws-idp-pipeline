@@ -1,5 +1,6 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Table } from 'aws-cdk-lib/aws-dynamodb';
+import { Vpc } from 'aws-cdk-lib/aws-ec2';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
@@ -35,10 +36,32 @@ export class McpStack extends Stack {
       agentStorageBucketName,
     );
 
+    const vpcId = StringParameter.valueFromLookup(this, SSM_KEYS.VPC_ID);
+    const vpc = Vpc.fromLookup(this, 'Vpc', { vpcId });
+
+    const elasticacheEndpoint = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.ELASTICACHE_ENDPOINT,
+    );
+
+    const websocketCallbackUrl = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.WEBSOCKET_CALLBACK_URL,
+    );
+
+    const websocketApiId = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.WEBSOCKET_API_ID,
+    );
+
     this.searchMcp = new SearchMcp(this, 'SearchMcp');
     this.artifactMcp = new ArtifactMcp(this, 'ArtifactMcp', {
       backendTable,
       storageBucket: agentStorageBucket,
+      vpc,
+      elasticacheEndpoint,
+      websocketCallbackUrl,
+      websocketApiId,
     });
 
     this.gateway = new agentcore.Gateway(this, 'McpGateway', {

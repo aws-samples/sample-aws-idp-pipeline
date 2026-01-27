@@ -18,6 +18,22 @@
 }
 ```
 
+### artifacts
+
+아티팩트 생성/수정/삭제 이벤트
+
+```json
+{
+  "action": "artifacts",
+  "data": {
+    "event": "created" | "updated" | "deleted",
+    "artifactId": "string",
+    "artifactFileName": "string",
+    "timestamp": "string (ISO 8601)"
+  }
+}
+```
+
 ---
 
 # Valkey Keys

@@ -3,9 +3,6 @@ import {
   ConverseCommand,
 } from '@aws-sdk/client-bedrock-runtime';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
-import { parseMessageS3Key } from '../parse-session-s3-key.js';
-import { getConnectionIdsByUsername } from './valkey.js';
-import { sendToConnection } from './websocket.js';
 
 const bedrockClient = new BedrockRuntimeClient();
 
@@ -37,12 +34,6 @@ export async function generateSessionName(
   bucket: string,
   messageKey: string,
 ): Promise<string | null> {
-  const keyInfo = parseMessageS3Key(messageKey);
-  if (!keyInfo) {
-    return null;
-  }
-
-  const { userId, sessionId } = keyInfo;
   const message0Key = messageKey.replace('message_1.json', 'message_0.json');
 
   const [userResponse, assistantResponse] = await Promise.all([
@@ -86,25 +77,5 @@ export async function generateSessionName(
   const response = await bedrockClient.send(command);
   const sessionName = response.output?.message?.content?.[0]?.text?.trim();
 
-  if (!sessionName) {
-    return null;
-  }
-
-  const connectionIds = await getConnectionIdsByUsername(userId);
-  const message = JSON.stringify({
-    action: 'sessions',
-    data: {
-      event: 'created',
-      sessionId,
-      sessionName,
-      timestamp: new Date().toISOString(),
-    },
-  });
-  await Promise.all(
-    connectionIds.map((connectionId) =>
-      sendToConnection(connectionId, message),
-    ),
-  );
-
-  return sessionName;
+  return sessionName ?? null;
 }

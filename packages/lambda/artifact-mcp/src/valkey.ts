@@ -11,11 +11,3 @@ export async function getConnectionIdsByUsername(
 ): Promise<string[]> {
   return valkey.smembers(`ws:username:${username}`);
 }
-
-export async function deleteSessionListCache(
-  userId: string,
-  projectId: string,
-): Promise<void> {
-  const cacheKey = `session_list:${userId}:${projectId}`;
-  await valkey.del(cacheKey);
-}

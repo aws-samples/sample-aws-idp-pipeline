@@ -14,7 +14,8 @@
   "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-ssm": "^3.958.0",
-    "aws4fetch": "^1.0.20"
+    "aws4fetch": "^1.0.20",
+    "iovalkey": "^0.3.3"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.145",

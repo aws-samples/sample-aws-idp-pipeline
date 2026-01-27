@@ -3,22 +3,13 @@ import {
   GetObjectCommand,
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
-import Redis from 'ioredis';
 import { MessageKeyInfo } from '../parse-session-s3-key';
 import { generateSessionName } from './generate-session-name';
-
-let redis: Redis | null = null;
-
-function getRedis(): Redis | null {
-  if (!redis && process.env.ELASTICACHE_ENDPOINT) {
-    redis = new Redis({
-      host: process.env.ELASTICACHE_ENDPOINT,
-      port: 6379,
-      tls: {},
-    });
-  }
-  return redis;
-}
+import {
+  deleteSessionListCache,
+  getConnectionIdsByUsername,
+} from './valkey.js';
+import { sendToConnection, SessionsMessage } from './websocket.js';
 
 export async function handleNameUpdate(
   s3Client: S3Client,
@@ -57,11 +48,24 @@ export async function handleNameUpdate(
     }),
   );
 
-  const redisClient = getRedis();
-  if (redisClient) {
-    const cacheKey = `session_list:${keyInfo.userId}:${keyInfo.projectId}`;
-    await redisClient.del(cacheKey);
-  }
+  await deleteSessionListCache(keyInfo.userId, keyInfo.projectId);
+
+  // Send WebSocket notification
+  const connectionIds = await getConnectionIdsByUsername(keyInfo.userId);
+  const message: SessionsMessage = {
+    action: 'sessions',
+    data: {
+      event: 'created',
+      sessionId: keyInfo.sessionId,
+      sessionName,
+      timestamp: new Date().toISOString(),
+    },
+  };
+  await Promise.all(
+    connectionIds.map((connectionId) =>
+      sendToConnection(connectionId, JSON.stringify(message)),
+    ),
+  );
 
   console.log(`Updated session_name for ${sessionJsonKey}`);
 }
