@@ -8,8 +8,9 @@ client = TestClient(app)
 
 
 class TestListWorkflows:
+    @patch("app.routers.workflows.get_document_item")
     @patch("app.ddb.workflows.get_table")
-    def test_list_workflows_success(self, mock_get_table):
+    def test_list_workflows_success(self, mock_get_table, mock_get_document_item):
         mock_table = MagicMock()
         mock_table.query.return_value = {
             "Items": [
@@ -32,6 +33,7 @@ class TestListWorkflows:
             ]
         }
         mock_get_table.return_value = mock_table
+        mock_get_document_item.return_value = None
 
         response = client.get("/documents/doc-1/workflows")
 
@@ -45,11 +47,13 @@ class TestListWorkflows:
         assert data[0]["created_at"] == "2024-01-01T00:00:00+00:00"
         assert data[0]["updated_at"] == "2024-01-01T01:00:00+00:00"
 
+    @patch("app.routers.workflows.get_document_item")
     @patch("app.ddb.workflows.get_table")
-    def test_list_workflows_empty(self, mock_get_table):
+    def test_list_workflows_empty(self, mock_get_table, mock_get_document_item):
         mock_table = MagicMock()
         mock_table.query.return_value = {"Items": []}
         mock_get_table.return_value = mock_table
+        mock_get_document_item.return_value = None
 
         response = client.get("/documents/doc-1/workflows")
 

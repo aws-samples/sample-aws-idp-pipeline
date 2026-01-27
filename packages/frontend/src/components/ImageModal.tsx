@@ -164,42 +164,42 @@ export default function ImageModal({ src, alt, onClose }: ImageModalProps) {
     >
       {/* Toolbar */}
       <div
-        className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-md rounded-full border border-white/20 z-10"
+        className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 bg-slate-800/80 backdrop-blur-md rounded-full border border-slate-600/50 z-10 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           onClick={handleZoomOut}
           disabled={scale <= minScale}
-          className="p-2 rounded-full hover:bg-white/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="p-2 rounded-full bg-slate-700 hover:bg-slate-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           title="Zoom out (-)"
         >
-          <ZoomOut className="w-5 h-5 text-white" />
+          <ZoomOut className="w-5 h-5 text-slate-100" />
         </button>
-        <span className="px-3 text-sm font-medium text-white min-w-[4rem] text-center">
+        <span className="px-3 text-sm font-medium text-slate-100 min-w-[4rem] text-center">
           {Math.round(scale * 100)}%
         </span>
         <button
           onClick={handleZoomIn}
           disabled={scale >= maxScale}
-          className="p-2 rounded-full hover:bg-white/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="p-2 rounded-full bg-slate-700 hover:bg-slate-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           title="Zoom in (+)"
         >
-          <ZoomIn className="w-5 h-5 text-white" />
+          <ZoomIn className="w-5 h-5 text-slate-100" />
         </button>
-        <div className="w-px h-6 bg-white/30 mx-1" />
+        <div className="w-px h-6 bg-slate-500 mx-1" />
         <button
           onClick={handleReset}
-          className="p-2 rounded-full hover:bg-white/20 transition-colors"
+          className="p-2 rounded-full bg-slate-700 hover:bg-slate-600 transition-colors"
           title="Reset (0)"
         >
-          <Maximize2 className="w-5 h-5 text-white" />
+          <Maximize2 className="w-5 h-5 text-slate-100" />
         </button>
         <button
           onClick={handleDownload}
-          className="p-2 rounded-full hover:bg-white/20 transition-colors"
+          className="p-2 rounded-full bg-slate-700 hover:bg-slate-600 transition-colors"
           title="Download"
         >
-          <Download className="w-5 h-5 text-white" />
+          <Download className="w-5 h-5 text-slate-100" />
         </button>
       </div>
 

@@ -116,7 +116,17 @@
     "noSegments": "セグメントがありません",
     "loadingImage": "画像を読み込み中...",
     "noVideoAvailable": "このセグメントの動画はありません",
-    "noImageAvailable": "このセグメントの画像はありません"
+    "noImageAvailable": "このセグメントの画像はありません",
+    "reanalyze": "再分析",
+    "reanalyzeTitle": "AI分析を再実行",
+    "reanalyzeDescription": "AI分析のみ再実行されます。OCR、BDA、Transcribeの結果は保持されます。",
+    "reanalyzeInstructions": "分析指示",
+    "reanalyzeInstructionsPlaceholder": "AI分析のための追加指示を入力してください（オプション）\n\n例：\n- 表の数値データに注目してください\n- 日付と金額を正確に抽出してください\n- 契約条件を要約してください",
+    "reanalyzeStart": "再分析を開始",
+    "reanalyzeStarting": "再分析を開始中...",
+    "reanalyzeStarted": "再分析が開始されました",
+    "reanalyzeFailed": "再分析の開始に失敗しました",
+    "reanalyzeNotAllowed": "完了または失敗したワークフローのみ再分析できます"
   },
   "ocr": {
     "title": "OCR設定",

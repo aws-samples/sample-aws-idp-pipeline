@@ -349,3 +349,52 @@ def get_segment_count_from_s3(file_uri: str) -> int:
     except Exception as e:
         print(f'Error counting segments from S3: {e}')
         return 0
+
+
+def clear_segment_ai_analysis(file_uri: str, segment_index: int) -> Optional[dict]:
+    """
+    Clear ai_analysis array from segment for re-analysis.
+
+    Args:
+        file_uri: Original file URI
+        segment_index: Segment index
+
+    Returns:
+        Updated data dict or None if failed
+    """
+    data = get_segment_analysis(file_uri, segment_index)
+    if data is None:
+        return None
+
+    data['ai_analysis'] = []
+    save_segment_analysis(file_uri, segment_index, data)
+    return data
+
+
+def save_reanalysis_instructions(
+    file_uri: str,
+    segment_index: int,
+    instructions: str
+) -> Optional[dict]:
+    """
+    Save reanalysis instructions to segment JSON.
+
+    Args:
+        file_uri: Original file URI
+        segment_index: Segment index
+        instructions: User-provided instructions for re-analysis
+
+    Returns:
+        Updated data dict or None if failed
+    """
+    from datetime import datetime, timezone
+
+    data = get_segment_analysis(file_uri, segment_index)
+    if data is None:
+        return None
+
+    data['reanalysis_instructions'] = instructions
+    data['reanalysis_at'] = datetime.now(timezone.utc).isoformat()
+
+    save_segment_analysis(file_uri, segment_index, data)
+    return data

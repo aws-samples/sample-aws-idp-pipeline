@@ -1,11 +1,23 @@
 import json
+from datetime import datetime
 
+import boto3
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.ddb.workflows import get_workflow_item, query_workflows
+from app.config import get_config
+from app.ddb import get_document_item
+from app.ddb.workflows import get_workflow_item, query_workflows, update_workflow_status
 from app.markdown import transform_markdown_images
 from app.s3 import generate_presigned_url, get_s3_client, list_segment_keys, parse_s3_uri
+
+
+def _get_display_file_name(project_id: str, document_id: str, fallback_name: str) -> str:
+    """Get original file name from document record for display."""
+    doc = get_document_item(project_id, document_id)
+    if doc and doc.data.name:
+        return doc.data.name
+    return fallback_name
 
 
 def _get_segment_from_s3(file_uri: str, s3_key: str) -> dict | None:
@@ -45,6 +57,12 @@ class WorkflowListResponse(BaseModel):
     updated_at: str
 
 
+class TranscribeSegment(BaseModel):
+    start_time: float
+    end_time: float
+    transcript: str
+
+
 class SegmentData(BaseModel):
     segment_index: int
     segment_type: str | None = "PAGE"
@@ -58,6 +76,7 @@ class SegmentData(BaseModel):
     paddleocr_blocks: dict | None = None
     format_parser: str
     ai_analysis: list[dict]
+    transcribe_segments: list[TranscribeSegment] | None = None
 
 
 class WorkflowDetailResponse(BaseModel):
@@ -83,7 +102,7 @@ def list_workflows(document_id: str) -> list[WorkflowListResponse]:
         WorkflowListResponse(
             workflow_id=wf.SK.replace("WF#", "") if wf.SK.startswith("WF#") else wf.SK,
             status=wf.data.status,
-            file_name=wf.data.file_name,
+            file_name=_get_display_file_name(wf.data.project_id, document_id, wf.data.file_name),
             file_uri=wf.data.file_uri,
             language=wf.data.language,
             created_at=wf.created_at,
@@ -136,6 +155,21 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
         if segment_type in ("VIDEO", "CHAPTER") and segment_file_uri:
             video_url = generate_presigned_url(segment_file_uri)
 
+        # Get transcribe segments
+        raw_transcribe = s3_data.get("transcribe_segments", [])
+        transcribe_segments = (
+            [
+                TranscribeSegment(
+                    start_time=ts.get("start_time", 0),
+                    end_time=ts.get("end_time", 0),
+                    transcript=ts.get("transcript", ""),
+                )
+                for ts in raw_transcribe
+            ]
+            if raw_transcribe
+            else None
+        )
+
         segments.append(
             SegmentData(
                 segment_index=s3_data.get("segment_index", 0),
@@ -150,6 +184,7 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
                 paddleocr_blocks=paddleocr_blocks,
                 format_parser=format_parser,
                 ai_analysis=ai_analysis,
+                transcribe_segments=transcribe_segments,
             )
         )
 
@@ -157,7 +192,7 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
         workflow_id=workflow_id,
         document_id=document_id,
         status=wf.data.status,
-        file_name=wf.data.file_name,
+        file_name=_get_display_file_name(wf.data.project_id, document_id, wf.data.file_name),
         file_uri=wf.data.file_uri,
         file_type=wf.data.file_type,
         language=wf.data.language,
@@ -166,3 +201,74 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
         updated_at=wf.updated_at,
         segments=segments,
     )
+
+
+class ReanalysisRequest(BaseModel):
+    user_instructions: str = ""
+
+
+class ReanalysisResponse(BaseModel):
+    workflow_id: str
+    execution_arn: str
+    status: str
+
+
+@router.post("/{workflow_id}/reanalyze")
+def reanalyze_workflow(document_id: str, workflow_id: str, request: ReanalysisRequest) -> ReanalysisResponse:
+    """Trigger re-analysis for a workflow with optional user instructions."""
+    config = get_config()
+
+    # Get existing workflow
+    wf = get_workflow_item(document_id, workflow_id)
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    # Verify workflow is completed
+    if wf.data.status not in ("completed", "failed"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Workflow must be completed or failed to reanalyze. Current status: {wf.data.status}",
+        )
+
+    # Get Step Function ARN
+    step_function_arn = config.step_function_arn
+    if not step_function_arn:
+        raise HTTPException(status_code=500, detail="Step Function ARN not configured")
+
+    # Prepare Step Functions input for re-analysis
+    sfn_input = {
+        "workflow_id": workflow_id,
+        "document_id": document_id,
+        "project_id": wf.data.project_id,
+        "file_uri": wf.data.file_uri,
+        "file_name": wf.data.file_name,
+        "file_type": wf.data.file_type,
+        "is_reanalysis": True,
+        "user_instructions": request.user_instructions,
+        "triggered_at": datetime.utcnow().isoformat(),
+    }
+
+    # Start Step Functions execution
+    try:
+        sfn_client = boto3.client("stepfunctions", region_name=config.aws_region)
+        execution_name = f"reanalyze-{workflow_id[:16]}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+
+        response = sfn_client.start_execution(
+            stateMachineArn=step_function_arn,
+            name=execution_name,
+            input=json.dumps(sfn_input),
+        )
+
+        execution_arn = response["executionArn"]
+
+        # Update workflow status
+        update_workflow_status(document_id, workflow_id, "reanalyzing", execution_arn)
+
+        return ReanalysisResponse(
+            workflow_id=workflow_id,
+            execution_arn=execution_arn,
+            status="reanalyzing",
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start re-analysis: {e}") from e

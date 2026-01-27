@@ -39,6 +39,7 @@ import {
 } from '../../types/project';
 import AgentSelectModal from '../../components/AgentSelectModal';
 import DocumentUploadModal from '../../components/DocumentUploadModal';
+import ArtifactViewer from '../../components/ArtifactViewer';
 
 interface DocumentWorkflows {
   document_id: string;
@@ -96,7 +97,11 @@ function ProjectDetailPage() {
   const [showAgentModal, setShowAgentModal] = useState(false);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(
+    null,
+  );
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [reanalyzing, setReanalyzing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // WebSocket 메시지 구독 예시
@@ -492,8 +497,22 @@ function ProjectDetailPage() {
         method: 'DELETE',
       });
       setArtifacts((prev) => prev.filter((a) => a.artifact_id !== artifactId));
+      // Close viewer if deleted artifact was being viewed
+      if (selectedArtifact?.artifact_id === artifactId) {
+        setSelectedArtifact(null);
+      }
     },
-    [fetchApi],
+    [fetchApi, selectedArtifact],
+  );
+
+  const handleArtifactSelect = useCallback(
+    (artifactId: string) => {
+      const artifact = artifacts.find((a) => a.artifact_id === artifactId);
+      if (artifact) {
+        setSelectedArtifact(artifact);
+      }
+    },
+    [artifacts],
   );
 
   const handleArtifactDownload = useCallback(
@@ -564,6 +583,38 @@ function ProjectDetailPage() {
     }
     setLoadingWorkflow(false);
   };
+
+  const handleReanalyze = useCallback(
+    async (userInstructions: string) => {
+      if (!selectedWorkflow) return;
+
+      setReanalyzing(true);
+      try {
+        await fetchApi<{
+          workflow_id: string;
+          execution_arn: string;
+          status: string;
+        }>(
+          `documents/${selectedWorkflow.document_id}/workflows/${selectedWorkflow.workflow_id}/reanalyze`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_instructions: userInstructions }),
+          },
+        );
+        showToast('success', t('workflow.reanalyzeStarted'));
+        setSelectedWorkflow(null);
+        // Refresh workflows list
+        loadWorkflows();
+      } catch (error) {
+        console.error('Failed to start re-analysis:', error);
+        showToast('error', t('workflow.reanalyzeFailed'));
+      } finally {
+        setReanalyzing(false);
+      }
+    },
+    [fetchApi, selectedWorkflow, showToast, t, loadWorkflows],
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -1060,7 +1111,7 @@ function ProjectDetailPage() {
 
           {/* Right - History & Artifacts */}
           <ResizablePanel id="side">
-            <div className="h-full pl-1">
+            <div className="h-full pl-1 relative">
               <SidePanel
                 sessions={sessions}
                 currentSessionId={currentSessionId}
@@ -1071,9 +1122,20 @@ function ProjectDetailPage() {
                 loadingMoreSessions={loadingMoreSessions}
                 onLoadMoreSessions={loadMoreSessions}
                 artifacts={artifacts}
+                currentArtifactId={selectedArtifact?.artifact_id}
+                onArtifactSelect={handleArtifactSelect}
                 onArtifactDownload={handleArtifactDownload}
                 onArtifactDelete={handleArtifactDelete}
               />
+              {/* Artifact Viewer - overlays SidePanel */}
+              {selectedArtifact && (
+                <ArtifactViewer
+                  artifact={selectedArtifact}
+                  onClose={() => setSelectedArtifact(null)}
+                  onDownload={handleArtifactDownload}
+                  getPresignedUrl={getPresignedDownloadUrl}
+                />
+              )}
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
@@ -1086,6 +1148,8 @@ function ProjectDetailPage() {
           projectColor={project?.color ?? 0}
           loadingWorkflow={loadingWorkflow}
           onClose={() => setSelectedWorkflow(null)}
+          onReanalyze={handleReanalyze}
+          reanalyzing={reanalyzing}
         />
       )}
 

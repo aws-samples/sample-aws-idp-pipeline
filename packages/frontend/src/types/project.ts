@@ -57,6 +57,12 @@ export interface PaddleOcrBlocks {
   height: number | null;
 }
 
+export interface TranscribeSegment {
+  start_time: number;
+  end_time: number;
+  transcript: string;
+}
+
 export interface SegmentData {
   segment_index: number;
   segment_type?: 'PAGE' | 'VIDEO' | 'CHAPTER';
@@ -70,6 +76,7 @@ export interface SegmentData {
   paddleocr_blocks: PaddleOcrBlocks | null;
   format_parser: string;
   ai_analysis: { analysis_query: string; content: string }[];
+  transcribe_segments?: TranscribeSegment[] | null;
 }
 
 export interface WorkflowDetail {
@@ -132,7 +139,7 @@ export interface WorkflowProgress {
 }
 
 export interface AnalysisPopup {
-  type: 'bda' | 'ocr' | 'pdf' | 'ai' | null;
+  type: 'bda' | 'ocr' | 'pdf' | 'ai' | 'stt' | null;
   content: string;
   title: string;
   qaItems: { question: string; answer: string }[];

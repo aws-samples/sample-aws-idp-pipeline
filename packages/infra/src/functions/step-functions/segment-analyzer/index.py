@@ -64,6 +64,9 @@ def handler(event, _context):
     start_timecode = segment_data.get('start_timecode_smpte', '')
     end_timecode = segment_data.get('end_timecode_smpte', '')
 
+    # Check for reanalysis instructions (takes priority over project settings)
+    reanalysis_instructions = segment_data.get('reanalysis_instructions', '')
+
     context_parts = []
     if bda_content:
         context_parts.append(f'## BDA Indexer:\n{bda_content}')
@@ -94,6 +97,11 @@ def handler(event, _context):
             bucket_owner_account_id=os.environ.get('BUCKET_OWNER_ACCOUNT_ID', '')
         )
 
+        # Use reanalysis_instructions if provided, otherwise use project document_prompt
+        effective_instructions = reanalysis_instructions if reanalysis_instructions else document_prompt
+        if reanalysis_instructions:
+            print(f'Using reanalysis instructions ({len(reanalysis_instructions)} chars)')
+
         result = agent.analyze(
             document_id=workflow_id,
             segment_id=f'{workflow_id}_{segment_index:04d}',
@@ -102,7 +110,7 @@ def handler(event, _context):
             context=context,
             file_type=file_type,
             language=language,
-            user_instructions=document_prompt,
+            user_instructions=effective_instructions,
             segment_type=segment_type,
             video_uri=video_uri,
             start_timecode=start_timecode,

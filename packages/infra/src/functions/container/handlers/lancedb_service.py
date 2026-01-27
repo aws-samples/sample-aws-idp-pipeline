@@ -278,6 +278,30 @@ def action_search(params: dict) -> dict:
     return {'success': True, 'results': combined[:limit]}
 
 
+def action_delete_record(params: dict) -> dict:
+    """Delete a specific segment record from LanceDB."""
+    project_id = params.get('project_id', 'default')
+    workflow_id = params.get('workflow_id', '')
+    segment_index = params.get('segment_index', 0)
+    segment_id = f'{workflow_id}_{segment_index:04d}'
+
+    db = get_lancedb_connection()
+
+    if project_id not in db.table_names():
+        return {'success': True, 'deleted': 0, 'message': 'Table not found'}
+
+    table = db.open_table(project_id)
+
+    # Delete by segment_id
+    try:
+        table.delete(f"segment_id = '{segment_id}'")
+        print(f'[delete_record] Deleted record: {segment_id}')
+        return {'success': True, 'deleted': 1, 'segment_id': segment_id}
+    except Exception as e:
+        print(f'[delete_record] Error deleting: {e}')
+        return {'success': False, 'error': str(e)}
+
+
 def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
@@ -287,6 +311,7 @@ def handler(event, _context):
 
     actions = {
         'add_record': action_add_record,
+        'delete_record': action_delete_record,
         'get_segments': action_get_segments,
         'search': action_search,
         'list_tables': action_list_tables,

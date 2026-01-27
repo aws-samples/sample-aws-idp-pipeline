@@ -5,7 +5,7 @@ NX_STREAM_OUTPUT = "true"
 [tasks.deploy]
 description = "Deploy a specific CDK stack (fzf)"
 run = """
-stack=$(echo "IDP-V2-Vpc\nIDP-V2-Storage\nIDP-V2-Workflow\nIDP-V2-Websocket\nIDP-V2-Worker\nIDP-V2-Mcp\nIDP-V2-Agent\nIDP-V2-Application" | fzf --prompt="Select stack: ")
+stack=$(echo "IDP-V2-Vpc\nIDP-V2-Storage\nIDP-V2-Event\nIDP-V2-Bda\nIDP-V2-Ocr\nIDP-V2-Transcribe\nIDP-V2-Workflow\nIDP-V2-Worker\nIDP-V2-Mcp\nIDP-V2-Agent\nIDP-V2-Application" | fzf --prompt="Select stack: ")
 pnpm nx run @idp-v2/infra:deploy $stack --output-style=stream
 """
 

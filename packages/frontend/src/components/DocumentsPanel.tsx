@@ -270,7 +270,7 @@ export default function DocumentsPanel({
                                 workflow.workflow_id,
                               )
                             }
-                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30 dark:hover:bg-blue-800/40 rounded-lg transition-colors"
+                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-900 bg-blue-400 hover:bg-blue-100 hover:text-blue-700 hover:scale-105 hover:shadow-md dark:text-blue-300 dark:bg-blue-800 dark:hover:bg-blue-500 dark:hover:text-white rounded-lg transition-all"
                             title="View analysis"
                           >
                             <Eye className="h-3.5 w-3.5" />
@@ -282,7 +282,7 @@ export default function DocumentsPanel({
                             e.stopPropagation();
                             onDeleteDocument(doc.document_id);
                           }}
-                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-1.5 text-red-900 bg-red-400 hover:bg-red-100 hover:text-red-600 hover:scale-105 hover:shadow-md dark:text-red-400 dark:bg-red-800 dark:hover:bg-red-500 dark:hover:text-white rounded-lg transition-all"
                           title="Delete document"
                         >
                           <Trash2 className="h-4 w-4" />

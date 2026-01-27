@@ -1,7 +1,7 @@
 import React, { PropsWithChildren, useEffect } from 'react';
 import { AuthProvider, AuthProviderProps, useAuth } from 'react-oidc-context';
 import { Alert } from '../alert';
-import { Spinner } from '../spinner';
+import CubeLoader from '../CubeLoader';
 import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 
 /**
@@ -66,7 +66,11 @@ const CognitoAuthInternal: React.FC<PropsWithChildren> = ({ children }) => {
     );
   }
 
-  return <Spinner />;
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+      <CubeLoader />
+    </div>
+  );
 };
 
 export default CognitoAuth;

@@ -1,6 +1,9 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/typography';
 
+/* Override Tailwind's dark: variant to use class-based dark mode */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   color-scheme: light;
   font-family:
@@ -1982,4 +1985,27 @@ a {
 
 .artifact-icon-chart {
   background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+}
+
+/* Fade-in animation for artifact viewer */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Tool Result Header - consistent across all browsers */
+.tool-result-header {
+  background: #f9fafb;
+}
+
+:root.dark .tool-result-header {
+  background: rgba(139, 92, 246, 0.2);
 }
