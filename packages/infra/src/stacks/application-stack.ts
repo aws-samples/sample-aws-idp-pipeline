@@ -100,7 +100,8 @@ export class ApplicationStack extends Stack {
       this,
       SSM_KEYS.WEBSOCKET_CALLBACK_URL,
     );
-    RuntimeConfig.ensure(this).config.websocketUrl = websocketCallbackUrl.replace('https://', 'wss://');
+    RuntimeConfig.ensure(this).config.websocketUrl =
+      websocketCallbackUrl.replace('https://', 'wss://');
 
     userIdentity.identityPool.authenticatedRole.addToPrincipalPolicy(
       new PolicyStatement({
@@ -110,5 +111,17 @@ export class ApplicationStack extends Stack {
         ],
       }),
     );
+
+    // Grant WebSocket connect Lambda access to Cognito AdminGetUser
+    const websocketConnectRoleArn = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.WEBSOCKET_CONNECT_ROLE_ARN,
+    );
+    const websocketConnectRole = Role.fromRoleArn(
+      this,
+      'WebSocketConnectRole',
+      websocketConnectRoleArn,
+    );
+    userIdentity.userPool.grant(websocketConnectRole, 'cognito-idp:AdminGetUser');
   }
 }

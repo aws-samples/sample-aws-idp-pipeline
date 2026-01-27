@@ -37,6 +37,7 @@ export class WebsocketStack extends Stack {
           functions.connectFunction,
         ),
         authorizer: iamAuthorizer,
+        returnResponse: true,
       },
       disconnectRouteOptions: {
         integration: new WebSocketLambdaIntegration(
@@ -60,6 +61,11 @@ export class WebsocketStack extends Stack {
     new StringParameter(this, 'WebSocketCallbackUrlParam', {
       parameterName: SSM_KEYS.WEBSOCKET_CALLBACK_URL,
       stringValue: this.stage.callbackUrl,
+    });
+
+    new StringParameter(this, 'WebSocketConnectRoleArnParam', {
+      parameterName: SSM_KEYS.WEBSOCKET_CONNECT_ROLE_ARN,
+      stringValue: functions.connectFunction.role!.roleArn,
     });
   }
 }
