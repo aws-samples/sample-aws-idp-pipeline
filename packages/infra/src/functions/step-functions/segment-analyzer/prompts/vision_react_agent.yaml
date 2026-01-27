@@ -575,11 +575,6 @@ video_system_prompt: |
 video_user_query: |
   Analyze video segment (chapter {segment_index}).
 
-  <timecode_information>
-  Start: {start_timecode}
-  End: {end_timecode}
-  </timecode_information>
-
   <context_from_previous_processing>
   The following information has been extracted by upstream processors. Use this as reference but verify against the video - the video is the authoritative source.
 
@@ -656,14 +651,6 @@ video_user_query: |
 video_analysis_prompt: |
   Analyze this video segment to answer the following query.
 
-  <timecode_range>
-  {start_timecode} to {end_timecode}
-  </timecode_range>
-
-  <previous_analysis_context>
-  {previous_context}
-  </previous_analysis_context>
-
   <current_query>
   {query}
   </current_query>
@@ -674,12 +661,6 @@ video_analysis_prompt: |
   - Answer the specific query directly and completely
   - Describe exactly what is visible and audible
   - Do not generalize when precision matters
-
-  **Building on Context**
-  - Reference previous findings where relevant
-  - Avoid repeating already-extracted information
-  - Fill gaps in previous analysis
-  - Note any corrections to previous findings
 
   **Evidence-Based Responses**
   - Every claim must be supported by visible/audible content

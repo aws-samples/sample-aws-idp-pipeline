@@ -58,6 +58,7 @@ def handler(event, _context):
     bda_content = segment_data.get('bda_indexer', '')
     pdf_text = segment_data.get('format_parser', '')
     ocr_text = segment_data.get('paddleocr', '')
+    transcribe_segments = segment_data.get('transcribe_segments', [])
     segment_type = segment_data.get('segment_type', 'PAGE')
     video_uri = segment_data.get('file_uri', file_uri)
     start_timecode = segment_data.get('start_timecode_smpte', '')
@@ -70,6 +71,15 @@ def handler(event, _context):
         context_parts.append(f'## Format Parser:\n{pdf_text}')
     if ocr_text:
         context_parts.append(f'## PaddleOCR:\n{ocr_text}')
+    if transcribe_segments:
+        # Format transcribe segments with timing info
+        segments_text = []
+        for seg in transcribe_segments:
+            start = seg.get('start_time', '')
+            end = seg.get('end_time', '')
+            transcript = seg.get('transcript', '')
+            segments_text.append(f'[{start}s - {end}s] {transcript}')
+        context_parts.append(f'## Transcribe Segments:\n' + '\n'.join(segments_text))
 
     context = '\n\n'.join(context_parts) if context_parts else 'No prior analysis available.'
 
@@ -100,7 +110,7 @@ def handler(event, _context):
         )
 
         analysis_steps = result.get('analysis_steps', [])
-        is_video = segment_type in ('VIDEO', 'CHAPTER')
+        is_media = segment_type in ('VIDEO', 'CHAPTER', 'AUDIO')
 
         for step in analysis_steps:
             question = step.get('question', '')
@@ -117,7 +127,7 @@ def handler(event, _context):
             add_segment_ai_analysis(
                 file_uri=file_uri,
                 segment_index=segment_index,
-                analysis_query=f'Chapter {segment_index + 1}' if is_video else f'Page {segment_index + 1}',
+                analysis_query=f'Chapter {segment_index + 1}' if is_media else f'Page {segment_index + 1}',
                 content=result.get('response', '')
             )
 
@@ -133,7 +143,7 @@ def handler(event, _context):
 
     except Exception as e:
         print(f'Error in segment analysis: {e}')
-        is_video = segment_type in ('VIDEO', 'CHAPTER')
+        is_media = segment_type in ('VIDEO', 'CHAPTER', 'AUDIO')
 
         # Update status to FAILED
         update_segment_status(file_uri, segment_index, SegmentStatus.FAILED, error=str(e))

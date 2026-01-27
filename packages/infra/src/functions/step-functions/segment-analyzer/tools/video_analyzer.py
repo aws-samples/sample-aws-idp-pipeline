@@ -23,8 +23,6 @@ def _load_video_analysis_prompt() -> str:
 
 def create_video_analyzer_tool(
     video_uri_getter: Callable[[], str],
-    timecode_getter: Callable[[], tuple[str, str]],
-    previous_context_getter: Callable[[], str],
     analysis_steps: list,
     model_id: str,
     bedrock_client,
@@ -35,8 +33,6 @@ def create_video_analyzer_tool(
 
     Args:
         video_uri_getter: Function to get video S3 URI
-        timecode_getter: Function to get (start_timecode, end_timecode) tuple
-        previous_context_getter: Function to get previous analysis context
         analysis_steps: List to append analysis steps
         model_id: Bedrock model ID for TwelveLabs Pegasus
         bedrock_client: Bedrock client
@@ -64,27 +60,16 @@ def create_video_analyzer_tool(
         if not video_uri:
             return 'No video available for analysis.'
 
-        start_timecode, end_timecode = timecode_getter()
-
         try:
-            previous_context = previous_context_getter()
             prompt_template = _load_video_analysis_prompt()
 
             if prompt_template:
                 analysis_prompt = prompt_template.format(
-                    previous_context=previous_context or 'No previous analysis.',
                     query=question,
-                    language=language,
-                    start_timecode=start_timecode,
-                    end_timecode=end_timecode
+                    language=language
                 )
             else:
                 analysis_prompt = f"""Analyze this video segment and answer the following question.
-
-Previous Analysis Context:
-{previous_context or 'No previous analysis.'}
-
-Timecode Range: {start_timecode} to {end_timecode}
 
 Question: {question}
 
@@ -103,11 +88,7 @@ Provide detailed, professional analysis in {language}."""
             if bucket_owner_account_id:
                 request_body['mediaSource']['s3Location']['bucketOwner'] = bucket_owner_account_id
 
-            # Note: Timecode filtering is done via the prompt, not API parameters
-            # TwelveLabs Pegasus doesn't support startTimecode/endTimecode in request body
-
             print(f'Analyzing video: {video_uri}')
-            print(f'Timecode: {start_timecode} - {end_timecode}')
 
             response = bedrock_client.invoke_model(
                 modelId=model_id,
@@ -123,8 +104,7 @@ Provide detailed, professional analysis in {language}."""
                 'step': len(analysis_steps) + 1,
                 'tool': 'analyze_video',
                 'question': question,
-                'answer': answer[:3000],
-                'timecode_range': f'{start_timecode} - {end_timecode}'
+                'answer': answer[:3000]
             })
 
             return answer

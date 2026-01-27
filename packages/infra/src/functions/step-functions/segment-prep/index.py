@@ -1,12 +1,11 @@
-"""
-Preprocessor Lambda
+"""Segment Prep Lambda
 
-Converts documents to per-page images for downstream processing.
+Prepares segment metadata for downstream processing.
 
 Supported formats:
-- PDF: Convert each page to PNG using PyMuPDF
-- Image: Use as single segment
-- Video: Use entire video as single segment (no splitting)
+- PDF: Render each page to PNG, create segment metadata
+- Image: Use original file, create single segment metadata
+- Video: Create single segment metadata (no image)
 
 Output structure:
   s3://bucket/{base_path}/preprocessed/
@@ -25,19 +24,27 @@ from shared.ddb_client import (
     record_step_start,
     record_step_complete,
     record_step_error,
+    update_workflow_total_segments,
     StepName,
 )
-from shared.s3_analysis import get_s3_client, parse_s3_uri
+from shared.s3_analysis import (
+    get_s3_client,
+    parse_s3_uri,
+    save_segment_analysis,
+    SegmentStatus,
+)
 
 # Image quality settings for PDF rendering
 PDF_DPI = 150  # DPI for PDF page rendering
-IMAGE_QUALITY = 85  # JPEG quality (not used for PNG, but kept for future)
 
 # Supported image extensions
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.tiff', '.tif', '.webp', '.bmp'}
 
 # Supported video extensions
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
+
+# Supported audio extensions
+AUDIO_EXTENSIONS = {'.mp3', '.wav', '.flac', '.aac', '.m4a', '.ogg', '.wma'}
 
 
 def get_file_extension(file_uri: str) -> str:
@@ -142,7 +149,6 @@ def process_pdf(file_uri: str, bucket: str, base_path: str) -> list[dict]:
 
 def process_image(file_uri: str, bucket: str, base_path: str) -> list[dict]:
     """Process image file: use original file as single segment (no copy)."""
-    # For images, we create a single segment using the original file directly
     ext = get_file_extension(file_uri)
 
     # Get image dimensions
@@ -170,15 +176,19 @@ def process_image(file_uri: str, bucket: str, base_path: str) -> list[dict]:
 
 def process_video(file_uri: str) -> list[dict]:
     """Process video file: create single segment for entire video (no splitting)."""
-    # For videos, we create a single segment covering the entire video
-    # SegmentAnalyzer will analyze the video directly
     return [{
         'segment_index': 0,
         'segment_type': 'VIDEO',
-        'image_uri': '',  # No thumbnail image
         'file_uri': file_uri,
-        'start_timecode_smpte': '00:00:00:00',
-        'end_timecode_smpte': ''
+    }]
+
+
+def process_audio(file_uri: str) -> list[dict]:
+    """Process audio file: create single segment for entire audio (no splitting)."""
+    return [{
+        'segment_index': 0,
+        'segment_type': 'AUDIO',
+        'file_uri': file_uri,
     }]
 
 
@@ -189,7 +199,7 @@ def handler(event, _context):
     file_uri = event.get('file_uri')
     file_type = event.get('file_type', '')
 
-    record_step_start(workflow_id, StepName.PREPROCESSOR)
+    record_step_start(workflow_id, StepName.SEGMENT_PREP)
 
     try:
         bucket, base_path = get_document_base_path(file_uri)
@@ -205,6 +215,9 @@ def handler(event, _context):
         elif ext in VIDEO_EXTENSIONS or file_type.startswith('video/'):
             print('Processing as video')
             segments = process_video(file_uri)
+        elif ext in AUDIO_EXTENSIONS or file_type.startswith('audio/'):
+            print('Processing as audio')
+            segments = process_audio(file_uri)
         else:
             # Unknown type - treat as single segment
             print(f'Unknown file type: {file_type}, ext: {ext}. Treating as single segment.')
@@ -215,7 +228,7 @@ def handler(event, _context):
                 'file_uri': file_uri
             }]
 
-        # Save metadata
+        # Save metadata (for internal use)
         metadata = {
             'segments': segments,
             'segment_count': len(segments),
@@ -225,9 +238,40 @@ def handler(event, _context):
         metadata_uri = save_metadata_to_s3(bucket, base_path, metadata)
         print(f'Saved metadata to {metadata_uri}')
 
+        # Create initial segment analysis files (so frontend can show images immediately)
+        for seg in segments:
+            segment_type = seg.get('segment_type', 'PAGE')
+            segment_data = {
+                'segment_index': seg['segment_index'],
+                'segment_type': segment_type,
+                'image_uri': seg.get('image_uri', ''),
+                'width': seg.get('width'),
+                'height': seg.get('height'),
+                'status': SegmentStatus.INDEXING,
+                # Initialize empty fields for later merging
+                'bda_indexer': '',
+                'paddleocr': '',
+                'paddleocr_blocks': None,
+                'format_parser': '',
+                'ai_analysis': [],
+            }
+            # Media-specific fields (video/audio)
+            if segment_type in ('VIDEO', 'AUDIO'):
+                segment_data['file_uri'] = seg.get('file_uri', file_uri)
+                # Initialize transcribe fields for media files
+                segment_data['transcribe'] = ''
+                segment_data['transcribe_segments'] = []
+
+            save_segment_analysis(file_uri, seg['segment_index'], segment_data)
+            print(f'Created initial segment {seg["segment_index"]}')
+
+        # Update workflow total_segments in DynamoDB
+        document_id = event.get('document_id')
+        update_workflow_total_segments(document_id, workflow_id, len(segments))
+
         record_step_complete(
             workflow_id,
-            StepName.PREPROCESSOR,
+            StepName.SEGMENT_PREP,
             segment_count=len(segments)
         )
 
@@ -239,6 +283,6 @@ def handler(event, _context):
 
     except Exception as e:
         error_msg = str(e)
-        print(f'Error in preprocessor: {error_msg}')
-        record_step_error(workflow_id, StepName.PREPROCESSOR, error_msg)
+        print(f'Error in segment-prep: {error_msg}')
+        record_step_error(workflow_id, StepName.SEGMENT_PREP, error_msg)
         raise

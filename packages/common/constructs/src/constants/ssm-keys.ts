@@ -10,7 +10,7 @@ export const SSM_KEYS = {
   VPC_ID: '/idp-v2/vpc/id',
   AGENT_RUNTIME_ARN: '/idp-v2/agent/runtime-arn',
   BIDI_AGENT_RUNTIME_ARN: '/idp-v2/bidi-agent/runtime-arn',
-  PADDLEOCR_EC2_INSTANCE_ID: '/idp-v2/paddleocr/ec2-instance-id',
+  PADDLEOCR_ENDPOINT_NAME: '/idp-v2/paddleocr/endpoint-name',
   BACKEND_URL: '/idp-v2/backend/url',
   SEARCH_MCP_FUNCTION_ARN: '/idp-v2/mcp/search/function-arn',
   SEARCH_MCP_ROLE_ARN: '/idp-v2/mcp/search/role-arn',
@@ -18,4 +18,9 @@ export const SSM_KEYS = {
   WEBSOCKET_API_ID: '/idp-v2/websocket/api-id',
   WEBSOCKET_CALLBACK_URL: '/idp-v2/websocket/callback-url',
   WEBSOCKET_CONNECT_ROLE_ARN: '/idp-v2/websocket/connect-role-arn',
+  // Preprocessing queues
+  PREPROCESS_OCR_QUEUE_URL: '/idp-v2/preprocess/ocr/queue-url',
+  PREPROCESS_BDA_QUEUE_URL: '/idp-v2/preprocess/bda/queue-url',
+  PREPROCESS_TRANSCRIBE_QUEUE_URL: '/idp-v2/preprocess/transcribe/queue-url',
+  PREPROCESS_WORKFLOW_QUEUE_URL: '/idp-v2/preprocess/workflow/queue-url',
 } as const;
