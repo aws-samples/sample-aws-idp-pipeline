@@ -12,11 +12,16 @@ import {
   OAuthScope,
   UserPool,
   UserPoolClient,
+  UserPoolOperation,
 } from 'aws-cdk-lib/aws-cognito';
 import { Construct } from 'constructs';
 import { RuntimeConfig } from './runtime-config.js';
 import { Distribution } from 'aws-cdk-lib/aws-cloudfront';
 import { suppressRules } from './checkov.js';
+import { Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { ITableV2 } from 'aws-cdk-lib/aws-dynamodb';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 const WEB_CLIENT_ID = 'WebClient';
 /**
@@ -84,7 +89,7 @@ export class UserIdentity extends Construct {
         requireSymbols: true,
         tempPasswordValidity: Duration.days(3),
       },
-      mfa: Mfa.REQUIRED,
+      mfa: Mfa.OFF,
       featurePlan: FeaturePlan.PLUS,
       mfaSecondFactor: { sms: true, otp: true },
       signInCaseSensitive: false,
@@ -178,4 +183,33 @@ export class UserIdentity extends Construct {
     Stack.of(this)
       .node.findAll()
       .filter((child) => child instanceof Distribution);
+
+  public addPostAuthenticationTrigger(backendTable: ITableV2): Function {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+
+    const postAuthenticationFn = new Function(
+      this,
+      'PostAuthenticationTrigger',
+      {
+        runtime: Runtime.NODEJS_20_X,
+        handler: 'post-authentication.handler',
+        code: Code.fromAsset(
+          path.join(__dirname, '../../../../lambda/cognito-trigger/dist'),
+        ),
+        environment: {
+          TABLE_NAME: backendTable.tableName,
+        },
+      },
+    );
+
+    backendTable.grantWriteData(postAuthenticationFn);
+
+    this.userPool.addTrigger(
+      UserPoolOperation.POST_AUTHENTICATION,
+      postAuthenticationFn,
+    );
+
+    return postAuthenticationFn;
+  }
 }

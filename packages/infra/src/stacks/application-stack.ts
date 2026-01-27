@@ -11,6 +11,7 @@ import { Vpc } from 'aws-cdk-lib/aws-ec2';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
+import { TableV2 } from 'aws-cdk-lib/aws-dynamodb';
 
 export class ApplicationStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -55,6 +56,18 @@ export class ApplicationStack extends Stack {
     RuntimeConfig.ensure(this).config.websocketUrl = websocketCallbackUrl;
 
     const userIdentity = new UserIdentity(this, 'UserIdentity');
+
+    // Add post-confirmation trigger to save user data to DynamoDB
+    const backendTableName = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.BACKEND_TABLE_NAME,
+    );
+    const backendTable = TableV2.fromTableName(
+      this,
+      'BackendTable',
+      backendTableName,
+    );
+    userIdentity.addPostAuthenticationTrigger(backendTable);
 
     const backend = new Backend(this, 'Backend', { vpc });
 

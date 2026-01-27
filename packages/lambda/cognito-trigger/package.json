@@ -1,0 +1,24 @@
+{
+  "name": "@idp-v2/cognito-trigger",
+  "version": "1.0.0",
+  "description": "Cognito post-confirmation trigger Lambda",
+  "main": "dist/post-confirmation.js",
+  "types": "dist/post-confirmation.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.821.0",
+    "@aws-sdk/lib-dynamodb": "^3.821.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^22.19.1",
+    "typescript": "~5.9.3"
+  },
+  "packageManager": "pnpm@10.12.4"
+}
