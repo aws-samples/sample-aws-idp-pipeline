@@ -48,6 +48,12 @@ export class ApplicationStack extends Stack {
       agentStorageBucketName,
     );
 
+    const websocketCallbackUrl = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.WEBSOCKET_CALLBACK_URL,
+    );
+    RuntimeConfig.ensure(this).config.websocketUrl = websocketCallbackUrl;
+
     const userIdentity = new UserIdentity(this, 'UserIdentity');
 
     const backend = new Backend(this, 'Backend', { vpc });
@@ -96,12 +102,6 @@ export class ApplicationStack extends Stack {
       this,
       SSM_KEYS.WEBSOCKET_API_ID,
     );
-    const websocketCallbackUrl = StringParameter.valueForStringParameter(
-      this,
-      SSM_KEYS.WEBSOCKET_CALLBACK_URL,
-    );
-    RuntimeConfig.ensure(this).config.websocketUrl =
-      websocketCallbackUrl.replace('https://', 'wss://');
 
     userIdentity.identityPool.authenticatedRole.addToPrincipalPolicy(
       new PolicyStatement({
@@ -121,7 +121,11 @@ export class ApplicationStack extends Stack {
       this,
       'WebSocketConnectRole',
       websocketConnectRoleArn,
+      { mutable: true },
     );
-    userIdentity.userPool.grant(websocketConnectRole, 'cognito-idp:AdminGetUser');
+    userIdentity.userPool.grant(
+      websocketConnectRole,
+      'cognito-idp:AdminGetUser',
+    );
   }
 }
