@@ -22,9 +22,15 @@ export class WebsocketStack extends Stack {
       SSM_KEYS.ELASTICACHE_ENDPOINT,
     );
 
+    const backendTableName = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.BACKEND_TABLE_NAME,
+    );
+
     const functions = new WebsocketFunctions(this, 'WebsocketFunctions', {
       vpc,
       elasticacheEndpoint,
+      backendTableName,
     });
 
     const iamAuthorizer = new WebSocketIamAuthorizer();
@@ -69,9 +75,11 @@ export class WebsocketStack extends Stack {
       stringValue: this.stage.callbackUrl,
     });
 
-    new StringParameter(this, 'WebSocketConnectRoleArnParam', {
-      parameterName: SSM_KEYS.WEBSOCKET_CONNECT_ROLE_ARN,
-      stringValue: functions.connectFunction.role!.roleArn,
-    });
+    if (functions.connectFunction.role) {
+      new StringParameter(this, 'WebSocketConnectRoleArnParam', {
+        parameterName: SSM_KEYS.WEBSOCKET_CONNECT_ROLE_ARN,
+        stringValue: functions.connectFunction.role.roleArn,
+      });
+    }
   }
 }

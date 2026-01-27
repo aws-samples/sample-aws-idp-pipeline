@@ -1,4 +1,5 @@
 import { Duration } from 'aws-cdk-lib';
+import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { IVpc } from 'aws-cdk-lib/aws-ec2';
 import { Runtime, Architecture } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -8,6 +9,7 @@ import * as path from 'path';
 export interface WebsocketFunctionsProps {
   vpc: IVpc;
   elasticacheEndpoint: string;
+  backendTableName: string;
 }
 
 export class WebsocketFunctions extends Construct {
@@ -18,7 +20,13 @@ export class WebsocketFunctions extends Construct {
   constructor(scope: Construct, id: string, props: WebsocketFunctionsProps) {
     super(scope, id);
 
-    const { vpc, elasticacheEndpoint } = props;
+    const { vpc, elasticacheEndpoint, backendTableName } = props;
+
+    const backendTable = Table.fromTableName(
+      this,
+      'BackendTable',
+      backendTableName,
+    );
 
     this.connectFunction = new NodejsFunction(this, 'ConnectFunction', {
       entry: path.resolve(
@@ -32,8 +40,11 @@ export class WebsocketFunctions extends Construct {
       vpc,
       environment: {
         ELASTICACHE_ENDPOINT: elasticacheEndpoint,
+        BACKEND_TABLE_NAME: backendTableName,
       },
     });
+
+    backendTable.grantReadData(this.connectFunction);
 
     this.defaultFunction = new NodejsFunction(this, 'DefaultFunction', {
       entry: path.resolve(

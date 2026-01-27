@@ -4,26 +4,27 @@
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `ws:conn:{connectionId}` | String | connectionId → userSub 매핑 |
-| `ws:user:{userSub}` | Set | userSub → connectionId(s) 매핑 |
+| `ws:conn:{connectionId}` | String | connectionId → `{userSub}:{username}` 매핑 |
+| `ws:username:{username}` | Set | username → connectionId(s) 매핑 |
 
 ## 사용 방법
 
 ### Connect (저장)
 
 ```typescript
-await valkey.set(KEYS.conn(connectionId), userSub);
-await valkey.sadd(KEYS.user(userSub), connectionId);
+await valkey.set(KEYS.conn(connectionId), `${userSub}:${username}`);
+await valkey.sadd(KEYS.username(username), connectionId);
 ```
 
 ### 조회
 
 ```typescript
-// userSub로 모든 connectionId 가져오기
-const connectionIds = await valkey.smembers(KEYS.user(userSub));
+// username으로 모든 connectionId 가져오기
+const connectionIds = await valkey.smembers(KEYS.username(username));
 
-// connectionId로 userSub 가져오기
-const userSub = await valkey.get(KEYS.conn(connectionId));
+// connectionId로 userSub, username 가져오기
+const value = await valkey.get(KEYS.conn(connectionId));
+const [userSub, username] = value?.split(':') ?? [];
 
 // 모든 connectionId 가져오기
 const keys = await valkey.scanAll({ match: 'ws:conn:*' });
@@ -33,10 +34,11 @@ const connectionIds = keys.map(k => k.replace('ws:conn:', ''));
 ### Disconnect (삭제)
 
 ```typescript
-const userSub = await valkey.get(KEYS.conn(connectionId));
+const value = await valkey.get(KEYS.conn(connectionId));
 await valkey.del(KEYS.conn(connectionId));
 
-if (userSub) {
-  await valkey.srem(KEYS.user(userSub), connectionId);
+if (value) {
+  const [, username] = value.split(':');
+  await valkey.srem(KEYS.username(username), connectionId);
 }
 ```

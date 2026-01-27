@@ -6,11 +6,12 @@ export const disconnectHandler: APIGatewayProxyHandler = async (event) => {
   const { connectionId } = event.requestContext;
 
   if (connectionId) {
-    const userSub = await valkey.get(KEYS.conn(connectionId));
+    const value = await valkey.get(KEYS.conn(connectionId));
     await valkey.del(KEYS.conn(connectionId));
 
-    if (userSub) {
-      await valkey.srem(KEYS.user(userSub), connectionId);
+    if (value) {
+      const [, username] = value.split(':');
+      await valkey.srem(KEYS.username(username), connectionId);
     }
   }
 
