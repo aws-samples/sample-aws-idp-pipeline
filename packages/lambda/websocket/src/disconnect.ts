@@ -1,14 +1,20 @@
-import type { APIGatewayProxyWebsocketHandlerV2 } from 'aws-lambda';
+import type { APIGatewayProxyHandler } from 'aws-lambda';
+import { KEYS } from './keys.js';
+import { valkey } from './valkey.js';
 
-export const disconnectHandler: APIGatewayProxyWebsocketHandlerV2 = async (
-  event,
-) => {
-  const { connectionId, identity } = event.requestContext;
+export const disconnectHandler: APIGatewayProxyHandler = async (event) => {
+  const { connectionId } = event.requestContext;
 
-  console.log('WebSocket disconnected', {
-    connectionId,
-    identity,
-  });
+  if (connectionId) {
+    const userSub = await valkey.get(KEYS.conn(connectionId));
+    await valkey.del(KEYS.conn(connectionId));
+
+    if (userSub) {
+      await valkey.srem(KEYS.user(userSub), connectionId);
+    }
+  }
+
+  console.log('WebSocket disconnected', { connectionId });
 
   return { statusCode: 200, body: 'Disconnected' };
 };
