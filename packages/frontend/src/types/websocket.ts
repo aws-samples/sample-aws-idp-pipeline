@@ -8,7 +8,8 @@ export type WebSocketStatus =
 /** WebSocket 메시지 기본 타입 */
 export interface WebSocketMessage<T = unknown> {
   action: string;
-  data: T;
+  data?: T;
+  projectId?: string;
 }
 
 /** 메시지 구독 콜백 타입 */

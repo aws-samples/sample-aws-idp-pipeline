@@ -58,6 +58,7 @@ class WorkflowStatus:
     IN_PROGRESS = 'in_progress'
     COMPLETED = 'completed'
     FAILED = 'failed'
+    SKIPPED = 'skipped'
 
 
 class PreprocessStatus:
@@ -105,9 +106,9 @@ def determine_preprocess_required(file_type: str, use_bda: bool = False) -> dict
 class StepName:
     SEGMENT_PREP = 'segment_prep'
     BDA_PROCESSOR = 'bda_processor'
-    BDA_STATUS_CHECKER = 'bda_status_checker'
     FORMAT_PARSER = 'format_parser'
     PADDLEOCR_PROCESSOR = 'paddleocr_processor'
+    TRANSCRIBE = 'transcribe'
     SEGMENT_BUILDER = 'segment_builder'
     SEGMENT_ANALYZER = 'segment_analyzer'
     DOCUMENT_SUMMARIZER = 'document_summarizer'
@@ -115,9 +116,9 @@ class StepName:
     ORDER = [
         'segment_prep',
         'bda_processor',
-        'bda_status_checker',
         'format_parser',
         'paddleocr_processor',
+        'transcribe',
         'segment_builder',
         'segment_analyzer',
         'document_summarizer'
@@ -126,9 +127,9 @@ class StepName:
     LABELS = {
         'segment_prep': 'Segment Prep',
         'bda_processor': 'BDA Processing',
-        'bda_status_checker': 'BDA Status Check',
         'format_parser': 'Format Parsing',
         'paddleocr_processor': 'PaddleOCR Processing',
+        'transcribe': 'Transcription',
         'segment_builder': 'Building Segments',
         'segment_analyzer': 'Segment Analysis',
         'document_summarizer': 'Document Summary'
@@ -171,13 +172,29 @@ def create_workflow(
         'updated_at': now
     }
 
-    # Initialize STEP row with all steps as pending
+    # Determine which steps should be skipped based on file type and options
+    is_pdf = file_type == 'application/pdf'
+    is_image = file_type.startswith('image/')
+    is_video = file_type.startswith('video/')
+    is_audio = file_type.startswith('audio/')
+
+    skip_conditions = {
+        StepName.BDA_PROCESSOR: not use_bda,
+        StepName.PADDLEOCR_PROCESSOR: not (is_pdf or is_image),
+        StepName.TRANSCRIBE: not (is_video or is_audio),
+        StepName.FORMAT_PARSER: not is_pdf,
+    }
+
+    # Initialize STEP row with appropriate statuses
     steps_data = {
+        'project_id': project_id,
+        'document_id': document_id,
         'current_step': ''
     }
     for step_name in StepName.ORDER:
+        should_skip = skip_conditions.get(step_name, False)
         steps_data[step_name] = {
-            'status': WorkflowStatus.PENDING,
+            'status': WorkflowStatus.SKIPPED if should_skip else WorkflowStatus.PENDING,
             'label': StepName.LABELS.get(step_name, step_name)
         }
 
@@ -451,6 +468,32 @@ def record_step_error(workflow_id: str, step_name: str, error: str) -> dict:
     step_data['error'] = error
     data[step_name] = step_data
     data['current_step'] = ''
+
+    response = table.update_item(
+        Key={'PK': f'WF#{workflow_id}', 'SK': 'STEP'},
+        UpdateExpression='SET #data = :data, updated_at = :updated_at',
+        ExpressionAttributeNames={'#data': 'data'},
+        ExpressionAttributeValues={':data': data, ':updated_at': now},
+        ReturnValues='ALL_NEW'
+    )
+    return decimal_to_python(response.get('Attributes', {}))
+
+
+def record_step_skipped(workflow_id: str, step_name: str, reason: str = '') -> dict:
+    """Update step status to skipped in STEP row"""
+    table = get_table()
+    now = now_iso()
+
+    steps = get_steps(workflow_id)
+    if not steps:
+        return {}
+
+    data = steps.get('data', {})
+    step_data = data.get(step_name, {})
+    step_data['status'] = WorkflowStatus.SKIPPED
+    if reason:
+        step_data['reason'] = reason
+    data[step_name] = step_data
 
     response = table.update_item(
         Key={'PK': f'WF#{workflow_id}', 'SK': 'STEP'},

@@ -18,6 +18,21 @@ type SortOption =
   | 'updated_desc'
   | 'updated_asc';
 
+const PROJECT_SORT_KEY = 'idp-project-sort';
+
+const getInitialSortOption = (): SortOption => {
+  const stored = localStorage.getItem(PROJECT_SORT_KEY);
+  if (
+    stored === 'created_desc' ||
+    stored === 'created_asc' ||
+    stored === 'updated_desc' ||
+    stored === 'updated_asc'
+  ) {
+    return stored;
+  }
+  return 'created_desc';
+};
+
 export const Route = createFileRoute('/')({
   component: ProjectsPage,
 });
@@ -204,7 +219,13 @@ function ProjectsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortOption, setSortOption] = useState<SortOption>('created_desc');
+  const [sortOption, setSortOption] =
+    useState<SortOption>(getInitialSortOption);
+
+  const handleSortChange = (newSort: SortOption) => {
+    setSortOption(newSort);
+    localStorage.setItem(PROJECT_SORT_KEY, newSort);
+  };
 
   const filteredProjects = useMemo(() => {
     let result = [...projects];
@@ -374,7 +395,7 @@ function ProjectsPage() {
               <ArrowUpDown className="w-4 h-4 text-slate-400" />
               <select
                 value={sortOption}
-                onChange={(e) => setSortOption(e.target.value as SortOption)}
+                onChange={(e) => handleSortChange(e.target.value as SortOption)}
                 className="px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900 dark:text-white"
               >
                 <option value="created_desc">

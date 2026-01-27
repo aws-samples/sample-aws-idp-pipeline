@@ -1,0 +1,16 @@
+{
+  "name": "workflow-stream",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/lambda/workflow-stream/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "packages/lambda/workflow-stream/dist",
+        "tsConfig": "packages/lambda/workflow-stream/tsconfig.json"
+      }
+    }
+  }
+}

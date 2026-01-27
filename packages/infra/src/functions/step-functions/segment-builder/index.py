@@ -20,6 +20,8 @@ from shared.ddb_client import (
     record_step_start,
     record_step_complete,
     record_step_error,
+    update_workflow_status,
+    WorkflowStatus,
     StepName,
 )
 from shared.s3_analysis import (
@@ -517,11 +519,13 @@ def handler(event, _context):
             'file_uri': file_uri,
             'file_type': file_type,
             'segment_ids': list(range(segment_count)),
-            'segment_count': segment_count
+            'segment_count': segment_count,
+            'is_reanalysis': event.get('is_reanalysis', False)
         }
 
     except Exception as e:
         error_msg = str(e)
         print(f'Error building segments: {error_msg}')
         record_step_error(workflow_id, StepName.SEGMENT_BUILDER, error_msg)
+        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, error=error_msg)
         raise

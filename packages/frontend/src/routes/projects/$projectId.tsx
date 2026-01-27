@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { nanoid } from 'nanoid';
 import {
@@ -8,7 +8,10 @@ import {
   ContentBlock,
 } from '../../hooks/useAwsClient';
 import { useToast } from '../../components/Toast';
-import { useWebSocketMessage } from '../../contexts/WebSocketContext';
+import {
+  useWebSocketMessage,
+  useWebSocket,
+} from '../../contexts/WebSocketContext';
 import CubeLoader from '../../components/CubeLoader';
 import ConfirmModal from '../../components/ConfirmModal';
 import ProjectSettingsModal, {
@@ -64,6 +67,20 @@ function ProjectDetailPage() {
   const { projectId } = Route.useParams();
   const { fetchApi, invokeAgent, getPresignedDownloadUrl } = useAwsClient();
   const { showToast } = useToast();
+  const { sendMessage, status: wsStatus } = useWebSocket();
+
+  // Subscribe to project WebSocket notifications
+  useEffect(() => {
+    if (wsStatus === 'connected') {
+      sendMessage({ action: 'subscribe', projectId });
+    }
+    return () => {
+      if (wsStatus === 'connected') {
+        sendMessage({ action: 'unsubscribe', projectId });
+      }
+    };
+  }, [projectId, sendMessage, wsStatus]);
+
   // AgentCore requires session ID >= 33 chars
   const [currentSessionId, setCurrentSessionId] = useState(() => nanoid(33));
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -85,8 +102,9 @@ function ProjectDetailPage() {
     useState<WorkflowDetail | null>(null);
   const [loadingWorkflow, setLoadingWorkflow] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [workflowProgress, setWorkflowProgress] =
-    useState<WorkflowProgress | null>(null);
+  const [workflowProgressMap, setWorkflowProgressMap] = useState<
+    Record<string, WorkflowProgress>
+  >({});
   const [showUploadArea, setShowUploadArea] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
@@ -224,6 +242,149 @@ function ProjectDetailPage() {
       setArtifacts([]);
     }
   }, [fetchApi, projectId]);
+
+  // WebSocket artifact event handler
+  const handleArtifactMessage = useCallback(
+    (data: {
+      event: string;
+      artifactId: string;
+      artifactFileName: string;
+      timestamp: string;
+    }) => {
+      if (data.event === 'created') {
+        // Refresh artifacts list when a new artifact is created
+        loadArtifacts();
+      }
+    },
+    [loadArtifacts],
+  );
+
+  useWebSocketMessage('artifacts', handleArtifactMessage);
+
+  // WebSocket workflow status change handler
+  const handleWorkflowMessage = useCallback(
+    (data: {
+      event: string;
+      workflowId: string;
+      documentId: string;
+      projectId: string;
+      status: string;
+      previousStatus?: string;
+      timestamp: string;
+    }) => {
+      // Only handle events for this project
+      if (data.projectId !== projectId) {
+        return;
+      }
+
+      if (data.event === 'status_changed') {
+        // Update progress status when workflow completes or fails
+        if (data.status === 'completed' || data.status === 'failed') {
+          setWorkflowProgressMap((prev) => {
+            if (!prev[data.documentId]) return prev;
+            return {
+              ...prev,
+              [data.documentId]: {
+                ...prev[data.documentId],
+                status: data.status as 'completed' | 'failed',
+              },
+            };
+          });
+        }
+
+        // Refresh documents and workflows when status changes
+        loadDocuments();
+        loadWorkflows();
+      }
+    },
+    [projectId, loadDocuments, loadWorkflows],
+  );
+
+  useWebSocketMessage('workflow', handleWorkflowMessage);
+
+  // Step labels for display
+  const stepLabels = useMemo<Record<string, string>>(
+    () => ({
+      segment_prep: t('workflow.segmentPrep', 'Segment Prep'),
+      bda_processor: t('workflow.bdaProcessing', 'BDA Processing'),
+      format_parser: t('workflow.formatParsing', 'Format Parsing'),
+      paddleocr_processor: t(
+        'workflow.paddleocrProcessing',
+        'PaddleOCR Processing',
+      ),
+      transcribe: t('workflow.transcription', 'Transcription'),
+      segment_builder: t('workflow.buildingSegments', 'Building Segments'),
+      segment_analyzer: t('workflow.segmentAiAnalysis', 'Segment AI Analysis'),
+      document_summarizer: t('workflow.documentSummary', 'Document Summary'),
+    }),
+    [t],
+  );
+
+  // WebSocket step progress handler
+  const handleStepMessage = useCallback(
+    (data: {
+      event: string;
+      workflowId: string;
+      projectId: string;
+      stepName: string;
+      status: string;
+      previousStatus?: string;
+      currentStep?: string;
+      timestamp: string;
+    }) => {
+      // Only handle events for this project
+      if (data.projectId !== projectId) {
+        return;
+      }
+
+      if (data.event === 'step_changed') {
+        // Find the document for this workflow
+        const workflow = workflows.find(
+          (w) => w.workflow_id === data.workflowId,
+        );
+        const document = workflow
+          ? documents.find((d) => d.document_id === workflow.document_id)
+          : null;
+        const documentId = workflow?.document_id || '';
+        if (!documentId) return;
+
+        const stepLabel = stepLabels[data.stepName] || data.stepName;
+
+        setWorkflowProgressMap((prev) => {
+          const existing = prev[documentId];
+          const newProgress: WorkflowProgress = {
+            workflowId: data.workflowId,
+            documentId,
+            fileName: document?.name || existing?.fileName || '',
+            status:
+              data.status === 'in_progress'
+                ? 'in_progress'
+                : existing?.status || 'in_progress',
+            currentStep: stepLabel,
+            stepMessage: '',
+            segmentProgress: existing?.segmentProgress || null,
+            error: data.status === 'failed' ? `${stepLabel} failed` : null,
+            steps: {
+              ...(existing?.steps || {}),
+              [data.stepName]: {
+                status: data.status as
+                  | 'pending'
+                  | 'in_progress'
+                  | 'completed'
+                  | 'failed'
+                  | 'skipped',
+                label: stepLabel,
+              },
+            },
+          };
+          return { ...prev, [documentId]: newProgress };
+        });
+      }
+    },
+    [projectId, workflows, documents, stepLabels],
+  );
+
+  useWebSocketMessage('step', handleStepMessage);
 
   const loadAgentDetail = useCallback(
     async (agentName: string): Promise<Agent | null> => {
@@ -665,23 +826,86 @@ function ProjectDetailPage() {
     loadArtifacts,
   ]);
 
-  // Handle workflow completion/failure
-  const progressStatus = workflowProgress?.status;
+  // Detect in-progress workflows on page load
   useEffect(() => {
-    if (
-      !progressStatus ||
-      (progressStatus !== 'completed' && progressStatus !== 'failed')
-    ) {
-      return;
+    if (loading) return;
+
+    // Find all workflows that are in progress
+    const inProgressWorkflows = workflows.filter(
+      (w) => w.status === 'in_progress' || w.status === 'processing',
+    );
+
+    if (inProgressWorkflows.length > 0) {
+      setWorkflowProgressMap((prev) => {
+        const newMap = { ...prev };
+        for (const wf of inProgressWorkflows) {
+          // Skip if already tracked
+          if (newMap[wf.document_id]) continue;
+
+          const document = documents.find(
+            (d) => d.document_id === wf.document_id,
+          );
+
+          // Initialize all steps as pending
+          const initialSteps: Record<
+            string,
+            {
+              status:
+                | 'pending'
+                | 'in_progress'
+                | 'completed'
+                | 'failed'
+                | 'skipped';
+              label: string;
+            }
+          > = {};
+          for (const [stepKey, stepLabel] of Object.entries(stepLabels)) {
+            initialSteps[stepKey] = {
+              status: 'pending',
+              label: stepLabel,
+            };
+          }
+
+          newMap[wf.document_id] = {
+            workflowId: wf.workflow_id,
+            documentId: wf.document_id,
+            fileName: document?.name || wf.file_name,
+            status: 'in_progress',
+            currentStep: t('workflow.inProgress', 'Processing...'),
+            stepMessage: '',
+            segmentProgress: null,
+            error: null,
+            steps: initialSteps,
+          };
+        }
+        return newMap;
+      });
     }
-    // Refresh workflows list
+  }, [loading, workflows, documents, t, stepLabels]);
+
+  // Handle workflow completion/failure - clear completed/failed after delay
+  useEffect(() => {
+    const completedDocIds = Object.entries(workflowProgressMap)
+      .filter(
+        ([, progress]) =>
+          progress.status === 'completed' || progress.status === 'failed',
+      )
+      .map(([docId]) => docId);
+
+    if (completedDocIds.length === 0) return;
+
     loadWorkflows();
-    // Clear workflow progress after a delay
     const timeout = setTimeout(() => {
-      setWorkflowProgress(null);
+      setWorkflowProgressMap((prev) => {
+        const newMap = { ...prev };
+        for (const docId of completedDocIds) {
+          delete newMap[docId];
+        }
+        return newMap;
+      });
     }, 5000);
     return () => clearTimeout(timeout);
-  }, [progressStatus, loadWorkflows]);
+  }, [workflowProgressMap, loadWorkflows]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -772,13 +996,13 @@ function ProjectDetailPage() {
           throw new Error(`Failed to upload ${file.name} to S3`);
         }
 
-        // Step 3: Update document status to completed
+        // Step 3: Update document status to uploaded (workflow will change to in_progress/completed)
         await fetchApi(
           `projects/${projectId}/documents/${uploadInfo.document_id}/status`,
           {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'completed' }),
+            body: JSON.stringify({ status: 'uploaded' }),
           },
         );
       }
@@ -786,20 +1010,26 @@ function ProjectDetailPage() {
 
       // Initialize progress state for uploaded files
       if (uploadedDocuments.length > 0) {
-        const uploadedDocIds = uploadedDocuments.map((d) => d.documentId);
-        setWorkflowProgress({
-          workflowId: '',
-          documentId: uploadedDocuments[0].documentId,
-          fileName: uploadedDocuments.map((d) => d.fileName).join(', '),
-          status: 'pending',
-          currentStep: 'Waiting for workflow...',
-          stepMessage: 'Upload complete. Starting analysis...',
-          segmentProgress: null,
-          error: null,
+        // Set initial progress for all uploaded documents
+        setWorkflowProgressMap((prev) => {
+          const newMap = { ...prev };
+          for (const uploaded of uploadedDocuments) {
+            newMap[uploaded.documentId] = {
+              workflowId: '',
+              documentId: uploaded.documentId,
+              fileName: uploaded.fileName,
+              status: 'pending',
+              currentStep: t('workflow.preparing', 'Preparing...'),
+              stepMessage: '',
+              segmentProgress: null,
+              error: null,
+            };
+          }
+          return newMap;
         });
 
-        // Poll for new workflow after upload
-        const pollForWorkflow = async (retries = 10) => {
+        // Poll for new workflows after upload
+        const pollForWorkflows = async (retries = 10) => {
           for (let i = 0; i < retries; i++) {
             await new Promise((resolve) => setTimeout(resolve, 2000));
             // Fetch workflows for uploaded documents
@@ -819,25 +1049,49 @@ function ProjectDetailPage() {
                 // Skip documents with no workflows yet
               }
             }
-            // Find workflow that matches uploaded document and is pending/in_progress
-            const newWorkflow = allWorkflows.find(
-              (w) =>
-                uploadedDocIds.includes(w.document_id) &&
-                (w.status === 'pending' || w.status === 'in_progress'),
+
+            // Update progress for each document that has a workflow
+            const foundWorkflows = allWorkflows.filter(
+              (w) => w.status === 'pending' || w.status === 'in_progress',
             );
-            if (newWorkflow) {
-              setWorkflowProgress((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      workflowId: newWorkflow.workflow_id,
-                      documentId: newWorkflow.document_id,
+
+            if (foundWorkflows.length > 0) {
+              // Initialize all steps as pending
+              const initialSteps: Record<
+                string,
+                {
+                  status:
+                    | 'pending'
+                    | 'in_progress'
+                    | 'completed'
+                    | 'failed'
+                    | 'skipped';
+                  label: string;
+                }
+              > = {};
+              for (const [stepKey, stepLabel] of Object.entries(stepLabels)) {
+                initialSteps[stepKey] = {
+                  status: 'pending',
+                  label: stepLabel,
+                };
+              }
+
+              setWorkflowProgressMap((prev) => {
+                const newMap = { ...prev };
+                for (const wf of foundWorkflows) {
+                  if (newMap[wf.document_id]) {
+                    newMap[wf.document_id] = {
+                      ...newMap[wf.document_id],
+                      workflowId: wf.workflow_id,
                       status: 'in_progress',
-                      currentStep: 'Connected',
-                      stepMessage: 'Workflow started',
-                    }
-                  : null,
-              );
+                      currentStep: t('workflow.starting', 'Starting...'),
+                      steps: initialSteps,
+                    };
+                  }
+                }
+                return newMap;
+              });
+
               setWorkflows((prevWorkflows) => {
                 const existingIds = new Set(
                   prevWorkflows.map((w) => w.workflow_id),
@@ -850,14 +1104,19 @@ function ProjectDetailPage() {
               return;
             }
           }
-          // If no workflow found after retries, clear progress
-          setWorkflowProgress(null);
+          // If no workflow found after retries, clear progress for uploaded docs
+          setWorkflowProgressMap((prev) => {
+            const newMap = { ...prev };
+            for (const uploaded of uploadedDocuments) {
+              delete newMap[uploaded.documentId];
+            }
+            return newMap;
+          });
         };
-        pollForWorkflow();
+        pollForWorkflows();
       }
     } catch (error) {
       console.error('Failed to upload document:', error);
-      setWorkflowProgress(null);
     }
     setUploading(false);
     if (fileInputRef.current) {
@@ -1096,7 +1355,7 @@ function ProjectDetailPage() {
               <DocumentsPanel
                 documents={documents}
                 workflows={workflows}
-                workflowProgress={workflowProgress}
+                workflowProgressMap={workflowProgressMap}
                 uploading={uploading}
                 showUploadArea={showUploadArea}
                 isDragging={isDragging}

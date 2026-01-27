@@ -2,14 +2,20 @@ import { Stack, StackProps } from 'aws-cdk-lib';
 import { WebSocketApi, WebSocketStage } from 'aws-cdk-lib/aws-apigatewayv2';
 import { WebSocketIamAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { WebSocketLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Vpc } from 'aws-cdk-lib/aws-ec2';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
-import { SSM_KEYS, WebsocketFunctions } from ':idp-v2/common-constructs';
+import {
+  SSM_KEYS,
+  WebsocketFunctions,
+  WorkflowStream,
+} from ':idp-v2/common-constructs';
 
 export class WebsocketStack extends Stack {
   public readonly api: WebSocketApi;
   public readonly stage: WebSocketStage;
+  public readonly workflowStream: WorkflowStream;
 
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
@@ -26,6 +32,16 @@ export class WebsocketStack extends Stack {
       this,
       SSM_KEYS.BACKEND_TABLE_NAME,
     );
+
+    const backendTableStreamArn = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.BACKEND_TABLE_STREAM_ARN,
+    );
+
+    const backendTable = Table.fromTableAttributes(this, 'BackendTable', {
+      tableName: backendTableName,
+      tableStreamArn: backendTableStreamArn,
+    });
 
     const functions = new WebsocketFunctions(this, 'WebsocketFunctions', {
       vpc,
@@ -81,5 +97,14 @@ export class WebsocketStack extends Stack {
         stringValue: functions.connectFunction.role.roleArn,
       });
     }
+
+    // WorkflowStream - DynamoDB Stream handler for workflow status changes
+    this.workflowStream = new WorkflowStream(this, 'WorkflowStream', {
+      backendTable,
+      vpc,
+      elasticacheEndpoint,
+      websocketCallbackUrl: this.stage.callbackUrl,
+      websocketApiId: this.api.apiId,
+    });
   }
 }

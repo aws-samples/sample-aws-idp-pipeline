@@ -12,18 +12,26 @@ const resources = {
   ja: { translation: ja },
 };
 
+// Set default language to English if not stored
+const LANGUAGE_KEY = 'i18nextLng';
+if (!localStorage.getItem(LANGUAGE_KEY)) {
+  localStorage.setItem(LANGUAGE_KEY, 'en');
+}
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
     resources,
     fallbackLng: 'en',
+    lng: localStorage.getItem(LANGUAGE_KEY) || 'en',
     interpolation: {
       escapeValue: false,
     },
     detection: {
       order: ['localStorage'],
       caches: ['localStorage'],
+      lookupLocalStorage: LANGUAGE_KEY,
     },
   });
 
