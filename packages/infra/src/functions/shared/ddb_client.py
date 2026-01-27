@@ -221,7 +221,30 @@ def update_workflow_status(document_id: str, workflow_id: str, status: str, **kw
         ExpressionAttributeValues=expr_values
     )
 
+    # Also update document status to match workflow status
+    project_id = data.get('project_id')
+    if project_id:
+        update_document_status(project_id, document_id, status)
+
     return decimal_to_python({'data': data, 'updated_at': now})
+
+
+def update_document_status(project_id: str, document_id: str, status: str) -> bool:
+    """Update document status in DynamoDB."""
+    table = get_table()
+    now = now_iso()
+
+    try:
+        table.update_item(
+            Key={'PK': f'PROJ#{project_id}', 'SK': f'DOC#{document_id}'},
+            UpdateExpression='SET #data.#status = :status, updated_at = :updated_at',
+            ExpressionAttributeNames={'#data': 'data', '#status': 'status'},
+            ExpressionAttributeValues={':status': status, ':updated_at': now}
+        )
+        return True
+    except Exception as e:
+        print(f'Failed to update document status: {e}')
+        return False
 
 
 def get_workflow(document_id: str, workflow_id: str) -> Optional[dict]:

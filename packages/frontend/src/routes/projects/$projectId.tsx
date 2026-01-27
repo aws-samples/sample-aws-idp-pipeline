@@ -104,10 +104,36 @@ function ProjectDetailPage() {
   const [reanalyzing, setReanalyzing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // WebSocket 메시지 구독 예시
-  useWebSocketMessage<{ message: string }>('sessions', (data) => {
-    console.log('WebSocket message received:', data);
-  });
+  // WebSocket 세션 이벤트 구독
+  const handleSessionMessage = useCallback(
+    (data: {
+      event: string;
+      sessionId: string;
+      sessionName: string;
+      timestamp: string;
+    }) => {
+      if (data.event === 'created') {
+        // Remove 'session_' prefix if present for matching
+        const sessionIdWithoutPrefix = data.sessionId.replace(/^session_/, '');
+
+        setSessions((prev) =>
+          prev.map((session) =>
+            session.session_id === sessionIdWithoutPrefix ||
+            session.session_id === data.sessionId
+              ? {
+                  ...session,
+                  session_name: data.sessionName,
+                  updated_at: data.timestamp,
+                }
+              : session,
+          ),
+        );
+      }
+    },
+    [],
+  );
+
+  useWebSocketMessage('sessions', handleSessionMessage);
 
   const loadProject = useCallback(async () => {
     try {
@@ -882,8 +908,10 @@ function ProjectDetailPage() {
   }, []);
 
   const handleSendMessage = useCallback(
-    async (files: AttachedFile[]) => {
-      if ((!inputMessage.trim() && files.length === 0) || sending) return;
+    async (files: AttachedFile[], message?: string) => {
+      // Use provided message or fall back to inputMessage state
+      const messageContent = message ?? inputMessage;
+      if ((!messageContent.trim() && files.length === 0) || sending) return;
 
       // Convert AttachedFile to ChatAttachment for display
       const attachments: ChatAttachment[] = files.map((f) => ({
@@ -896,7 +924,7 @@ function ProjectDetailPage() {
       const userMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'user',
-        content: inputMessage.trim(),
+        content: messageContent.trim(),
         attachments: attachments.length > 0 ? attachments : undefined,
         timestamp: new Date(),
       };
@@ -1099,6 +1127,7 @@ function ProjectDetailPage() {
                 currentToolUse={currentToolUse}
                 loadingHistory={loadingHistory}
                 selectedAgent={selectedAgent}
+                artifacts={artifacts}
                 onInputChange={setInputMessage}
                 onSendMessage={handleSendMessage}
                 onAgentClick={() => setShowAgentModal(true)}

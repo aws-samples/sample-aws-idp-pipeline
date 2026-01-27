@@ -205,7 +205,8 @@
     "renameSession": "会話の名前変更",
     "sessionNamePlaceholder": "会話名を入力",
     "deleteArtifact": "アーティファクトを削除",
-    "deleteArtifactConfirm": "このアーティファクトを削除しますか？削除されたアーティファクトは復元できません。"
+    "deleteArtifactConfirm": "このアーティファクトを削除しますか？削除されたアーティファクトは復元できません。",
+    "selectArtifact": "アーティファクトを選択"
   },
   "viewer": {
     "zoomIn": "拡大",
@@ -240,7 +241,11 @@
     "searchPlaceholder": "アーティファクトを検索...",
     "noArtifacts": "アーティファクトがありません",
     "noArtifactsDescription": "チャット会話中に生成されたアーティファクトがここに表示されます。",
-    "items": "件"
+    "items": "件",
+    "goToProject": "プロジェクトへ移動",
+    "unsupportedType": "このファイル形式はプレビューに対応していません",
+    "loadError": "アーティファクトの読み込みに失敗しました",
+    "noPreview": "プレビューは利用できません"
   },
   "languages": {
     "ko": "韓国語",

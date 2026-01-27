@@ -23,7 +23,7 @@ import DOMPurify from 'isomorphic-dompurify';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
-import { ChatMessage, Agent, ChatArtifact } from '../types/project';
+import { ChatMessage, Agent, ChatArtifact, Artifact } from '../types/project';
 import { useAwsClient } from '../hooks/useAwsClient';
 import { useToast } from './Toast';
 import ImageModal from './ImageModal';
@@ -43,8 +43,9 @@ interface ChatPanelProps {
   currentToolUse: string | null;
   loadingHistory?: boolean;
   selectedAgent: Agent | null;
+  artifacts?: Artifact[];
   onInputChange: (value: string) => void;
-  onSendMessage: (files: AttachedFile[]) => void;
+  onSendMessage: (files: AttachedFile[], message?: string) => void;
   onAgentClick: () => void;
   onNewChat: () => void;
 }
@@ -105,6 +106,74 @@ const getFileTypeInfo = (
   }
 };
 
+/** Parse message content and render artifact references as chips */
+const renderMessageWithArtifacts = (content: string) => {
+  // Pattern: [[artifact:artifact_id|filename]]
+  const artifactPattern = /\[\[artifact:([^\]|]+)\|([^\]]+)\]\]/g;
+  const parts: (string | { type: 'artifact'; id: string; filename: string })[] =
+    [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = artifactPattern.exec(content)) !== null) {
+    // Add text before the match
+    if (match.index > lastIndex) {
+      parts.push(content.slice(lastIndex, match.index));
+    }
+    // Add artifact reference
+    parts.push({
+      type: 'artifact',
+      id: match[1],
+      filename: match[2],
+    });
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text
+  if (lastIndex < content.length) {
+    parts.push(content.slice(lastIndex));
+  }
+
+  // If no artifacts found, return plain text
+  if (parts.length === 1 && typeof parts[0] === 'string') {
+    return <span className="whitespace-pre-wrap">{content}</span>;
+  }
+
+  return (
+    <span className="whitespace-pre-wrap">
+      {parts.map((part, index) => {
+        if (typeof part === 'string') {
+          return <span key={index}>{part}</span>;
+        }
+        // Render artifact chip
+        return (
+          <span
+            key={index}
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 bg-violet-100 dark:bg-violet-900/40 border border-violet-200 dark:border-violet-700 rounded text-xs font-medium text-violet-700 dark:text-violet-300 align-middle"
+            title={part.id}
+          >
+            <svg
+              className="w-3 h-3 text-violet-500 dark:text-violet-400"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z" />
+              <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" />
+              <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" />
+            </svg>
+            <span className="max-w-24 truncate">{part.filename}</span>
+          </span>
+        );
+      })}
+    </span>
+  );
+};
+
 /** Prepare content for markdown parsing */
 const prepareMarkdown = (content: string): string => {
   // Decode HTML entities in a single pass to avoid double-unescaping
@@ -156,6 +225,7 @@ export default function ChatPanel({
   currentToolUse,
   loadingHistory = false,
   selectedAgent,
+  artifacts = [],
   onInputChange,
   onSendMessage,
   onAgentClick,
@@ -165,7 +235,7 @@ export default function ChatPanel({
   const { getPresignedDownloadUrl } = useAwsClient();
   const { showToast } = useToast();
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
@@ -181,6 +251,12 @@ export default function ChatPanel({
   const [downloadingArtifact, setDownloadingArtifact] = useState<string | null>(
     null,
   );
+  // Artifact mention state
+  const [showArtifactDropdown, setShowArtifactDropdown] = useState(false);
+  const [artifactSearchQuery, setArtifactSearchQuery] = useState('');
+  const [selectedArtifactIndex, setSelectedArtifactIndex] = useState(0);
+  const artifactDropdownRef = useRef<HTMLDivElement>(null);
+  const mentionRangeRef = useRef<Range | null>(null);
 
   const handleArtifactDownload = useCallback(
     async (artifact: ChatArtifact) => {
@@ -271,16 +347,183 @@ export default function ChatPanel({
     });
   }, []);
 
+  // Filtered artifacts for mention dropdown
+  const filteredArtifacts = artifacts.filter((artifact) =>
+    artifact.filename.toLowerCase().includes(artifactSearchQuery.toLowerCase()),
+  );
+
+  // Get text content from contenteditable (extracting artifact references)
+  const getInputContent = useCallback(() => {
+    if (!inputRef.current) return '';
+
+    let result = '';
+    const processNode = (node: Node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        result += node.textContent || '';
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        if (el.dataset.artifactId) {
+          // This is an artifact chip - convert to reference format
+          result += `[[artifact:${el.dataset.artifactId}|${el.dataset.artifactFilename}]]`;
+        } else if (el.tagName === 'BR') {
+          result += '\n';
+        } else {
+          el.childNodes.forEach(processNode);
+        }
+      }
+    };
+
+    inputRef.current.childNodes.forEach(processNode);
+    return result;
+  }, []);
+
+  // Get plain text content (for hasContent check)
+  const getPlainTextContent = useCallback(() => {
+    if (!inputRef.current) return '';
+    return inputRef.current.textContent || '';
+  }, []);
+
+  // Handle input change with @ mention detection
+  const handleInputChange = useCallback(() => {
+    const content = getPlainTextContent();
+    onInputChange(content);
+
+    // Detect @ mention
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || artifacts.length === 0) {
+      setShowArtifactDropdown(false);
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    if (!range.collapsed) {
+      setShowArtifactDropdown(false);
+      return;
+    }
+
+    // Get text before cursor in current text node
+    const node = range.startContainer;
+    if (node.nodeType !== Node.TEXT_NODE) {
+      setShowArtifactDropdown(false);
+      return;
+    }
+
+    const textBeforeCursor =
+      node.textContent?.slice(0, range.startOffset) || '';
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+    if (lastAtIndex !== -1) {
+      const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
+      // Check if there's no space between @ and cursor (active mention)
+      if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+        // Store the range for later insertion
+        const mentionRange = document.createRange();
+        mentionRange.setStart(node, lastAtIndex);
+        mentionRange.setEnd(node, range.startOffset);
+        mentionRangeRef.current = mentionRange;
+
+        setShowArtifactDropdown(true);
+        setArtifactSearchQuery(textAfterAt);
+        setSelectedArtifactIndex(0);
+        return;
+      }
+    }
+
+    setShowArtifactDropdown(false);
+    setArtifactSearchQuery('');
+    mentionRangeRef.current = null;
+  }, [onInputChange, artifacts.length, getPlainTextContent]);
+
+  // Create artifact chip element
+  const createArtifactChip = useCallback((artifact: Artifact) => {
+    const chip = document.createElement('span');
+    chip.contentEditable = 'false';
+    chip.dataset.artifactId = artifact.artifact_id;
+    chip.dataset.artifactFilename = artifact.filename;
+    chip.className =
+      'inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 bg-violet-100 dark:bg-violet-900/40 border border-violet-200 dark:border-violet-700 rounded text-xs font-medium text-violet-700 dark:text-violet-300 align-middle';
+    chip.innerHTML = `<svg class="w-3 h-3 text-violet-500 dark:text-violet-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg><span class="max-w-24 truncate">${artifact.filename}</span>`;
+    return chip;
+  }, []);
+
+  // Handle artifact selection from dropdown
+  const handleArtifactSelect = useCallback(
+    (artifact: Artifact) => {
+      if (!mentionRangeRef.current || !inputRef.current) {
+        setShowArtifactDropdown(false);
+        return;
+      }
+
+      // Delete the @query text
+      mentionRangeRef.current.deleteContents();
+
+      // Insert the chip
+      const chip = createArtifactChip(artifact);
+      mentionRangeRef.current.insertNode(chip);
+
+      // Move cursor after the chip
+      const selection = window.getSelection();
+      if (selection) {
+        const newRange = document.createRange();
+        newRange.setStartAfter(chip);
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+      }
+
+      // Update parent state
+      onInputChange(getPlainTextContent());
+
+      setShowArtifactDropdown(false);
+      setArtifactSearchQuery('');
+      mentionRangeRef.current = null;
+
+      // Focus back to input
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    },
+    [createArtifactChip, onInputChange, getPlainTextContent],
+  );
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        artifactDropdownRef.current &&
+        !artifactDropdownRef.current.contains(e.target as Node)
+      ) {
+        setShowArtifactDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Scroll selected artifact into view
+  useEffect(() => {
+    if (showArtifactDropdown && artifactDropdownRef.current) {
+      const selectedItem = artifactDropdownRef.current.querySelector(
+        `[data-artifact-index="${selectedArtifactIndex}"]`,
+      );
+      if (selectedItem) {
+        selectedItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }, [selectedArtifactIndex, showArtifactDropdown]);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
-  // Auto-resize textarea
+  // Sync input content when inputMessage changes externally (e.g., cleared after send)
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height =
-        Math.min(textareaRef.current.scrollHeight, 200) + 'px';
+    if (
+      inputRef.current &&
+      inputMessage === '' &&
+      inputRef.current.innerHTML !== ''
+    ) {
+      inputRef.current.innerHTML = '';
     }
   }, [inputMessage]);
 
@@ -335,21 +578,83 @@ export default function ChatPanel({
   const hasMessages = messages.length > 0 || sending;
   const hasContent = inputMessage.trim().length > 0 || attachedFiles.length > 0;
 
+  // Keep focus on input when view changes (welcome -> messages)
+  useEffect(() => {
+    if (hasMessages && inputRef.current) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
+  }, [hasMessages]);
+
   const handleSend = useCallback(() => {
     if (!hasContent || sending) return;
-    onSendMessage(attachedFiles);
+
+    // Get content with artifact references
+    const messageContent = getInputContent();
+
+    // Pass formatted message content directly to avoid async state update issues
+    onSendMessage(attachedFiles, messageContent);
     setAttachedFiles([]);
-  }, [hasContent, sending, onSendMessage, attachedFiles]);
+
+    // Clear the input and keep focus
+    if (inputRef.current) {
+      inputRef.current.innerHTML = '';
+      inputRef.current.focus();
+    }
+    onInputChange('');
+  }, [
+    hasContent,
+    sending,
+    onSendMessage,
+    attachedFiles,
+    onInputChange,
+    getInputContent,
+  ]);
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      // Handle artifact dropdown navigation
+      if (showArtifactDropdown && filteredArtifacts.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setSelectedArtifactIndex((prev) =>
+            prev < filteredArtifacts.length - 1 ? prev + 1 : 0,
+          );
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setSelectedArtifactIndex((prev) =>
+            prev > 0 ? prev - 1 : filteredArtifacts.length - 1,
+          );
+          return;
+        }
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          handleArtifactSelect(filteredArtifacts[selectedArtifactIndex]);
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setShowArtifactDropdown(false);
+          return;
+        }
+      }
+
       // Ignore Enter during IME composition (Korean, Japanese, Chinese input)
       if (e.key === 'Enter' && !e.shiftKey && !isComposingRef.current) {
         e.preventDefault();
         handleSend();
       }
     },
-    [handleSend],
+    [
+      handleSend,
+      showArtifactDropdown,
+      filteredArtifacts,
+      selectedArtifactIndex,
+      handleArtifactSelect,
+    ],
   );
 
   // Input Box - inline JSX to prevent re-mounting on every render
@@ -414,12 +719,12 @@ export default function ChatPanel({
             </div>
           )}
 
-          {/* Textarea */}
+          {/* Contenteditable Input */}
           <div className="max-h-48 w-full overflow-y-auto">
-            <textarea
-              ref={textareaRef}
-              value={inputMessage}
-              onChange={(e) => onInputChange(e.target.value)}
+            <div
+              ref={inputRef}
+              contentEditable
+              onInput={handleInputChange}
               onCompositionStart={() => {
                 isComposingRef.current = true;
               }}
@@ -427,14 +732,15 @@ export default function ChatPanel({
                 isComposingRef.current = false;
               }}
               onKeyDown={handleKeyDown}
-              placeholder={t('chat.placeholder')}
-              className="w-full border-0 outline-none text-base resize-none overflow-hidden py-0 leading-relaxed"
-              rows={1}
+              data-placeholder={t('chat.placeholder')}
+              className="chat-input-editable w-full border-0 outline-none text-base py-0 leading-relaxed empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 empty:before:pointer-events-none"
               style={{
                 minHeight: '1.5em',
                 background: 'transparent',
                 color: 'inherit',
                 border: 'none',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
               }}
             />
           </div>
@@ -487,6 +793,43 @@ export default function ChatPanel({
           </div>
         </div>
       </div>
+
+      {/* Artifact Mention Dropdown */}
+      {showArtifactDropdown && filteredArtifacts.length > 0 && (
+        <div
+          ref={artifactDropdownRef}
+          className="absolute bottom-full left-0 right-0 mb-2 max-h-48 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-50"
+        >
+          <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-700">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              {t('chat.selectArtifact', 'Select artifact')}
+            </span>
+          </div>
+          {filteredArtifacts.slice(0, 10).map((artifact, index) => (
+            <button
+              key={artifact.artifact_id}
+              type="button"
+              data-artifact-index={index}
+              onClick={() => handleArtifactSelect(artifact)}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
+                index === selectedArtifactIndex
+                  ? 'bg-blue-50 dark:bg-blue-900/30'
+                  : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
+              }`}
+            >
+              <File className="w-4 h-4 text-slate-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                  {artifact.filename}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {artifact.content_type}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Drag Overlay */}
       {isDragging && (
@@ -639,8 +982,8 @@ export default function ChatPanel({
                     {/* Text content */}
                     {message.content && (
                       <div className="px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-white">
-                        <p className="text-sm whitespace-pre-wrap">
-                          {message.content}
+                        <p className="text-sm">
+                          {renderMessageWithArtifacts(message.content)}
                         </p>
                       </div>
                     )}

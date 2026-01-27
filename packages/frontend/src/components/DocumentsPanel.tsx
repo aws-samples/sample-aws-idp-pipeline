@@ -39,28 +39,36 @@ interface DocumentsPanelProps {
 
 const getFileIcon = (fileType: string) => {
   if (fileType.includes('pdf')) {
-    return <FileText className="h-5 w-5 text-blue-500" />;
+    return <FileText className="h-5 w-5 text-blue-400" />;
   }
   if (fileType.includes('image')) {
-    return <Image className="h-5 w-5 text-emerald-500" />;
+    return <Image className="h-5 w-5 text-emerald-400" />;
   }
   if (fileType.includes('video')) {
-    return <Film className="h-5 w-5 text-violet-500" />;
+    return <Film className="h-5 w-5 text-violet-400" />;
   }
   if (fileType.includes('audio')) {
-    return <Music className="h-5 w-5 text-amber-500" />;
+    return <Music className="h-5 w-5 text-amber-400" />;
   }
   return <File className="h-5 w-5 text-slate-400" />;
 };
 
 const getStatusBadge = (status: string) => {
   const statusColors: Record<string, string> = {
-    completed: 'bg-green-100 text-green-700',
-    processing: 'bg-yellow-100 text-yellow-700',
-    failed: 'bg-red-100 text-red-700',
-    uploading: 'bg-blue-100 text-blue-700',
+    completed:
+      'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    processing:
+      'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+    failed: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    uploading:
+      'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    pending:
+      'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400',
   };
-  return statusColors[status] || 'bg-slate-100 text-slate-700';
+  return (
+    statusColors[status] ||
+    'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400'
+  );
 };
 
 export default function DocumentsPanel({
@@ -230,12 +238,8 @@ export default function DocumentsPanel({
                   {/* Document Info Row */}
                   <div className="flex items-center gap-3">
                     <div
-                      className={`flex-shrink-0 p-2 rounded-lg ${
-                        isProcessing
-                          ? 'bg-blue-100'
-                          : doc.file_type.includes('image')
-                            ? 'bg-purple-100'
-                            : 'bg-slate-100'
+                      className={`flex-shrink-0 p-2 rounded-lg doc-icon-bg ${
+                        isProcessing ? 'processing' : ''
                       }`}
                     >
                       {getFileIcon(doc.file_type)}
@@ -251,7 +255,7 @@ export default function DocumentsPanel({
                         <span
                           className={`text-xs px-1.5 py-0.5 rounded font-medium ${getStatusBadge(doc.status)}`}
                         >
-                          {doc.status}
+                          {t(`documents.${doc.status}`, doc.status)}
                         </span>
                         <span className="text-xs text-slate-400">
                           {(doc.file_size / 1024).toFixed(1)} KB

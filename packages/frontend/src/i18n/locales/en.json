@@ -205,7 +205,8 @@
     "renameSession": "Rename Session",
     "sessionNamePlaceholder": "Enter session name",
     "deleteArtifact": "Delete Artifact",
-    "deleteArtifactConfirm": "Are you sure you want to delete this artifact? This action cannot be undone."
+    "deleteArtifactConfirm": "Are you sure you want to delete this artifact? This action cannot be undone.",
+    "selectArtifact": "Select artifact"
   },
   "viewer": {
     "zoomIn": "Zoom In",
@@ -240,7 +241,11 @@
     "searchPlaceholder": "Search artifacts...",
     "noArtifacts": "No artifacts yet",
     "noArtifactsDescription": "Artifacts generated during chat conversations will appear here.",
-    "items": "items"
+    "items": "items",
+    "goToProject": "Go to Project",
+    "unsupportedType": "Preview not available for this file type",
+    "loadError": "Failed to load artifact",
+    "noPreview": "Preview not available"
   },
   "languages": {
     "ko": "Korean",

@@ -205,7 +205,8 @@
     "renameSession": "대화 이름 변경",
     "sessionNamePlaceholder": "대화 이름을 입력하세요",
     "deleteArtifact": "아티팩트 삭제",
-    "deleteArtifactConfirm": "이 아티팩트를 삭제하시겠습니까? 삭제된 아티팩트는 복구할 수 없습니다."
+    "deleteArtifactConfirm": "이 아티팩트를 삭제하시겠습니까? 삭제된 아티팩트는 복구할 수 없습니다.",
+    "selectArtifact": "아티팩트 선택"
   },
   "viewer": {
     "zoomIn": "확대",
@@ -240,7 +241,11 @@
     "searchPlaceholder": "아티팩트 검색...",
     "noArtifacts": "아티팩트가 없습니다",
     "noArtifactsDescription": "채팅 대화 중에 생성된 아티팩트가 여기에 표시됩니다.",
-    "items": "개"
+    "items": "개",
+    "goToProject": "프로젝트로 이동",
+    "unsupportedType": "이 파일 형식은 미리보기를 지원하지 않습니다",
+    "loadError": "아티팩트를 불러오는데 실패했습니다",
+    "noPreview": "미리보기를 사용할 수 없습니다"
   },
   "languages": {
     "ko": "한국어",

@@ -1,6 +1,6 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState, useEffect, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useTranslation, getI18n } from 'react-i18next';
 import {
   FileText,
   Image,
@@ -15,7 +15,13 @@ import {
   Layers,
   Loader2,
   ChevronDown,
+  X,
+  ExternalLink,
+  Image as ImageIcon,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import remarkGfm from 'remark-gfm';
 import { useAwsClient } from '../hooks/useAwsClient';
 import { useToast } from '../components/Toast';
 import { Artifact, ArtifactsResponse } from '../types/project';
@@ -75,6 +81,7 @@ function formatFileSize(bytes: number): string {
 
 function ArtifactsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { fetchApi, getPresignedDownloadUrl } = useAwsClient();
   const { showToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
@@ -88,6 +95,11 @@ function ArtifactsPage() {
   );
   const [deleting, setDeleting] = useState(false);
   const [copiedProjectId, setCopiedProjectId] = useState<string | null>(null);
+  const [viewingArtifact, setViewingArtifact] = useState<Artifact | null>(null);
+  const [viewerContent, setViewerContent] = useState<string | null>(null);
+  const [viewerImageUrl, setViewerImageUrl] = useState<string | null>(null);
+  const [viewerLoading, setViewerLoading] = useState(false);
+  const [viewerError, setViewerError] = useState<string | null>(null);
 
   const handleCopyProjectId = async (
     projectId: string,
@@ -223,12 +235,85 @@ function ArtifactsPage() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString(undefined, {
+    const locale = getI18n().language || 'en';
+    return date.toLocaleDateString(locale, {
       year: 'numeric',
-      month: 'short',
+      month: 'long',
       day: 'numeric',
     });
   };
+
+  const handleViewArtifact = useCallback(
+    async (artifact: Artifact) => {
+      setViewingArtifact(artifact);
+      setViewerLoading(true);
+      setViewerError(null);
+      setViewerContent(null);
+      setViewerImageUrl(null);
+
+      const imageExtensions = [
+        '.png',
+        '.jpg',
+        '.jpeg',
+        '.gif',
+        '.webp',
+        '.svg',
+      ];
+      const isImage =
+        artifact.content_type.startsWith('image/') ||
+        imageExtensions.some((ext) =>
+          artifact.filename.toLowerCase().endsWith(ext),
+        );
+      const isText =
+        artifact.content_type.startsWith('text/') ||
+        artifact.content_type === 'application/json';
+
+      try {
+        const presignedUrl = await getPresignedDownloadUrl(
+          artifact.s3_bucket,
+          artifact.s3_key,
+        );
+
+        if (isImage) {
+          setViewerImageUrl(presignedUrl);
+        } else if (isText) {
+          const response = await fetch(presignedUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to load: ${response.status}`);
+          }
+          const text = await response.text();
+          setViewerContent(text);
+        } else {
+          setViewerError(
+            t(
+              'artifacts.unsupportedType',
+              'Preview not available for this file type',
+            ),
+          );
+        }
+      } catch (err) {
+        console.error('Failed to load artifact:', err);
+        setViewerError(t('artifacts.loadError', 'Failed to load artifact'));
+      } finally {
+        setViewerLoading(false);
+      }
+    },
+    [getPresignedDownloadUrl, t],
+  );
+
+  const handleCloseViewer = useCallback(() => {
+    setViewingArtifact(null);
+    setViewerContent(null);
+    setViewerImageUrl(null);
+    setViewerError(null);
+  }, []);
+
+  const handleGoToProject = useCallback(
+    (projectId: string) => {
+      navigate({ to: '/projects/$projectId', params: { projectId } });
+    },
+    [navigate],
+  );
 
   if (loading) {
     return (
@@ -310,6 +395,7 @@ function ArtifactsPage() {
                   <div
                     key={artifact.artifact_id}
                     className="artifact-card group cursor-pointer"
+                    onClick={() => handleViewArtifact(artifact)}
                   >
                     {/* Gradient overlay */}
                     <div className="artifact-card-gradient" />
@@ -439,6 +525,143 @@ function ArtifactsPage() {
         variant="danger"
         loading={deleting}
       />
+
+      {/* Artifact Viewer Modal */}
+      {viewingArtifact && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={handleCloseViewer}
+        >
+          <div
+            className="relative w-full max-w-4xl max-h-[90vh] mx-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center ${getIconClass(viewingArtifact.content_type)}`}
+              >
+                {viewingArtifact.content_type.startsWith('image/') ? (
+                  <ImageIcon className="w-5 h-5 text-white" />
+                ) : (
+                  <FileText className="w-5 h-5 text-white" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200 truncate">
+                  {viewingArtifact.filename}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {viewingArtifact.content_type} |{' '}
+                  {formatFileSize(viewingArtifact.file_size)}
+                </p>
+              </div>
+              <button
+                onClick={() => handleGoToProject(viewingArtifact.project_id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                title={t('artifacts.goToProject', 'Go to Project')}
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span className="hidden sm:inline">
+                  {t('artifacts.goToProject', 'Go to Project')}
+                </span>
+              </button>
+              <button
+                onClick={() => handleDownload(viewingArtifact)}
+                className="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                title={t('common.download', 'Download')}
+              >
+                <Download className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleCloseViewer}
+                className="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                title={t('common.close', 'Close')}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-auto p-5">
+              {viewerLoading ? (
+                <div className="flex flex-col items-center justify-center h-64 gap-3">
+                  <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {t('common.loading', 'Loading...')}
+                  </p>
+                </div>
+              ) : viewerError ? (
+                <div className="flex flex-col items-center justify-center h-64 gap-3">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {viewerError}
+                  </p>
+                  <button
+                    onClick={() => handleDownload(viewingArtifact)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    {t('common.download', 'Download')}
+                  </button>
+                </div>
+              ) : viewerImageUrl ? (
+                <div className="flex items-center justify-center min-h-64 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                  <img
+                    src={viewerImageUrl}
+                    alt={viewingArtifact.filename}
+                    className="max-w-full max-h-[60vh] object-contain"
+                  />
+                </div>
+              ) : viewerContent ? (
+                viewingArtifact.content_type === 'text/markdown' ||
+                viewingArtifact.content_type === 'text/x-markdown' ||
+                viewingArtifact.filename.endsWith('.md') ? (
+                  <div className="prose prose-sm prose-slate dark:prose-invert max-w-none [&_strong]:!text-inherit">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeRaw]}
+                    >
+                      {viewerContent}
+                    </ReactMarkdown>
+                  </div>
+                ) : viewingArtifact.content_type === 'text/html' ? (
+                  <div
+                    className="prose prose-sm prose-slate dark:prose-invert max-w-none [&_strong]:!text-inherit"
+                    dangerouslySetInnerHTML={{ __html: viewerContent }}
+                  />
+                ) : (
+                  <pre className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono bg-slate-50 dark:bg-slate-800 p-4 rounded-lg overflow-auto">
+                    {viewerContent}
+                  </pre>
+                )
+              ) : (
+                <div className="flex flex-col items-center justify-center h-64 gap-3">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {t('artifacts.noPreview', 'Preview not available')}
+                  </p>
+                  <button
+                    onClick={() => handleDownload(viewingArtifact)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    {t('common.download', 'Download')}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {formatDate(viewingArtifact.created_at)}
+              </span>
+              <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">
+                {viewingArtifact.project_id}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
