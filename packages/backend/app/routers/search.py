@@ -10,6 +10,7 @@ router = APIRouter(prefix="/projects/{project_id}/search", tags=["search"])
 
 class SearchResult(BaseModel):
     workflow_id: str
+    document_id: str
     segment_id: str
     segment_index: int
     content: str
@@ -23,6 +24,7 @@ class HybridSearchResponse(BaseModel):
 
 class RerankedSearchResult(BaseModel):
     workflow_id: str
+    document_id: str
     segment_id: str
     segment_index: int
     content: str
@@ -36,6 +38,7 @@ class RerankedSearchResponse(BaseModel):
 
 class Segment(BaseModel):
     workflow_id: str
+    document_id: str
     segment_id: str
     segment_index: int
     content: str
@@ -69,6 +72,7 @@ def get_segments(
         segments=[
             Segment(
                 workflow_id=row["workflow_id"],
+                document_id=row["document_id"],
                 segment_id=row["segment_id"],
                 segment_index=row["segment_index"],
                 content=row["content"],
@@ -117,6 +121,7 @@ def hybrid_search(
             SearchResult(
                 workflow_id=row["workflow_id"],
                 segment_id=row["segment_id"],
+                document_id=row["document_id"],
                 segment_index=row["segment_index"],
                 content=row["content"],
                 keywords=row["keywords"],
@@ -173,6 +178,7 @@ def rerank_search(
         results=[
             RerankedSearchResult(
                 workflow_id=candidates[idx]["workflow_id"],
+                document_id=candidates[idx]["document_id"],
                 segment_id=candidates[idx]["segment_id"],
                 segment_index=candidates[idx]["segment_index"],
                 content=candidates[idx]["content"],
