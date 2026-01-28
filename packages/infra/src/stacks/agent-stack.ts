@@ -31,24 +31,6 @@ export class AgentStack extends Stack {
       sessionStorageBucketName,
     );
 
-    // Get LanceDB lock table from SSM
-    const lancedbLockTableName = StringParameter.valueForStringParameter(
-      this,
-      SSM_KEYS.LANCEDB_LOCK_TABLE_NAME,
-    );
-
-    const lancedbLockTable = Table.fromTableName(
-      this,
-      'LancedbLockTable',
-      lancedbLockTableName,
-    );
-
-    // Get LanceDB Express bucket name from SSM
-    const lancedbExpressBucketName = StringParameter.valueForStringParameter(
-      this,
-      SSM_KEYS.LANCEDB_EXPRESS_BUCKET_NAME,
-    );
-
     // Get backend table from SSM
     const backendTableName = StringParameter.valueForStringParameter(
       this,
@@ -77,23 +59,19 @@ export class AgentStack extends Stack {
       agentPath: path.resolve(process.cwd(), '../../packages/agents/idp-agent'),
       agentName: 'idp_agent',
       sessionStorageBucket,
-      lancedbLockTable,
-      lancedbExpressBucketName,
       backendTable,
       gateway,
       bedrockModelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
       agentStorageBucket,
     });
 
-    const bidiAgent = new IdpAgent(this, 'BidiAgent', {
+    const researchAgent = new IdpAgent(this, 'ResearchAgent', {
       agentPath: path.resolve(
         process.cwd(),
-        '../../packages/agents/bidi-agent',
+        '../../packages/agents/research-agent',
       ),
-      agentName: 'bidi_agent',
+      agentName: 'research_agent',
       sessionStorageBucket,
-      lancedbLockTable,
-      lancedbExpressBucketName,
       backendTable,
       gateway,
     });
@@ -107,10 +85,10 @@ export class AgentStack extends Stack {
       description: 'ARN of the IDP Agent Runtime',
     });
 
-    new StringParameter(this, 'BidiAgentRuntimeArnParam', {
-      parameterName: SSM_KEYS.BIDI_AGENT_RUNTIME_ARN,
-      stringValue: bidiAgent.runtime.agentRuntimeArn,
-      description: 'ARN of the Bidi Agent Runtime',
+    new StringParameter(this, 'ResearchAgentRuntimeArnParam', {
+      parameterName: SSM_KEYS.RESEARCH_AGENT_RUNTIME_ARN,
+      stringValue: researchAgent.runtime.agentRuntimeArn,
+      description: 'ARN of the Research Agent Runtime',
     });
   }
 }

@@ -10,7 +10,7 @@ export const SSM_KEYS = {
   LANCEDB_EXPRESS_AZ_ID: '/idp-v2/lancedb/express/az-id',
   VPC_ID: '/idp-v2/vpc/id',
   AGENT_RUNTIME_ARN: '/idp-v2/agent/runtime-arn',
-  BIDI_AGENT_RUNTIME_ARN: '/idp-v2/bidi-agent/runtime-arn',
+  RESEARCH_AGENT_RUNTIME_ARN: '/idp-v2/research-agent/runtime-arn',
   PADDLEOCR_ENDPOINT_NAME: '/idp-v2/paddleocr/endpoint-name',
   BACKEND_URL: '/idp-v2/backend/url',
   SEARCH_MCP_FUNCTION_ARN: '/idp-v2/mcp/search/function-arn',
