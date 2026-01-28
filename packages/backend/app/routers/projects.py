@@ -1,7 +1,7 @@
 import contextlib
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from app.cache import CacheKey, cached_query_projects, invalidate
@@ -58,6 +58,7 @@ class DeletedInfo(BaseModel):
     lancedb_error: str | None = None
     workflow_items_deleted: int = 0
     s3_objects_deleted: int = 0
+    session_objects_deleted: int = 0
     project_items_deleted: int = 0
 
 
@@ -226,8 +227,8 @@ def update_project(project_id: str, request: ProjectUpdate) -> ProjectResponse:
 
 
 @router.delete("/{project_id}")
-async def delete_project(project_id: str) -> DeleteProjectResponse:
-    """Delete a project and all related data (documents, workflows, S3, LanceDB)."""
+async def delete_project(project_id: str, user_id: str = Header(alias="x-user-id")) -> DeleteProjectResponse:
+    """Delete a project and all related data (documents, workflows, S3, LanceDB, sessions)."""
     config = get_config()
 
     existing = get_project_item(project_id)
@@ -275,7 +276,14 @@ async def delete_project(project_id: str) -> DeleteProjectResponse:
         s3_deleted = delete_s3_prefix(config.document_storage_bucket_name, project_prefix)
         deleted_info.s3_objects_deleted = s3_deleted
 
-    # 5. Delete all project items from DynamoDB (PROJ#, DOC#*, WF#* links)
+    # 5. Delete session files from S3
+    if config.session_storage_bucket_name:
+        session_prefix = f"sessions/{user_id}/{project_id}/"
+        with contextlib.suppress(Exception):
+            session_deleted = delete_s3_prefix(config.session_storage_bucket_name, session_prefix)
+            deleted_info.session_objects_deleted = session_deleted
+
+    # 6. Delete all project items from DynamoDB (PROJ#, DOC#*, WF#* links)
     batch_delete_items(project_items)
 
     deleted_info.project_items_deleted = len(project_items)
