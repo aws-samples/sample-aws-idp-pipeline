@@ -59,6 +59,7 @@ class DeletedInfo(BaseModel):
     workflow_items_deleted: int = 0
     s3_objects_deleted: int = 0
     session_objects_deleted: int = 0
+    agent_objects_deleted: int = 0
     project_items_deleted: int = 0
 
 
@@ -283,7 +284,14 @@ async def delete_project(project_id: str, user_id: str = Header(alias="x-user-id
             session_deleted = delete_s3_prefix(config.session_storage_bucket_name, session_prefix)
             deleted_info.session_objects_deleted = session_deleted
 
-    # 6. Delete all project items from DynamoDB (PROJ#, DOC#*, WF#* links)
+    # 6. Delete agent files from S3
+    if config.agent_storage_bucket_name:
+        agent_prefix = f"{user_id}/{project_id}/"
+        with contextlib.suppress(Exception):
+            agent_deleted = delete_s3_prefix(config.agent_storage_bucket_name, agent_prefix)
+            deleted_info.agent_objects_deleted = agent_deleted
+
+    # 7. Delete all project items from DynamoDB (PROJ#, DOC#*, WF#* links)
     batch_delete_items(project_items)
 
     deleted_info.project_items_deleted = len(project_items)
