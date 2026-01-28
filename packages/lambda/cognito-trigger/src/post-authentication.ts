@@ -9,7 +9,7 @@ const TABLE_NAME = process.env.TABLE_NAME!;
 export const handler = async (
   event: PostAuthenticationTriggerEvent
 ): Promise<PostAuthenticationTriggerEvent> => {
-  const { sub, email, given_name, family_name } = event.request.userAttributes;
+  const { sub } = event.request.userAttributes;
   const username = event.userName;
 
   try {
@@ -21,9 +21,6 @@ export const handler = async (
           SK: "META",
           data: {
             username,
-            email,
-            given_name,
-            family_name,
             created_at: new Date().toISOString(),
           },
         },

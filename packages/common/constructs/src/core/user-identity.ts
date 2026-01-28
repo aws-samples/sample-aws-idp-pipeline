@@ -18,10 +18,11 @@ import { Construct } from 'constructs';
 import { RuntimeConfig } from './runtime-config.js';
 import { Distribution } from 'aws-cdk-lib/aws-cloudfront';
 import { suppressRules } from './checkov.js';
-import { Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { ITableV2 } from 'aws-cdk-lib/aws-dynamodb';
-import * as path from 'path';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { fileURLToPath } from 'url';
+import * as path from 'path';
 
 const WEB_CLIENT_ID = 'WebClient';
 /**
@@ -184,19 +185,20 @@ export class UserIdentity extends Construct {
       .node.findAll()
       .filter((child) => child instanceof Distribution);
 
-  public addPostAuthenticationTrigger(backendTable: ITableV2): Function {
+  public addPostAuthenticationTrigger(backendTable: ITableV2): NodejsFunction {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
 
-    const postAuthenticationFn = new Function(
+    const postAuthenticationFn = new NodejsFunction(
       this,
       'PostAuthenticationTrigger',
       {
         runtime: Runtime.NODEJS_22_X,
-        handler: 'post-authentication.handler',
-        code: Code.fromAsset(
-          path.join(__dirname, '../../../../lambda/cognito-trigger/dist'),
+        entry: path.join(
+          __dirname,
+          '../../../../lambda/cognito-trigger/src/post-authentication.ts',
         ),
+        handler: 'handler',
         environment: {
           TABLE_NAME: backendTable.tableName,
         },
