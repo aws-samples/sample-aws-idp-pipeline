@@ -208,7 +208,10 @@
     "sessionNamePlaceholder": "Enter session name",
     "deleteArtifact": "Delete Artifact",
     "deleteArtifactConfirm": "Are you sure you want to delete this artifact? This action cannot be undone.",
-    "selectArtifact": "Select artifact"
+    "selectArtifact": "Select artifact",
+    "documents": "Documents",
+    "noDocuments": "No documents found",
+    "tabToSwitch": "Press Tab to switch"
   },
   "viewer": {
     "zoomIn": "Zoom In",

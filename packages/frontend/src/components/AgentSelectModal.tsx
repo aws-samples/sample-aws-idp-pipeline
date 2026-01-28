@@ -14,9 +14,9 @@ interface AgentSelectModalProps {
   onClose: () => void;
   onSelect: (agentName: string | null) => void;
   onCreate: (name: string, content: string) => Promise<void>;
-  onUpdate: (name: string, content: string) => Promise<void>;
-  onDelete: (name: string) => Promise<void>;
-  onLoadDetail: (name: string) => Promise<Agent | null>;
+  onUpdate: (agentId: string, content: string) => Promise<void>;
+  onDelete: (agentId: string) => Promise<void>;
+  onLoadDetail: (agentId: string) => Promise<Agent | null>;
 }
 
 export default function AgentSelectModal({
@@ -116,7 +116,7 @@ export default function AgentSelectModal({
   const handleEdit = async (agent: Agent) => {
     setLoadingDetail(true);
     try {
-      const detail = await onLoadDetail(agent.name);
+      const detail = await onLoadDetail(agent.agent_id);
       if (detail) {
         setEditingAgent(detail);
         setContent(detail.content || '');
@@ -133,7 +133,7 @@ export default function AgentSelectModal({
     if (!editingAgent || !content.trim()) return;
     setSaving(true);
     try {
-      await onUpdate(editingAgent.name, content.trim());
+      await onUpdate(editingAgent.agent_id, content.trim());
       setView('list');
       setEditingAgent(null);
       setContent('');
@@ -144,12 +144,12 @@ export default function AgentSelectModal({
     }
   };
 
-  const handleDelete = async (agentName: string) => {
+  const handleDelete = async (agentId: string) => {
     setDeleting(true);
     try {
-      await onDelete(agentName);
+      await onDelete(agentId);
       setDeleteConfirm(null);
-      if (editingAgent?.name === agentName) {
+      if (editingAgent?.agent_id === agentId) {
         setView('list');
         setEditingAgent(null);
       }
@@ -341,7 +341,7 @@ export default function AgentSelectModal({
                       </p>
                       {!showRightPanel && (
                         <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {new Date(agent.updated_at).toLocaleDateString()}
+                          {new Date(agent.created_at).toLocaleDateString()}
                         </p>
                       )}
                     </div>
@@ -365,7 +365,7 @@ export default function AgentSelectModal({
                         <div
                           onClick={(e) => {
                             e.stopPropagation();
-                            setDeleteConfirm(agent.name);
+                            setDeleteConfirm(agent.agent_id);
                           }}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer"
                           title={t('common.delete', 'Delete')}

@@ -23,7 +23,13 @@ import DOMPurify from 'isomorphic-dompurify';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
-import { ChatMessage, Agent, ChatArtifact, Artifact } from '../types/project';
+import {
+  ChatMessage,
+  Agent,
+  ChatArtifact,
+  Artifact,
+  Document,
+} from '../types/project';
 import { useAwsClient } from '../hooks/useAwsClient';
 import { useToast } from './Toast';
 import ImageModal from './ImageModal';
@@ -44,6 +50,7 @@ interface ChatPanelProps {
   loadingHistory?: boolean;
   selectedAgent: Agent | null;
   artifacts?: Artifact[];
+  documents?: Document[];
   onInputChange: (value: string) => void;
   onSendMessage: (files: AttachedFile[], message?: string) => void;
   onAgentClick: () => void;
@@ -106,25 +113,27 @@ const getFileTypeInfo = (
   }
 };
 
-/** Parse message content and render artifact references as chips */
-const renderMessageWithArtifacts = (content: string) => {
-  // Pattern: [[artifact:artifact_id|filename]]
-  const artifactPattern = /\[\[artifact:([^\]|]+)\|([^\]]+)\]\]/g;
-  const parts: (string | { type: 'artifact'; id: string; filename: string })[] =
-    [];
+/** Parse message content and render artifact/document references as chips */
+const renderMessageWithMentions = (content: string) => {
+  // Pattern: [[artifact:artifact_id|filename]] or [[document:document_id|filename]]
+  const mentionPattern = /\[\[(artifact|document):([^\]|]+)\|([^\]]+)\]\]/g;
+  const parts: (
+    | string
+    | { type: 'artifact' | 'document'; id: string; filename: string }
+  )[] = [];
   let lastIndex = 0;
   let match;
 
-  while ((match = artifactPattern.exec(content)) !== null) {
+  while ((match = mentionPattern.exec(content)) !== null) {
     // Add text before the match
     if (match.index > lastIndex) {
       parts.push(content.slice(lastIndex, match.index));
     }
-    // Add artifact reference
+    // Add mention reference
     parts.push({
-      type: 'artifact',
-      id: match[1],
-      filename: match[2],
+      type: match[1] as 'artifact' | 'document',
+      id: match[2],
+      filename: match[3],
     });
     lastIndex = match.index + match[0].length;
   }
@@ -134,7 +143,7 @@ const renderMessageWithArtifacts = (content: string) => {
     parts.push(content.slice(lastIndex));
   }
 
-  // If no artifacts found, return plain text
+  // If no mentions found, return plain text
   if (parts.length === 1 && typeof parts[0] === 'string') {
     return <span className="whitespace-pre-wrap">{content}</span>;
   }
@@ -145,27 +154,36 @@ const renderMessageWithArtifacts = (content: string) => {
         if (typeof part === 'string') {
           return <span key={index}>{part}</span>;
         }
-        // Render artifact chip
+        // Render mention chip
+        const isDocument = part.type === 'document';
         return (
           <span
             key={index}
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 bg-violet-100 dark:bg-violet-900/40 border border-violet-200 dark:border-violet-700 rounded text-xs font-medium text-violet-700 dark:text-violet-300 align-middle"
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 rounded text-xs font-medium align-middle ${
+              isDocument
+                ? 'bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                : 'bg-violet-100 dark:bg-violet-900/40 border border-violet-200 dark:border-violet-700 text-violet-700 dark:text-violet-300'
+            }`}
             title={part.id}
           >
-            <svg
-              className="w-3 h-3 text-violet-500 dark:text-violet-400"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z" />
-              <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" />
-              <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" />
-            </svg>
+            {isDocument ? (
+              <FileText className="w-3 h-3" />
+            ) : (
+              <svg
+                className="w-3 h-3 text-violet-500 dark:text-violet-400"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z" />
+                <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" />
+                <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" />
+              </svg>
+            )}
             <span className="max-w-24 truncate">{part.filename}</span>
           </span>
         );
@@ -226,6 +244,7 @@ export default function ChatPanel({
   loadingHistory = false,
   selectedAgent,
   artifacts = [],
+  documents = [],
   onInputChange,
   onSendMessage,
   onAgentClick,
@@ -251,11 +270,14 @@ export default function ChatPanel({
   const [downloadingArtifact, setDownloadingArtifact] = useState<string | null>(
     null,
   );
-  // Artifact mention state
-  const [showArtifactDropdown, setShowArtifactDropdown] = useState(false);
-  const [artifactSearchQuery, setArtifactSearchQuery] = useState('');
-  const [selectedArtifactIndex, setSelectedArtifactIndex] = useState(0);
-  const artifactDropdownRef = useRef<HTMLDivElement>(null);
+  // Mention state (artifacts + documents)
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+  const [mentionSearchQuery, setMentionSearchQuery] = useState('');
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const [mentionTab, setMentionTab] = useState<'artifacts' | 'documents'>(
+    'artifacts',
+  );
+  const mentionDropdownRef = useRef<HTMLDivElement>(null);
   const mentionRangeRef = useRef<Range | null>(null);
 
   const handleArtifactDownload = useCallback(
@@ -347,12 +369,17 @@ export default function ChatPanel({
     });
   }, []);
 
-  // Filtered artifacts for mention dropdown
+  // Filtered items for mention dropdown
   const filteredArtifacts = artifacts.filter((artifact) =>
-    artifact.filename.toLowerCase().includes(artifactSearchQuery.toLowerCase()),
+    artifact.filename.toLowerCase().includes(mentionSearchQuery.toLowerCase()),
   );
+  const filteredDocuments = documents
+    .filter((doc) => doc.status === 'completed')
+    .filter((doc) =>
+      doc.name.toLowerCase().includes(mentionSearchQuery.toLowerCase()),
+    );
 
-  // Get text content from contenteditable (extracting artifact references)
+  // Get text content from contenteditable (extracting artifact/document references)
   const getInputContent = useCallback(() => {
     if (!inputRef.current) return '';
 
@@ -365,6 +392,9 @@ export default function ChatPanel({
         if (el.dataset.artifactId) {
           // This is an artifact chip - convert to reference format
           result += `[[artifact:${el.dataset.artifactId}|${el.dataset.artifactFilename}]]`;
+        } else if (el.dataset.documentId) {
+          // This is a document chip - convert to reference format
+          result += `[[document:${el.dataset.documentId}|${el.dataset.documentFilename}]]`;
         } else if (el.tagName === 'BR') {
           result += '\n';
         } else {
@@ -390,21 +420,22 @@ export default function ChatPanel({
 
     // Detect @ mention
     const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || artifacts.length === 0) {
-      setShowArtifactDropdown(false);
+    const hasMentionables = artifacts.length > 0 || documents.length > 0;
+    if (!selection || selection.rangeCount === 0 || !hasMentionables) {
+      setShowMentionDropdown(false);
       return;
     }
 
     const range = selection.getRangeAt(0);
     if (!range.collapsed) {
-      setShowArtifactDropdown(false);
+      setShowMentionDropdown(false);
       return;
     }
 
     // Get text before cursor in current text node
     const node = range.startContainer;
     if (node.nodeType !== Node.TEXT_NODE) {
-      setShowArtifactDropdown(false);
+      setShowMentionDropdown(false);
       return;
     }
 
@@ -422,17 +453,23 @@ export default function ChatPanel({
         mentionRange.setEnd(node, range.startOffset);
         mentionRangeRef.current = mentionRange;
 
-        setShowArtifactDropdown(true);
-        setArtifactSearchQuery(textAfterAt);
-        setSelectedArtifactIndex(0);
+        setShowMentionDropdown(true);
+        setMentionSearchQuery(textAfterAt);
+        setSelectedMentionIndex(0);
+        // Set default tab based on available items
+        if (artifacts.length === 0 && documents.length > 0) {
+          setMentionTab('documents');
+        } else {
+          setMentionTab('artifacts');
+        }
         return;
       }
     }
 
-    setShowArtifactDropdown(false);
-    setArtifactSearchQuery('');
+    setShowMentionDropdown(false);
+    setMentionSearchQuery('');
     mentionRangeRef.current = null;
-  }, [onInputChange, artifacts.length, getPlainTextContent]);
+  }, [onInputChange, artifacts.length, documents.length, getPlainTextContent]);
 
   // Create artifact chip element
   const createArtifactChip = useCallback((artifact: Artifact) => {
@@ -446,11 +483,23 @@ export default function ChatPanel({
     return chip;
   }, []);
 
+  // Create document chip element
+  const createDocumentChip = useCallback((doc: Document) => {
+    const chip = document.createElement('span');
+    chip.contentEditable = 'false';
+    chip.dataset.documentId = doc.document_id;
+    chip.dataset.documentFilename = doc.name;
+    chip.className =
+      'inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-700 rounded text-xs font-medium text-blue-700 dark:text-blue-300 align-middle';
+    chip.innerHTML = `<svg class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg><span class="max-w-24 truncate">${doc.name}</span>`;
+    return chip;
+  }, []);
+
   // Handle artifact selection from dropdown
   const handleArtifactSelect = useCallback(
     (artifact: Artifact) => {
       if (!mentionRangeRef.current || !inputRef.current) {
-        setShowArtifactDropdown(false);
+        setShowMentionDropdown(false);
         return;
       }
 
@@ -474,8 +523,8 @@ export default function ChatPanel({
       // Update parent state
       onInputChange(getPlainTextContent());
 
-      setShowArtifactDropdown(false);
-      setArtifactSearchQuery('');
+      setShowMentionDropdown(false);
+      setMentionSearchQuery('');
       mentionRangeRef.current = null;
 
       // Focus back to input
@@ -486,31 +535,71 @@ export default function ChatPanel({
     [createArtifactChip, onInputChange, getPlainTextContent],
   );
 
+  // Handle document selection from dropdown
+  const handleDocumentSelect = useCallback(
+    (doc: Document) => {
+      if (!mentionRangeRef.current || !inputRef.current) {
+        setShowMentionDropdown(false);
+        return;
+      }
+
+      // Delete the @query text
+      mentionRangeRef.current.deleteContents();
+
+      // Insert the chip
+      const chip = createDocumentChip(doc);
+      mentionRangeRef.current.insertNode(chip);
+
+      // Move cursor after the chip
+      const selection = window.getSelection();
+      if (selection) {
+        const newRange = document.createRange();
+        newRange.setStartAfter(chip);
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+      }
+
+      // Update parent state
+      onInputChange(getPlainTextContent());
+
+      setShowMentionDropdown(false);
+      setMentionSearchQuery('');
+      mentionRangeRef.current = null;
+
+      // Focus back to input
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    },
+    [createDocumentChip, onInputChange, getPlainTextContent],
+  );
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
-        artifactDropdownRef.current &&
-        !artifactDropdownRef.current.contains(e.target as Node)
+        mentionDropdownRef.current &&
+        !mentionDropdownRef.current.contains(e.target as Node)
       ) {
-        setShowArtifactDropdown(false);
+        setShowMentionDropdown(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Scroll selected artifact into view
+  // Scroll selected item into view
   useEffect(() => {
-    if (showArtifactDropdown && artifactDropdownRef.current) {
-      const selectedItem = artifactDropdownRef.current.querySelector(
-        `[data-artifact-index="${selectedArtifactIndex}"]`,
+    if (showMentionDropdown && mentionDropdownRef.current) {
+      const selectedItem = mentionDropdownRef.current.querySelector(
+        `[data-mention-index="${selectedMentionIndex}"]`,
       );
       if (selectedItem) {
         selectedItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     }
-  }, [selectedArtifactIndex, showArtifactDropdown]);
+  }, [selectedMentionIndex, showMentionDropdown]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -614,30 +703,45 @@ export default function ChatPanel({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
-      // Handle artifact dropdown navigation
-      if (showArtifactDropdown && filteredArtifacts.length > 0) {
+      // Handle mention dropdown navigation
+      const currentItems =
+        mentionTab === 'artifacts' ? filteredArtifacts : filteredDocuments;
+
+      if (showMentionDropdown && currentItems.length > 0) {
         if (e.key === 'ArrowDown') {
           e.preventDefault();
-          setSelectedArtifactIndex((prev) =>
-            prev < filteredArtifacts.length - 1 ? prev + 1 : 0,
+          setSelectedMentionIndex((prev) =>
+            prev < currentItems.length - 1 ? prev + 1 : 0,
           );
           return;
         }
         if (e.key === 'ArrowUp') {
           e.preventDefault();
-          setSelectedArtifactIndex((prev) =>
-            prev > 0 ? prev - 1 : filteredArtifacts.length - 1,
+          setSelectedMentionIndex((prev) =>
+            prev > 0 ? prev - 1 : currentItems.length - 1,
           );
+          return;
+        }
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          // Switch tabs
+          const newTab = mentionTab === 'artifacts' ? 'documents' : 'artifacts';
+          setMentionTab(newTab);
+          setSelectedMentionIndex(0);
           return;
         }
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          handleArtifactSelect(filteredArtifacts[selectedArtifactIndex]);
+          if (mentionTab === 'artifacts') {
+            handleArtifactSelect(filteredArtifacts[selectedMentionIndex]);
+          } else {
+            handleDocumentSelect(filteredDocuments[selectedMentionIndex]);
+          }
           return;
         }
         if (e.key === 'Escape') {
           e.preventDefault();
-          setShowArtifactDropdown(false);
+          setShowMentionDropdown(false);
           return;
         }
       }
@@ -650,10 +754,13 @@ export default function ChatPanel({
     },
     [
       handleSend,
-      showArtifactDropdown,
+      showMentionDropdown,
       filteredArtifacts,
-      selectedArtifactIndex,
+      filteredDocuments,
+      selectedMentionIndex,
+      mentionTab,
       handleArtifactSelect,
+      handleDocumentSelect,
     ],
   );
 
@@ -794,42 +901,133 @@ export default function ChatPanel({
         </div>
       </div>
 
-      {/* Artifact Mention Dropdown */}
-      {showArtifactDropdown && filteredArtifacts.length > 0 && (
-        <div
-          ref={artifactDropdownRef}
-          className="absolute bottom-full left-0 right-0 mb-2 max-h-48 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-50"
-        >
-          <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-700">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-              {t('chat.selectArtifact', 'Select artifact')}
-            </span>
+      {/* Mention Dropdown (Artifacts & Documents) */}
+      {showMentionDropdown &&
+        (filteredArtifacts.length > 0 || filteredDocuments.length > 0) && (
+          <div
+            ref={mentionDropdownRef}
+            className="absolute bottom-full left-0 right-0 mb-2 max-h-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-50 overflow-hidden"
+          >
+            {/* Tabs */}
+            <div className="flex border-b border-slate-100 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => {
+                  setMentionTab('artifacts');
+                  setSelectedMentionIndex(0);
+                }}
+                className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                  mentionTab === 'artifacts'
+                    ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-500'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                {t('chat.artifacts', 'Artifacts')} ({filteredArtifacts.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMentionTab('documents');
+                  setSelectedMentionIndex(0);
+                }}
+                className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                  mentionTab === 'documents'
+                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-500'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                {t('chat.documents', 'Documents')} ({filteredDocuments.length})
+              </button>
+            </div>
+
+            {/* Tab hint */}
+            <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700">
+              <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                {t('chat.tabToSwitch', 'Press Tab to switch')}
+              </span>
+            </div>
+
+            {/* Content */}
+            <div className="max-h-44 overflow-y-auto">
+              {mentionTab === 'artifacts' ? (
+                filteredArtifacts.length > 0 ? (
+                  filteredArtifacts.slice(0, 10).map((artifact, index) => (
+                    <button
+                      key={artifact.artifact_id}
+                      type="button"
+                      data-mention-index={index}
+                      onClick={() => handleArtifactSelect(artifact)}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
+                        index === selectedMentionIndex
+                          ? 'bg-violet-50 dark:bg-violet-900/30'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center w-7 h-7 rounded bg-violet-100 dark:bg-violet-900/40">
+                        <svg
+                          className="w-4 h-4 text-violet-500 dark:text-violet-400"
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z" />
+                          <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" />
+                          <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" />
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                          {artifact.filename}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {artifact.content_type}
+                        </p>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-3 py-4 text-center text-sm text-slate-400 dark:text-slate-500">
+                    {t('chat.noArtifacts', 'No artifacts found')}
+                  </div>
+                )
+              ) : filteredDocuments.length > 0 ? (
+                filteredDocuments.slice(0, 10).map((doc, index) => (
+                  <button
+                    key={doc.document_id}
+                    type="button"
+                    data-mention-index={index}
+                    onClick={() => handleDocumentSelect(doc)}
+                    className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
+                      index === selectedMentionIndex
+                        ? 'bg-blue-50 dark:bg-blue-900/30'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center w-7 h-7 rounded bg-blue-100 dark:bg-blue-900/40">
+                      <FileText className="w-4 h-4 text-blue-500 dark:text-blue-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                        {doc.name}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {doc.file_type}
+                      </p>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="px-3 py-4 text-center text-sm text-slate-400 dark:text-slate-500">
+                  {t('chat.noDocuments', 'No documents found')}
+                </div>
+              )}
+            </div>
           </div>
-          {filteredArtifacts.slice(0, 10).map((artifact, index) => (
-            <button
-              key={artifact.artifact_id}
-              type="button"
-              data-artifact-index={index}
-              onClick={() => handleArtifactSelect(artifact)}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
-                index === selectedArtifactIndex
-                  ? 'bg-blue-50 dark:bg-blue-900/30'
-                  : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
-              }`}
-            >
-              <File className="w-4 h-4 text-slate-400 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
-                  {artifact.filename}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {artifact.content_type}
-                </p>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+        )}
 
       {/* Drag Overlay */}
       {isDragging && (
@@ -983,7 +1181,7 @@ export default function ChatPanel({
                     {message.content && (
                       <div className="px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-white">
                         <p className="text-sm">
-                          {renderMessageWithArtifacts(message.content)}
+                          {renderMessageWithMentions(message.content)}
                         </p>
                       </div>
                     )}

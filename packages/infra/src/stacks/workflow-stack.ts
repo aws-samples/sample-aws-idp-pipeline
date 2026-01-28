@@ -440,6 +440,7 @@ export class WorkflowStack extends Stack {
         itemSelector: {
           'workflow_id.$': '$.workflow_id',
           'project_id.$': '$.project_id',
+          'document_id.$': '$.document_id',
           'file_uri.$': '$.file_uri',
           'file_type.$': '$.file_type',
           'segment_count.$': '$.segment_count',

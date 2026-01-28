@@ -208,7 +208,10 @@
     "sessionNamePlaceholder": "会話名を入力",
     "deleteArtifact": "アーティファクトを削除",
     "deleteArtifactConfirm": "このアーティファクトを削除しますか？削除されたアーティファクトは復元できません。",
-    "selectArtifact": "アーティファクトを選択"
+    "selectArtifact": "アーティファクトを選択",
+    "documents": "ドキュメント",
+    "noDocuments": "ドキュメントが見つかりません",
+    "tabToSwitch": "Tabキーで切り替え"
   },
   "viewer": {
     "zoomIn": "拡大",

@@ -23,6 +23,7 @@ def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
     workflow_id = event.get('workflow_id')
+    document_id = event.get('document_id', '')
     project_id = event.get('project_id', 'default')
     segment_index = event.get('segment_index', event)
     file_uri = event.get('file_uri')
@@ -50,7 +51,11 @@ def handler(event, _context):
         print(f'Segment {segment_index} not found in S3 for file {file_uri}')
         return {
             'workflow_id': workflow_id,
+            'document_id': document_id,
+            'project_id': project_id,
             'segment_index': segment_index,
+            'file_uri': file_uri,
+            'file_type': file_type,
             'status': 'not_found'
         }
 
@@ -141,7 +146,8 @@ def handler(event, _context):
 
         return {
             'workflow_id': workflow_id,
-            'project_id': event.get('project_id', 'default'),
+            'document_id': document_id,
+            'project_id': project_id,
             'segment_index': segment_index,
             'file_uri': file_uri,
             'file_type': file_type,
@@ -166,7 +172,8 @@ def handler(event, _context):
 
         return {
             'workflow_id': workflow_id,
-            'project_id': event.get('project_id', 'default'),
+            'document_id': document_id,
+            'project_id': project_id,
             'segment_index': segment_index,
             'file_uri': file_uri,
             'file_type': file_type,

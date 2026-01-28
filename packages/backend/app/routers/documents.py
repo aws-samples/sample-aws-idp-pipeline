@@ -196,13 +196,16 @@ def delete_document(project_id: str, document_id: str) -> DeleteDocumentResponse
     deleted_info = DeletedDocumentInfo(document_id=document_id, workflow_id=workflow_id)
 
     # 1. Delete from LanceDB (per-project, if workflow exists)
-    if workflow_id and config.lancedb_express_bucket_name:
+    if workflow_id and config.lancedb_express_bucket_name and config.lancedb_lock_table_name:
         try:
             import lancedb
 
-            db = lancedb.connect(f"s3://{config.lancedb_express_bucket_name}/{project_id}.lance")
-            if "documents" in db.table_names():
-                lance_table = db.open_table("documents")
+            db = lancedb.connect(
+                f"s3+ddb://{config.lancedb_express_bucket_name}?ddbTableName={config.lancedb_lock_table_name}"
+            )
+            # Table name is project_id
+            if project_id in db.table_names():
+                lance_table = db.open_table(project_id)
                 lance_table.delete(f"workflow_id = '{workflow_id}'")
                 deleted_info.lancedb_deleted = True
         except Exception as e:
