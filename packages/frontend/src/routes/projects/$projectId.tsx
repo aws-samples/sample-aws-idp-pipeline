@@ -383,10 +383,10 @@ function ProjectDetailPage() {
   useWebSocketMessage('step', handleStepMessage);
 
   const loadAgentDetail = useCallback(
-    async (agentName: string): Promise<Agent | null> => {
+    async (agentId: string): Promise<Agent | null> => {
       try {
         return await fetchApi<Agent>(
-          `projects/${projectId}/agents/${encodeURIComponent(agentName)}`,
+          `projects/${projectId}/agents/${encodeURIComponent(agentId)}`,
         );
       } catch (error) {
         console.error('Failed to load agent detail:', error);
@@ -396,7 +396,7 @@ function ProjectDetailPage() {
     [fetchApi, projectId],
   );
 
-  const handleAgentUpsert = useCallback(
+  const handleAgentCreate = useCallback(
     async (name: string, content: string) => {
       await fetchApi(`projects/${projectId}/agents`, {
         method: 'POST',
@@ -408,17 +408,36 @@ function ProjectDetailPage() {
     [fetchApi, projectId, loadAgents],
   );
 
-  const handleAgentDelete = useCallback(
-    async (name: string) => {
+  const handleAgentUpdate = useCallback(
+    async (agentId: string, content: string) => {
+      // Get current agent to preserve name
+      const agent = agents.find((a) => a.agent_id === agentId);
+      if (!agent) return;
+
       await fetchApi(
-        `projects/${projectId}/agents/${encodeURIComponent(name)}`,
+        `projects/${projectId}/agents/${encodeURIComponent(agentId)}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: agent.name, content }),
+        },
+      );
+      await loadAgents();
+    },
+    [fetchApi, projectId, loadAgents, agents],
+  );
+
+  const handleAgentDelete = useCallback(
+    async (agentId: string) => {
+      await fetchApi(
+        `projects/${projectId}/agents/${encodeURIComponent(agentId)}`,
         {
           method: 'DELETE',
         },
       );
       await loadAgents();
       // Reset to default if deleted agent was selected
-      if (selectedAgent?.name === name) {
+      if (selectedAgent?.agent_id === agentId) {
         setSelectedAgent(null);
         handleNewSession();
       }
@@ -1295,6 +1314,7 @@ function ProjectDetailPage() {
           currentSessionId,
           projectId,
           handleStreamEvent,
+          selectedAgent?.agent_id,
         );
 
         const assistantMessage: ChatMessage = {
@@ -1329,6 +1349,7 @@ function ProjectDetailPage() {
       projectId,
       handleStreamEvent,
       loadSessions,
+      selectedAgent,
     ],
   );
 
@@ -1413,6 +1434,7 @@ function ProjectDetailPage() {
                 loadingHistory={loadingHistory}
                 selectedAgent={selectedAgent}
                 artifacts={artifacts}
+                documents={documents}
                 onInputChange={setInputMessage}
                 onSendMessage={handleSendMessage}
                 onAgentClick={() => setShowAgentModal(true)}
@@ -1507,8 +1529,8 @@ function ProjectDetailPage() {
         loading={loadingAgents}
         onClose={() => setShowAgentModal(false)}
         onSelect={handleAgentSelect}
-        onCreate={handleAgentUpsert}
-        onUpdate={handleAgentUpsert}
+        onCreate={handleAgentCreate}
+        onUpdate={handleAgentUpdate}
         onDelete={handleAgentDelete}
         onLoadDetail={loadAgentDetail}
       />

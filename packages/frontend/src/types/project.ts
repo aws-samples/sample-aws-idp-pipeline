@@ -152,10 +152,10 @@ export interface AnalysisPopup {
 }
 
 export interface Agent {
+  agent_id: string;
   name: string;
   content?: string; // system prompt (only in detail response)
   created_at: string;
-  updated_at: string;
 }
 
 export interface Artifact {

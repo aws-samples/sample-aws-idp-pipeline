@@ -208,7 +208,10 @@
     "sessionNamePlaceholder": "대화 이름을 입력하세요",
     "deleteArtifact": "아티팩트 삭제",
     "deleteArtifactConfirm": "이 아티팩트를 삭제하시겠습니까? 삭제된 아티팩트는 복구할 수 없습니다.",
-    "selectArtifact": "아티팩트 선택"
+    "selectArtifact": "아티팩트 선택",
+    "documents": "문서",
+    "noDocuments": "문서를 찾을 수 없습니다",
+    "tabToSwitch": "Tab 키로 전환"
   },
   "viewer": {
     "zoomIn": "확대",
