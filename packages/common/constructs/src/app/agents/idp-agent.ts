@@ -14,8 +14,6 @@ export interface IdpAgentProps {
   agentPath: string;
   agentName: string;
   sessionStorageBucket: IBucket;
-  lancedbLockTable: ITable;
-  lancedbExpressBucketName: string;
   backendTable: ITable;
   gateway?: Gateway;
   bedrockModelId?: string;
@@ -32,8 +30,6 @@ export class IdpAgent extends Construct {
       agentPath,
       agentName,
       sessionStorageBucket,
-      lancedbLockTable,
-      lancedbExpressBucketName,
       backendTable,
       gateway,
       bedrockModelId,
@@ -50,8 +46,6 @@ export class IdpAgent extends Construct {
       agentRuntimeArtifact: dockerImage,
       environmentVariables: {
         SESSION_STORAGE_BUCKET_NAME: sessionStorageBucket.bucketName,
-        LANCEDB_LOCK_TABLE_NAME: lancedbLockTable.tableName,
-        LANCEDB_EXPRESS_BUCKET_NAME: lancedbExpressBucketName,
         BACKEND_TABLE_NAME: backendTable.tableName,
         ...(gateway?.gatewayUrl && { MCP_GATEWAY_URL: gateway.gatewayUrl }),
         ...(bedrockModelId && { BEDROCK_MODEL_ID: bedrockModelId }),
@@ -73,19 +67,8 @@ export class IdpAgent extends Construct {
       agentStorageBucket.grantRead(this.runtime.role);
     }
 
-    // Grant DynamoDB read/write access for LanceDB lock table
-    lancedbLockTable.grantReadWriteData(this.runtime.role);
-
     // Grant DynamoDB read/write access for backend table
     backendTable.grantReadWriteData(this.runtime.role);
-
-    // Grant S3 Express access for LanceDB storage
-    this.runtime.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ['s3express:*'],
-        resources: ['*'],
-      }),
-    );
 
     // Add Bedrock model invocation permissions
     this.runtime.addToRolePolicy(

@@ -18,6 +18,7 @@ members = [
   "packages/agents/idp-agent",
   "packages/backend",
   "packages/agents/bidi-agent",
+  "packages/agents/research-agent",
 ]
 
 [tool.uv.sources."idp_v2.backend"]
