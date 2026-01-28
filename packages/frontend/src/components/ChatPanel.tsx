@@ -1024,9 +1024,11 @@ export default function ChatPanel({
                       message.artifact && (
                         <button
                           type="button"
-                          onClick={() =>
-                            handleArtifactDownload(message.artifact!)
-                          }
+                          onClick={() => {
+                            if (message.artifact) {
+                              handleArtifactDownload(message.artifact);
+                            }
+                          }}
                           disabled={
                             downloadingArtifact === message.artifact.artifact_id
                           }
@@ -1059,12 +1061,14 @@ export default function ChatPanel({
                             <button
                               key={attachment.id}
                               type="button"
-                              onClick={() =>
-                                setModalImage({
-                                  src: attachment.preview!,
-                                  alt: attachment.name,
-                                })
-                              }
+                              onClick={() => {
+                                if (attachment.preview) {
+                                  setModalImage({
+                                    src: attachment.preview,
+                                    alt: attachment.name,
+                                  });
+                                }
+                              }}
                               className="relative group overflow-hidden rounded-xl shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2"
                             >
                               <img
@@ -1170,12 +1174,14 @@ export default function ChatPanel({
                           <button
                             key={attachment.id}
                             type="button"
-                            onClick={() =>
-                              setModalImage({
-                                src: attachment.preview!,
-                                alt: attachment.name,
-                              })
-                            }
+                            onClick={() => {
+                              if (attachment.preview) {
+                                setModalImage({
+                                  src: attachment.preview,
+                                  alt: attachment.name,
+                                });
+                              }
+                            }}
                             className="group relative rounded-xl overflow-hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                           >
                             <img

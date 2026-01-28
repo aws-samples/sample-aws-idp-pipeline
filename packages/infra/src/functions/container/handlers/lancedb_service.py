@@ -133,6 +133,7 @@ def get_document_record_schema():
 
     class DocumentRecord(LanceModel):
         workflow_id: str
+        document_id: str
         segment_id: str
         segment_index: int
         content: str = embeddings.SourceField()
@@ -195,6 +196,7 @@ def action_add_record(params: dict) -> dict:
 
     record = {
         'workflow_id': workflow_id,
+        'document_id': params.get('document_id', ''),
         'segment_id': segment_id,
         'segment_index': segment_index,
         'content': content[:10000],

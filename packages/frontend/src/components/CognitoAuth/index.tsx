@@ -51,21 +51,22 @@ const CognitoAuthInternal: React.FC<PropsWithChildren> = ({ children }) => {
     }
   }, [auth]);
 
+  // Handle authentication errors (e.g., token refresh failure)
+  useEffect(() => {
+    if (auth.error) {
+      console.error('Auth error:', auth.error);
+      // Clear any stale auth state and redirect to login
+      auth.removeUser().then(() => {
+        auth.signinRedirect();
+      });
+    }
+  }, [auth, auth.error]);
+
   if (auth.isAuthenticated) {
     return children;
   }
 
-  if (auth.error) {
-    return (
-      <Alert type="error" header="Configuration error">
-        <p>
-          Error contacting Cognito. Please check your runtime-config.json is
-          configured with the correct endpoints.
-        </p>
-      </Alert>
-    );
-  }
-
+  // Show loader while redirecting (including error redirect)
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-slate-50 dark:bg-slate-900">
       <CubeLoader />

@@ -49,6 +49,7 @@ def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
     workflow_id = event.get('workflow_id')
+    document_id = event.get('document_id', '')
     project_id = event.get('project_id', 'default')
     segment_index = event.get('segment_index', 0)
     file_uri = event.get('file_uri', '')
@@ -120,6 +121,7 @@ def handler(event, _context):
 
     message = {
         'workflow_id': workflow_id,
+        'document_id': document_id,
         'project_id': project_id,
         'segment_index': segment_index,
         'content_combined': content_combined,

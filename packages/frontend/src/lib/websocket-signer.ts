@@ -44,12 +44,10 @@ export async function createSignedWebSocketUrl({
   const signedHttpRequest = await signatureV4.presign(httpRequest);
 
   // presign으로 생성된 쿼리 파라미터를 URL에 추가
-  if (signedHttpRequest.query) {
-    Object.keys(signedHttpRequest.query).forEach((param) => {
-      urlObject.searchParams.set(
-        param,
-        signedHttpRequest.query![param] as string,
-      );
+  const query = signedHttpRequest.query;
+  if (query) {
+    Object.keys(query).forEach((param) => {
+      urlObject.searchParams.set(param, query[param] as string);
     });
   }
 

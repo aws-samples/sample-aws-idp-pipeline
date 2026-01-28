@@ -46,6 +46,7 @@ def handler(event, _context):
 
             result = invoke_lancedb('add_record', {
                 'workflow_id': workflow_id,
+                'document_id': message.get('document_id', ''),
                 'project_id': message.get('project_id', 'default'),
                 'segment_index': segment_index,
                 'content_combined': message.get('content_combined', ''),

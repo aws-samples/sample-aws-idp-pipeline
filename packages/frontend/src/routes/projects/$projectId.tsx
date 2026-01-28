@@ -74,11 +74,7 @@ function ProjectDetailPage() {
     if (wsStatus === 'connected') {
       sendMessage({ action: 'subscribe', projectId });
     }
-    return () => {
-      if (wsStatus === 'connected') {
-        sendMessage({ action: 'unsubscribe', projectId });
-      }
-    };
+    // No need to unsubscribe on cleanup - server handles it on disconnect
   }, [projectId, sendMessage, wsStatus]);
 
   // AgentCore requires session ID >= 33 chars
@@ -982,6 +978,36 @@ function ProjectDetailPage() {
           documentId: uploadInfo.document_id,
           fileName: file.name,
         });
+
+        // Immediately add document to list (optimistic update)
+        setDocuments((prev) => [
+          ...prev,
+          {
+            document_id: uploadInfo.document_id,
+            name: file.name,
+            file_type: file.type || 'application/octet-stream',
+            file_size: file.size,
+            status: 'uploading',
+            use_bda: useBda,
+            started_at: new Date().toISOString(),
+            ended_at: null,
+          },
+        ]);
+
+        // Set initial progress for this document
+        setWorkflowProgressMap((prev) => ({
+          ...prev,
+          [uploadInfo.document_id]: {
+            workflowId: '',
+            documentId: uploadInfo.document_id,
+            fileName: file.name,
+            status: 'pending',
+            currentStep: t('workflow.uploading', 'Uploading...'),
+            stepMessage: '',
+            segmentProgress: null,
+            error: null,
+          },
+        }));
 
         // Step 2: Upload file directly to S3 using presigned URL
         const uploadResponse = await fetch(uploadInfo.upload_url, {
