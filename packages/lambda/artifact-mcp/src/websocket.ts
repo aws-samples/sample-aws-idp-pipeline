@@ -1,5 +1,6 @@
 import {
   ApiGatewayManagementApiClient,
+  GoneException,
   PostToConnectionCommand,
 } from '@aws-sdk/client-apigatewaymanagementapi';
 
@@ -21,10 +22,17 @@ export async function sendToConnection(
   connectionId: string,
   data: string,
 ): Promise<void> {
-  await client.send(
-    new PostToConnectionCommand({
-      ConnectionId: connectionId,
-      Data: data,
-    }),
-  );
+  try {
+    await client.send(
+      new PostToConnectionCommand({
+        ConnectionId: connectionId,
+        Data: data,
+      }),
+    );
+  } catch (error) {
+    if (error instanceof GoneException) {
+      return;
+    }
+    throw error;
+  }
 }
