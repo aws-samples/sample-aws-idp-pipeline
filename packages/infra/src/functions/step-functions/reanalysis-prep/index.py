@@ -12,7 +12,10 @@ import json
 from shared.ddb_client import (
     record_step_start,
     record_step_complete,
+    record_step_error,
+    update_workflow_status,
     StepName,
+    WorkflowStatus,
 )
 from shared.s3_analysis import (
     get_segment_count_from_s3,
@@ -33,37 +36,45 @@ def handler(event, _context):
 
     record_step_start(workflow_id, StepName.SEGMENT_BUILDER)
 
-    # Get segment count from existing S3 files
-    segment_count = get_segment_count_from_s3(file_uri)
-    print(f'Found {segment_count} existing segments')
+    try:
+        # Get segment count from existing S3 files
+        segment_count = get_segment_count_from_s3(file_uri)
+        print(f'Found {segment_count} existing segments')
 
-    if segment_count == 0:
-        raise ValueError(f'No segments found for file: {file_uri}')
+        if segment_count == 0:
+            raise ValueError(f'No segments found for file: {file_uri}')
 
-    # Prepare each segment for re-analysis
-    for i in range(segment_count):
-        # Clear existing ai_analysis
-        clear_segment_ai_analysis(file_uri, i)
+        # Prepare each segment for re-analysis
+        for i in range(segment_count):
+            # Clear existing ai_analysis
+            clear_segment_ai_analysis(file_uri, i)
 
-        # Save reanalysis instructions if provided
-        if user_instructions:
-            save_reanalysis_instructions(file_uri, i, user_instructions)
+            # Save reanalysis instructions if provided
+            if user_instructions:
+                save_reanalysis_instructions(file_uri, i, user_instructions)
 
-        print(f'Prepared segment {i} for re-analysis')
+            print(f'Prepared segment {i} for re-analysis')
 
-    record_step_complete(
-        workflow_id,
-        StepName.SEGMENT_BUILDER,
-        segment_count=segment_count
-    )
+        record_step_complete(
+            workflow_id,
+            StepName.SEGMENT_BUILDER,
+            segment_count=segment_count
+        )
 
-    return {
-        'workflow_id': workflow_id,
-        'document_id': document_id,
-        'project_id': project_id,
-        'file_uri': file_uri,
-        'file_type': file_type,
-        'segment_ids': list(range(segment_count)),
-        'segment_count': segment_count,
-        'is_reanalysis': True
-    }
+        return {
+            'workflow_id': workflow_id,
+            'document_id': document_id,
+            'project_id': project_id,
+            'file_uri': file_uri,
+            'file_type': file_type,
+            'segment_ids': list(range(segment_count)),
+            'segment_count': segment_count,
+            'is_reanalysis': True
+        }
+
+    except Exception as e:
+        error_msg = str(e)
+        print(f'Error in reanalysis-prep: {error_msg}')
+        record_step_error(workflow_id, StepName.SEGMENT_BUILDER, error_msg)
+        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, error=error_msg)
+        raise

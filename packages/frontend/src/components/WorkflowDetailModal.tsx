@@ -524,9 +524,7 @@ export default function WorkflowDetailModal({
                 {workflow.segments.length > 0 && (
                   <div>
                     <h3 className="text-sm font-medium text-slate-700 mb-4">
-                      {t('workflow.segmentAnalysis', {
-                        index: currentSegmentIndex + 1,
-                      })}
+                      {t('workflow.segmentAiAnalysis', 'Segment AI Analysis')}
                     </h3>
                     <p className="text-xs text-slate-400 mb-3">
                       {t('workflow.clickToView')}

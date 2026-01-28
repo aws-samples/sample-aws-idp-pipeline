@@ -50,6 +50,7 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const isManualDisconnectRef = useRef(false);
+  const isConnectingRef = useRef(false);
   const subscribersRef = useRef<Map<string, Set<MessageCallback>>>(new Map());
 
   /** Cognito Identity Pool에서 AWS 자격 증명 획득 */
@@ -110,10 +111,19 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
       return;
     }
 
+    // Prevent duplicate connections (especially in React StrictMode)
+    if (
+      isConnectingRef.current ||
+      wsRef.current?.readyState === WebSocket.OPEN
+    ) {
+      return;
+    }
+
     if (wsRef.current) {
       wsRef.current.close();
     }
 
+    isConnectingRef.current = true;
     isManualDisconnectRef.current = false;
     setStatus('connecting');
 
@@ -134,6 +144,7 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
     wsRef.current = ws;
 
     ws.onopen = () => {
+      isConnectingRef.current = false;
       setStatus('connected');
       reconnectAttemptsRef.current = 0;
     };
@@ -149,6 +160,7 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
     };
 
     ws.onclose = (event) => {
+      isConnectingRef.current = false;
       setStatus('disconnected');
       wsRef.current = null;
 

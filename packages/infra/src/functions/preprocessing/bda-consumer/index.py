@@ -14,6 +14,11 @@ from shared.ddb_client import (
     update_preprocess_status,
     PreprocessStatus,
     PreprocessType,
+    record_step_start,
+    record_step_complete,
+    record_step_error,
+    record_step_skipped,
+    StepName,
 )
 
 BDA_PROJECT_NAME = os.environ.get('BDA_PROJECT_NAME', 'idp-v2-bda-project')
@@ -218,14 +223,6 @@ def process_message(message: dict) -> dict:
 
     print(f'Processing BDA job: workflow={workflow_id}, file={file_uri}')
 
-    # Update status to processing
-    update_preprocess_status(
-        document_id=document_id,
-        workflow_id=workflow_id,
-        processor=PreprocessType.BDA,
-        status=PreprocessStatus.PROCESSING
-    )
-
     # Check if file type is supported
     if file_type not in SUPPORTED_MIME_TYPES:
         print(f'Skipping unsupported file type: {file_type}')
@@ -236,7 +233,19 @@ def process_message(message: dict) -> dict:
             status=PreprocessStatus.SKIPPED,
             reason=f'File type {file_type} not supported'
         )
+        record_step_skipped(workflow_id, StepName.BDA_PROCESSOR, f'File type {file_type} not supported')
         return {'status': 'skipped', 'reason': f'Unsupported file type: {file_type}'}
+
+    # Update STEP record to in_progress
+    record_step_start(workflow_id, StepName.BDA_PROCESSOR)
+
+    # Update preprocess status to processing
+    update_preprocess_status(
+        document_id=document_id,
+        workflow_id=workflow_id,
+        processor=PreprocessType.BDA,
+        status=PreprocessStatus.PROCESSING
+    )
 
     try:
         # Start BDA job
@@ -260,6 +269,7 @@ def process_message(message: dict) -> dict:
                 output_uri=result,
                 invocation_arn=invocation_arn
             )
+            record_step_complete(workflow_id, StepName.BDA_PROCESSOR)
             return {
                 'status': 'completed',
                 'output_uri': result,
@@ -275,6 +285,7 @@ def process_message(message: dict) -> dict:
                 error=result,
                 invocation_arn=invocation_arn
             )
+            record_step_error(workflow_id, StepName.BDA_PROCESSOR, result or 'Unknown error')
             return {
                 'status': 'failed',
                 'error': result,
@@ -290,6 +301,7 @@ def process_message(message: dict) -> dict:
             status=PreprocessStatus.FAILED,
             error=str(e)
         )
+        record_step_error(workflow_id, StepName.BDA_PROCESSOR, str(e))
         raise
 
 

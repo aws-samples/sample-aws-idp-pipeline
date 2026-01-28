@@ -21,7 +21,7 @@ import { Document, Workflow, WorkflowProgress } from '../types/project';
 interface DocumentsPanelProps {
   documents: Document[];
   workflows: Workflow[];
-  workflowProgress: WorkflowProgress | null;
+  workflowProgressMap: Record<string, WorkflowProgress>;
   uploading: boolean;
   showUploadArea: boolean;
   isDragging: boolean;
@@ -39,34 +39,46 @@ interface DocumentsPanelProps {
 
 const getFileIcon = (fileType: string) => {
   if (fileType.includes('pdf')) {
-    return <FileText className="h-5 w-5 text-blue-500" />;
+    return <FileText className="h-5 w-5 text-blue-400" />;
   }
   if (fileType.includes('image')) {
-    return <Image className="h-5 w-5 text-emerald-500" />;
+    return <Image className="h-5 w-5 text-emerald-400" />;
   }
   if (fileType.includes('video')) {
-    return <Film className="h-5 w-5 text-violet-500" />;
+    return <Film className="h-5 w-5 text-violet-400" />;
   }
   if (fileType.includes('audio')) {
-    return <Music className="h-5 w-5 text-amber-500" />;
+    return <Music className="h-5 w-5 text-amber-400" />;
   }
   return <File className="h-5 w-5 text-slate-400" />;
 };
 
 const getStatusBadge = (status: string) => {
   const statusColors: Record<string, string> = {
-    completed: 'bg-green-100 text-green-700',
-    processing: 'bg-yellow-100 text-yellow-700',
-    failed: 'bg-red-100 text-red-700',
-    uploading: 'bg-blue-100 text-blue-700',
+    completed:
+      'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    processing:
+      'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+    in_progress:
+      'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    failed: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    uploading:
+      'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+    uploaded:
+      'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+    pending:
+      'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400',
   };
-  return statusColors[status] || 'bg-slate-100 text-slate-700';
+  return (
+    statusColors[status] ||
+    'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400'
+  );
 };
 
 export default function DocumentsPanel({
   documents,
   workflows,
-  workflowProgress,
+  workflowProgressMap,
   uploading,
   showUploadArea,
   isDragging,
@@ -200,19 +212,11 @@ export default function DocumentsPanel({
               const workflow = workflows.find(
                 (wf) => wf.document_id === doc.document_id,
               );
+              const workflowProgress = workflowProgressMap[doc.document_id];
               const isProcessing =
                 workflowProgress &&
-                workflowProgress.documentId === doc.document_id &&
                 workflowProgress.status !== 'completed' &&
                 workflowProgress.status !== 'failed';
-              const processingComplete =
-                workflowProgress &&
-                workflowProgress.documentId === doc.document_id &&
-                workflowProgress.status === 'completed';
-              const processingFailed =
-                workflowProgress &&
-                workflowProgress.documentId === doc.document_id &&
-                workflowProgress.status === 'failed';
 
               return (
                 <div
@@ -220,22 +224,14 @@ export default function DocumentsPanel({
                   className={`group bg-white border rounded-lg p-3 transition-all ${
                     isProcessing
                       ? 'border-blue-300 bg-blue-50/30'
-                      : processingComplete
-                        ? 'border-green-300 bg-green-50/30'
-                        : processingFailed
-                          ? 'border-red-300 bg-red-50/30'
-                          : 'border-slate-200 hover:border-slate-300'
+                      : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
                   {/* Document Info Row */}
                   <div className="flex items-center gap-3">
                     <div
-                      className={`flex-shrink-0 p-2 rounded-lg ${
-                        isProcessing
-                          ? 'bg-blue-100'
-                          : doc.file_type.includes('image')
-                            ? 'bg-purple-100'
-                            : 'bg-slate-100'
+                      className={`flex-shrink-0 p-2 rounded-lg doc-icon-bg ${
+                        isProcessing ? 'processing' : ''
                       }`}
                     >
                       {getFileIcon(doc.file_type)}
@@ -251,7 +247,7 @@ export default function DocumentsPanel({
                         <span
                           className={`text-xs px-1.5 py-0.5 rounded font-medium ${getStatusBadge(doc.status)}`}
                         >
-                          {doc.status}
+                          {t(`documents.${doc.status}`, doc.status)}
                         </span>
                         <span className="text-xs text-slate-400">
                           {(doc.file_size / 1024).toFixed(1)} KB
@@ -260,23 +256,23 @@ export default function DocumentsPanel({
                     </div>
 
                     {/* Action Buttons */}
-                    {!isProcessing && (
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {workflow && (
-                          <button
-                            onClick={() =>
-                              onViewWorkflow(
-                                workflow.document_id,
-                                workflow.workflow_id,
-                              )
-                            }
-                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-900 bg-blue-400 hover:bg-blue-100 hover:text-blue-700 hover:scale-105 hover:shadow-md dark:text-blue-300 dark:bg-blue-800 dark:hover:bg-blue-500 dark:hover:text-white rounded-lg transition-all"
-                            title="View analysis"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            {t('documents.view')}
-                          </button>
-                        )}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {workflow && (
+                        <button
+                          onClick={() =>
+                            onViewWorkflow(
+                              workflow.document_id,
+                              workflow.workflow_id,
+                            )
+                          }
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-900 bg-blue-400 hover:bg-blue-100 hover:text-blue-700 hover:scale-105 hover:shadow-md dark:text-blue-300 dark:bg-blue-800 dark:hover:bg-blue-500 dark:hover:text-white rounded-lg transition-all"
+                          title="View analysis"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          {t('documents.view')}
+                        </button>
+                      )}
+                      {!isProcessing && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -287,67 +283,80 @@ export default function DocumentsPanel({
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
 
-                  {/* Processing Progress */}
-                  {(isProcessing || processingComplete || processingFailed) &&
-                    workflowProgress && (
-                      <div className="mt-3 pt-3 border-t border-slate-100">
-                        <div className="flex items-center gap-2 mb-1">
-                          {processingComplete ? (
-                            <Check className="h-4 w-4 text-green-500" />
-                          ) : processingFailed ? (
-                            <X className="h-4 w-4 text-red-500" />
-                          ) : (
-                            <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
-                          )}
-                          <span
-                            className={`text-xs font-medium ${
-                              processingComplete
-                                ? 'text-green-700'
-                                : processingFailed
-                                  ? 'text-red-700'
-                                  : 'text-blue-700'
-                            }`}
-                          >
-                            {workflowProgress.currentStep}
-                          </span>
-                        </div>
-                        <p
-                          className={`text-xs ${
-                            processingComplete
-                              ? 'text-green-600'
-                              : processingFailed
-                                ? 'text-red-600'
-                                : 'text-blue-600'
-                          }`}
-                        >
-                          {workflowProgress.error ||
-                            workflowProgress.stepMessage}
-                        </p>
-                        {workflowProgress.segmentProgress && isProcessing && (
-                          <div className="mt-2">
-                            <div className="flex justify-between text-xs text-blue-600 mb-1">
-                              <span>{t('workflow.segments')}</span>
-                              <span>
-                                {workflowProgress.segmentProgress.completed} /{' '}
-                                {workflowProgress.segmentProgress.total}
-                              </span>
-                            </div>
-                            <div className="h-1.5 bg-blue-200 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                                style={{
-                                  width: `${(workflowProgress.segmentProgress.completed / workflowProgress.segmentProgress.total) * 100}%`,
-                                }}
-                              />
-                            </div>
+                  {/* Processing Progress - only show while processing */}
+                  {isProcessing && workflowProgress && (
+                    <div className="mt-3 pt-3 border-t border-slate-100">
+                      {/* Current Step Header */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+                        <span className="text-xs font-medium text-blue-700">
+                          {workflowProgress.currentStep}
+                        </span>
+                      </div>
+
+                      {/* Step Progress List */}
+                      {workflowProgress.steps &&
+                        Object.keys(workflowProgress.steps).length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {Object.entries(workflowProgress.steps).map(
+                              ([stepName, step]) => (
+                                <span
+                                  key={stepName}
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded ${
+                                    step.status === 'completed'
+                                      ? 'bg-green-100 text-green-700'
+                                      : step.status === 'in_progress'
+                                        ? 'bg-blue-100 text-blue-700'
+                                        : step.status === 'failed'
+                                          ? 'bg-red-100 text-red-700'
+                                          : step.status === 'skipped'
+                                            ? 'bg-slate-100 text-slate-500'
+                                            : 'bg-slate-50 text-slate-400'
+                                  }`}
+                                  title={`${step.label}: ${step.status}`}
+                                >
+                                  {step.status === 'completed' && (
+                                    <Check className="h-2.5 w-2.5" />
+                                  )}
+                                  {step.status === 'in_progress' && (
+                                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                                  )}
+                                  {step.status === 'failed' && (
+                                    <X className="h-2.5 w-2.5" />
+                                  )}
+                                  {step.label}
+                                </span>
+                              ),
+                            )}
                           </div>
                         )}
-                      </div>
-                    )}
+
+                      {/* Segment Progress */}
+                      {workflowProgress.segmentProgress && (
+                        <div className="mt-2">
+                          <div className="flex justify-between text-xs text-blue-600 mb-1">
+                            <span>{t('workflow.segments')}</span>
+                            <span>
+                              {workflowProgress.segmentProgress.completed} /{' '}
+                              {workflowProgress.segmentProgress.total}
+                            </span>
+                          </div>
+                          <div className="h-1.5 bg-blue-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                              style={{
+                                width: `${(workflowProgress.segmentProgress.completed / workflowProgress.segmentProgress.total) * 100}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

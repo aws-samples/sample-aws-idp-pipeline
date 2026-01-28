@@ -85,9 +85,11 @@
     "orClick": "또는 클릭하여 선택",
     "supportedFormats": "문서(PDF, DOC, TXT), 이미지(PNG, JPG, GIF, TIFF), 동영상(MP4, MOV, AVI), 오디오(MP3, WAV, FLAC) 최대 500MB 지원",
     "processing": "처리 중",
+    "in_progress": "분석 중",
     "completed": "완료",
     "failed": "실패",
     "pending": "대기 중",
+    "uploaded": "업로드됨",
     "deleteConfirm": "이 문서를 삭제하시겠습니까?",
     "view": "보기",
     "useBda": "BDA 분석 사용",
@@ -111,7 +113,7 @@
     "totalSegments": "총 세그먼트",
     "analysisLanguage": "분석 언어",
     "created": "생성일",
-    "segmentAnalysis": "세그먼트 {{index}} 분석",
+    "segmentAiAnalysis": "Segment AI Analysis",
     "clickToView": "클릭하여 내용 보기",
     "noSegments": "세그먼트가 없습니다",
     "loadingImage": "이미지 로딩 중...",
@@ -205,7 +207,8 @@
     "renameSession": "대화 이름 변경",
     "sessionNamePlaceholder": "대화 이름을 입력하세요",
     "deleteArtifact": "아티팩트 삭제",
-    "deleteArtifactConfirm": "이 아티팩트를 삭제하시겠습니까? 삭제된 아티팩트는 복구할 수 없습니다."
+    "deleteArtifactConfirm": "이 아티팩트를 삭제하시겠습니까? 삭제된 아티팩트는 복구할 수 없습니다.",
+    "selectArtifact": "아티팩트 선택"
   },
   "viewer": {
     "zoomIn": "확대",
@@ -240,7 +243,11 @@
     "searchPlaceholder": "아티팩트 검색...",
     "noArtifacts": "아티팩트가 없습니다",
     "noArtifactsDescription": "채팅 대화 중에 생성된 아티팩트가 여기에 표시됩니다.",
-    "items": "개"
+    "items": "개",
+    "goToProject": "프로젝트로 이동",
+    "unsupportedType": "이 파일 형식은 미리보기를 지원하지 않습니다",
+    "loadError": "아티팩트를 불러오는데 실패했습니다",
+    "noPreview": "미리보기를 사용할 수 없습니다"
   },
   "languages": {
     "ko": "한국어",

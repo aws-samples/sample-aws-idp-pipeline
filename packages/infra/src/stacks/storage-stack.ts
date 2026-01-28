@@ -7,7 +7,12 @@ import {
   S3DirectoryBucket,
   SSM_KEYS,
 } from ':idp-v2/common-constructs';
-import { AttributeType, Billing, TableV2 } from 'aws-cdk-lib/aws-dynamodb';
+import {
+  AttributeType,
+  Billing,
+  StreamViewType,
+  TableV2,
+} from 'aws-cdk-lib/aws-dynamodb';
 import { HttpMethods } from 'aws-cdk-lib/aws-s3';
 import { Vpc } from 'aws-cdk-lib/aws-ec2';
 
@@ -111,6 +116,7 @@ export class StorageStack extends Stack {
       partitionKey: { name: 'PK', type: AttributeType.STRING },
       sortKey: { name: 'SK', type: AttributeType.STRING },
       billing: Billing.onDemand(),
+      dynamoStream: StreamViewType.NEW_AND_OLD_IMAGES,
       globalSecondaryIndexes: [
         {
           indexName: 'GSI1',
@@ -128,6 +134,11 @@ export class StorageStack extends Stack {
     new StringParameter(this, 'BackendTableNameParam', {
       parameterName: SSM_KEYS.BACKEND_TABLE_NAME,
       stringValue: backendTable.tableName,
+    });
+
+    new StringParameter(this, 'BackendTableStreamArnParam', {
+      parameterName: SSM_KEYS.BACKEND_TABLE_STREAM_ARN,
+      stringValue: backendTable.tableStreamArn!,
     });
 
     // Express One Zone Storage Bucket

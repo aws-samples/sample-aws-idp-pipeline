@@ -13,6 +13,10 @@ from shared.ddb_client import (
     update_preprocess_status,
     PreprocessStatus,
     PreprocessType,
+    record_step_start,
+    record_step_skipped,
+    record_step_error,
+    StepName,
 )
 from shared.s3_analysis import get_s3_client, parse_s3_uri
 
@@ -167,10 +171,14 @@ def process_message(message: dict) -> dict:
             status=PreprocessStatus.SKIPPED,
             reason=f'File type {file_type} not supported'
         )
+        record_step_skipped(workflow_id, StepName.PADDLEOCR_PROCESSOR, f'File type {file_type} not supported')
         return {'status': 'skipped', 'reason': f'Unsupported file type: {file_type}'}
 
     try:
-        # Update status to processing
+        # Update STEP record to in_progress
+        record_step_start(workflow_id, StepName.PADDLEOCR_PROCESSOR)
+
+        # Update preprocess status to processing
         update_preprocess_status(
             document_id=document_id,
             workflow_id=workflow_id,
@@ -201,6 +209,7 @@ def process_message(message: dict) -> dict:
             status=PreprocessStatus.FAILED,
             error=str(e)
         )
+        record_step_error(workflow_id, StepName.PADDLEOCR_PROCESSOR, str(e))
         raise
 
 

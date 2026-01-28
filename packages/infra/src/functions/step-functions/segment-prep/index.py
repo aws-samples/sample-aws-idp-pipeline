@@ -24,7 +24,9 @@ from shared.ddb_client import (
     record_step_start,
     record_step_complete,
     record_step_error,
+    update_workflow_status,
     update_workflow_total_segments,
+    WorkflowStatus,
     StepName,
 )
 from shared.s3_analysis import (
@@ -196,6 +198,7 @@ def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
     workflow_id = event.get('workflow_id')
+    document_id = event.get('document_id')
     file_uri = event.get('file_uri')
     file_type = event.get('file_type', '')
 
@@ -266,7 +269,6 @@ def handler(event, _context):
             print(f'Created initial segment {seg["segment_index"]}')
 
         # Update workflow total_segments in DynamoDB
-        document_id = event.get('document_id')
         update_workflow_total_segments(document_id, workflow_id, len(segments))
 
         record_step_complete(
@@ -285,4 +287,5 @@ def handler(event, _context):
         error_msg = str(e)
         print(f'Error in segment-prep: {error_msg}')
         record_step_error(workflow_id, StepName.SEGMENT_PREP, error_msg)
+        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, error=error_msg)
         raise

@@ -70,6 +70,7 @@ def handler(event, context):
                 'processing_type': processing_type,
                 'language': language,
                 'use_bda': use_bda,
+                'is_reanalysis': False,
                 'triggered_at': datetime.utcnow().isoformat()
             }
 

@@ -5,6 +5,7 @@ export const SSM_KEYS = {
   AGENT_STORAGE_BUCKET_NAME: '/idp-v2/agent-storage/bucket-name',
   MODEL_ARTIFACTS_BUCKET_NAME: '/idp-v2/model-artifacts/bucket-name',
   BACKEND_TABLE_NAME: '/idp-v2/backend/table-name',
+  BACKEND_TABLE_STREAM_ARN: '/idp-v2/backend/table-stream-arn',
   LANCEDB_EXPRESS_BUCKET_NAME: '/idp-v2/lancedb/express/bucket-name',
   LANCEDB_EXPRESS_AZ_ID: '/idp-v2/lancedb/express/az-id',
   VPC_ID: '/idp-v2/vpc/id',

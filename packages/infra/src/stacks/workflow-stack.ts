@@ -509,6 +509,8 @@ export class WorkflowStack extends Stack {
           'preprocessor_metadata_uri.$': '$[0].preprocessor_metadata_uri',
           'segment_count.$': '$[0].segment_count',
           'format_parser.$': '$[1].format_parser',
+          'is_reanalysis.$': '$$.Execution.Input.is_reanalysis',
+          'use_bda.$': '$$.Execution.Input.use_bda',
         },
       },
     );

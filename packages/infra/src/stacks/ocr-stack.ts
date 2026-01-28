@@ -199,7 +199,9 @@ export class OcrStack extends Stack {
     ocrInvoker.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['sagemaker:UpdateEndpointWeightsAndCapacities'],
-        resources: [`arn:aws:sagemaker:${this.region}:${this.account}:endpoint/${this.endpointName}`],
+        resources: [
+          `arn:aws:sagemaker:${this.region}:${this.account}:endpoint/${this.endpointName}`,
+        ],
       }),
     );
 

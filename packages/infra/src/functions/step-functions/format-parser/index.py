@@ -10,7 +10,17 @@ import tempfile
 import boto3
 import pypdf
 
-from shared.ddb_client import save_segment, batch_save_segments
+from shared.ddb_client import (
+    save_segment,
+    batch_save_segments,
+    update_workflow_status,
+    WorkflowStatus,
+    record_step_start,
+    record_step_complete,
+    record_step_error,
+    record_step_skipped,
+    StepName,
+)
 from shared.s3_analysis import get_s3_client, parse_s3_uri
 
 BACKEND_TABLE_NAME = os.environ.get('BACKEND_TABLE_NAME', '')
@@ -92,6 +102,7 @@ def handler(event, context):
     # Only process PDF files
     if file_type != 'application/pdf':
         print(f'Skipping non-PDF file: {file_type}')
+        record_step_skipped(workflow_id, StepName.FORMAT_PARSER, f'File type {file_type} is not PDF')
         return {
             **event,
             'format_parser': {
@@ -101,6 +112,9 @@ def handler(event, context):
         }
 
     try:
+        # Update STEP record to in_progress
+        record_step_start(workflow_id, StepName.FORMAT_PARSER)
+
         result = process_pdf(
             file_uri=file_uri,
             workflow_id=workflow_id,
@@ -110,20 +124,26 @@ def handler(event, context):
 
         print(f'Format parser completed: {result}')
 
+        # Update STEP record to completed
+        record_step_complete(workflow_id, StepName.FORMAT_PARSER)
+
         return {
             **event,
             'format_parser': result
         }
 
     except Exception as e:
-        print(f'Error in format parser: {e}')
+        error_msg = str(e)
+        print(f'Error in format parser: {error_msg}')
         import traceback
         traceback.print_exc()
+        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, error=error_msg)
+        record_step_error(workflow_id, StepName.FORMAT_PARSER, error_msg)
 
         return {
             **event,
             'format_parser': {
                 'status': 'failed',
-                'error': str(e)
+                'error': error_msg
             }
         }

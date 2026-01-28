@@ -2009,3 +2009,64 @@ a {
 :root.dark .tool-result-header {
   background: rgba(139, 92, 246, 0.2);
 }
+
+/* Document Icon Background - consistent across all browsers */
+.doc-icon-bg {
+  background: #f1f5f9;
+}
+
+.doc-icon-bg.processing {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+:root.dark .doc-icon-bg {
+  background: rgba(51, 65, 85, 0.5);
+}
+
+:root.dark .doc-icon-bg.processing {
+  background: rgba(59, 130, 246, 0.25);
+}
+
+/* Contenteditable input placeholder */
+.chat-input-editable:empty::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+:root.dark .chat-input-editable:empty::before {
+  color: #64748b;
+}
+
+/* Artifact chip in contenteditable */
+.chat-input-editable [data-artifact-id] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  margin: 0 0.375rem;
+  background: #ede9fe;
+  border: 1px solid #ddd6fe;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #6d28d9;
+  vertical-align: middle;
+  user-select: none;
+}
+
+:root.dark .chat-input-editable [data-artifact-id] {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #c4b5fd;
+}
+
+.chat-input-editable [data-artifact-id] svg {
+  width: 0.75rem;
+  height: 0.75rem;
+  color: #8b5cf6;
+}
+
+:root.dark .chat-input-editable [data-artifact-id] svg {
+  color: #a78bfa;
+}

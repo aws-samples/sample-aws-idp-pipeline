@@ -11,6 +11,9 @@ from shared.ddb_client import (
     update_preprocess_status,
     PreprocessStatus,
     PreprocessType,
+    record_step_complete,
+    record_step_error,
+    StepName,
 )
 from shared.s3_analysis import get_s3_client, parse_s3_uri
 
@@ -75,6 +78,8 @@ def handle_success(response_location: str, request_payload: dict):
             status=PreprocessStatus.FAILED,
             error=error
         )
+        # Update STEP record to failed
+        record_step_error(workflow_id, StepName.PADDLEOCR_PROCESSOR, error)
         return
 
     # Save to standard location
@@ -90,6 +95,8 @@ def handle_success(response_location: str, request_payload: dict):
         output_uri=ocr_output_uri,
         page_count=page_count
     )
+    # Update STEP record to completed
+    record_step_complete(workflow_id, StepName.PADDLEOCR_PROCESSOR)
 
 
 def handle_failure(failure_location: str, request_payload: dict):
@@ -117,6 +124,8 @@ def handle_failure(failure_location: str, request_payload: dict):
         status=PreprocessStatus.FAILED,
         error=error
     )
+    # Update STEP record to failed
+    record_step_error(workflow_id, StepName.PADDLEOCR_PROCESSOR, error)
 
 
 def handler(event, _context):

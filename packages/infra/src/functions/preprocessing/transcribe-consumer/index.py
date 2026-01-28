@@ -14,6 +14,11 @@ from shared.ddb_client import (
     update_preprocess_status,
     PreprocessStatus,
     PreprocessType,
+    record_step_start,
+    record_step_complete,
+    record_step_error,
+    record_step_skipped,
+    StepName,
 )
 from shared.s3_analysis import get_s3_client, parse_s3_uri
 
@@ -197,14 +202,6 @@ def process_message(message: dict) -> dict:
 
     print(f'Processing transcription job: workflow={workflow_id}, file={file_uri}')
 
-    # Update status to processing
-    update_preprocess_status(
-        document_id=document_id,
-        workflow_id=workflow_id,
-        processor=PreprocessType.TRANSCRIBE,
-        status=PreprocessStatus.PROCESSING
-    )
-
     # Check if file type is supported
     if file_type not in SUPPORTED_MIME_TYPES:
         print(f'Skipping unsupported file type: {file_type}')
@@ -215,7 +212,19 @@ def process_message(message: dict) -> dict:
             status=PreprocessStatus.SKIPPED,
             reason=f'File type {file_type} not supported'
         )
+        record_step_skipped(workflow_id, StepName.TRANSCRIBE, f'File type {file_type} not supported')
         return {'status': 'skipped', 'reason': f'Unsupported file type: {file_type}'}
+
+    # Update STEP record to in_progress
+    record_step_start(workflow_id, StepName.TRANSCRIBE)
+
+    # Update preprocess status to processing
+    update_preprocess_status(
+        document_id=document_id,
+        workflow_id=workflow_id,
+        processor=PreprocessType.TRANSCRIBE,
+        status=PreprocessStatus.PROCESSING
+    )
 
     try:
         # Start transcription job
@@ -250,6 +259,7 @@ def process_message(message: dict) -> dict:
                 text_uri=text_uri,
                 job_name=job_name
             )
+            record_step_complete(workflow_id, StepName.TRANSCRIBE)
             return {
                 'status': 'completed',
                 'output_uri': result,
@@ -266,6 +276,7 @@ def process_message(message: dict) -> dict:
                 error=result,
                 job_name=job_name
             )
+            record_step_error(workflow_id, StepName.TRANSCRIBE, result or 'Unknown error')
             return {
                 'status': 'failed',
                 'error': result,
@@ -281,6 +292,7 @@ def process_message(message: dict) -> dict:
             status=PreprocessStatus.FAILED,
             error=str(e)
         )
+        record_step_error(workflow_id, StepName.TRANSCRIBE, str(e))
         raise
 
 

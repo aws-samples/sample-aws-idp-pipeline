@@ -127,6 +127,11 @@ export interface ChatSession {
   session_name: string | null;
 }
 
+export interface StepStatus {
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'skipped';
+  label: string;
+}
+
 export interface WorkflowProgress {
   workflowId: string;
   documentId: string;
@@ -136,6 +141,7 @@ export interface WorkflowProgress {
   stepMessage: string;
   segmentProgress: { completed: number; total: number } | null;
   error: string | null;
+  steps?: Record<string, StepStatus>;
 }
 
 export interface AnalysisPopup {
