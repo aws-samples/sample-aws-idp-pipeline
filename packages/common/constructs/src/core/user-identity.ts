@@ -192,7 +192,7 @@ export class UserIdentity extends Construct {
       this,
       'PostAuthenticationTrigger',
       {
-        runtime: Runtime.NODEJS_20_X,
+        runtime: Runtime.NODEJS_22_X,
         handler: 'post-authentication.handler',
         code: Code.fromAsset(
           path.join(__dirname, '../../../../lambda/cognito-trigger/dist'),
