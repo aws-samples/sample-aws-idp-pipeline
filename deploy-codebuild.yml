@@ -111,12 +111,7 @@ Resources:
                 - git clone $REPO_URL /tmp/project
                 - cd /tmp/project
                 - git checkout $VERSION
-                - |
-                  REQUIRED_PY=$(cat .python-version 2>/dev/null || echo "")
-                  if [ -n "$REQUIRED_PY" ]; then
-                    pyenv install -s "$REQUIRED_PY"
-                    pyenv global "$REQUIRED_PY"
-                  fi
+                - find /tmp/project -name ".python-version" -delete
                 - pip install uv
                 - pnpm install --frozen-lockfile
             build:
