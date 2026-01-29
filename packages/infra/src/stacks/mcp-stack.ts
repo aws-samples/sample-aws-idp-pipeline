@@ -2,6 +2,7 @@ import { Stack, StackProps } from 'aws-cdk-lib';
 import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Vpc } from 'aws-cdk-lib/aws-ec2';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
+import { Queue } from 'aws-cdk-lib/aws-sqs';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import {
@@ -60,6 +61,16 @@ export class McpStack extends Stack {
       SSM_KEYS.WEBSOCKET_API_ID,
     );
 
+    const websocketMessageQueueArn = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.WEBSOCKET_MESSAGE_QUEUE_ARN,
+    );
+    const websocketMessageQueue = Queue.fromQueueArn(
+      this,
+      'WebsocketMessageQueue',
+      websocketMessageQueueArn,
+    );
+
     this.searchMcp = new SearchMcp(this, 'SearchMcp');
     this.artifactMcp = new ArtifactMcp(this, 'ArtifactMcp', {
       backendTable,
@@ -72,6 +83,7 @@ export class McpStack extends Stack {
     this.pdfMcp = new PdfMcp(this, 'PdfMcp', {
       backendTable,
       storageBucket: agentStorageBucket,
+      websocketMessageQueue,
     });
 
     this.gateway = new agentcore.Gateway(this, 'McpGateway', {

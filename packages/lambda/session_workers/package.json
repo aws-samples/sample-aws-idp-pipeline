@@ -15,8 +15,7 @@
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.972.0",
     "@aws-sdk/client-s3": "^3.958.0",
-    "ioredis": "^5.6.1",
-    "iovalkey": "^0.3.3",
+    "@aws-sdk/client-sqs": "^3.974.0",
     "nanoid": "^5.1.5"
   },
   "devDependencies": {

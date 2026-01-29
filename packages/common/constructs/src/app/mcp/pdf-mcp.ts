@@ -3,12 +3,14 @@ import { ITable } from 'aws-cdk-lib/aws-dynamodb';
 import { Runtime, Architecture } from 'aws-cdk-lib/aws-lambda';
 import { PythonFunction } from '@aws-cdk/aws-lambda-python-alpha';
 import { IBucket } from 'aws-cdk-lib/aws-s3';
+import { IQueue } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
 export interface PdfMcpProps {
   backendTable: ITable;
   storageBucket: IBucket;
+  websocketMessageQueue: IQueue;
 }
 
 export class PdfMcp extends Construct {
@@ -17,7 +19,7 @@ export class PdfMcp extends Construct {
   constructor(scope: Construct, id: string, props: PdfMcpProps) {
     super(scope, id);
 
-    const { backendTable, storageBucket } = props;
+    const { backendTable, storageBucket, websocketMessageQueue } = props;
 
     const pdfMcpPath = path.resolve(
       process.cwd(),
@@ -36,11 +38,13 @@ export class PdfMcp extends Construct {
       environment: {
         BACKEND_TABLE_NAME: backendTable.tableName,
         AGENT_STORAGE_BUCKET: storageBucket.bucketName,
+        WEBSOCKET_MESSAGE_QUEUE_URL: websocketMessageQueue.queueUrl,
       },
     });
 
     // Grant permissions for all operations
     backendTable.grantReadWriteData(this.function);
     storageBucket.grantReadWrite(this.function);
+    websocketMessageQueue.grantSendMessages(this.function);
   }
 }

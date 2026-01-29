@@ -1,5 +1,6 @@
 """Artifact system integration for PDF MCP tools."""
 
+import json
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -9,6 +10,7 @@ from nanoid import generate
 
 dynamodb = boto3.resource("dynamodb")
 s3 = boto3.client("s3")
+sqs = boto3.client("sqs")
 
 
 @dataclass
@@ -113,6 +115,25 @@ def save_artifact(
             },
         }
     )
+
+    # Send notification to websocket broker
+    queue_url = os.environ.get("WEBSOCKET_MESSAGE_QUEUE_URL")
+    if queue_url:
+        sqs.send_message(
+            QueueUrl=queue_url,
+            MessageBody=json.dumps({
+                "username": user_id,
+                "message": {
+                    "action": "artifacts",
+                    "data": {
+                        "event": "created",
+                        "artifact_id": artifact_id,
+                        "filename": filename,
+                        "created_at": created_at,
+                    },
+                },
+            }),
+        )
 
     return {
         "artifact_id": artifact_id,

@@ -5,11 +5,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { MessageKeyInfo } from '../parse-session-s3-key';
 import { generateSessionName } from './generate-session-name';
-import {
-  deleteSessionListCache,
-  getConnectionIdsByUsername,
-} from './valkey.js';
-import { sendToConnection, SessionsMessage } from './websocket.js';
+import { sendWebsocketMessage, SessionsMessage } from './sqs.js';
 
 export async function handleNameUpdate(
   s3Client: S3Client,
@@ -53,10 +49,7 @@ export async function handleNameUpdate(
     }),
   );
 
-  await deleteSessionListCache(keyInfo.userId, keyInfo.projectId);
-
-  // Send WebSocket notification
-  const connectionIds = await getConnectionIdsByUsername(keyInfo.userId);
+  // Send WebSocket notification via SQS
   const message: SessionsMessage = {
     action: 'sessions',
     data: {
@@ -66,11 +59,7 @@ export async function handleNameUpdate(
       timestamp: new Date().toISOString(),
     },
   };
-  await Promise.all(
-    connectionIds.map((connectionId) =>
-      sendToConnection(connectionId, JSON.stringify(message)),
-    ),
-  );
+  await sendWebsocketMessage(keyInfo.userId, message);
 
   console.log(`Updated session_name for ${sessionJsonKey}`);
 }

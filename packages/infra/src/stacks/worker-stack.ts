@@ -1,9 +1,14 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Vpc } from 'aws-cdk-lib/aws-ec2';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
+import { Queue } from 'aws-cdk-lib/aws-sqs';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
-import { MessageProcess, SSM_KEYS } from ':idp-v2/common-constructs';
+import {
+  MessageProcess,
+  WebsocketBroker,
+  SSM_KEYS,
+} from ':idp-v2/common-constructs';
 
 export class WorkerStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -38,12 +43,29 @@ export class WorkerStack extends Stack {
       SSM_KEYS.WEBSOCKET_API_ID,
     );
 
+    const websocketMessageQueueArn = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.WEBSOCKET_MESSAGE_QUEUE_ARN,
+    );
+
+    const websocketMessageQueue = Queue.fromQueueArn(
+      this,
+      'WebsocketMessageQueue',
+      websocketMessageQueueArn,
+    );
+
     new MessageProcess(this, 'MessageProcess', {
       bucket: sessionStorageBucket,
+      vpc,
+      websocketMessageQueue,
+    });
+
+    new WebsocketBroker(this, 'WebsocketBroker', {
       vpc,
       elasticacheEndpoint,
       websocketCallbackUrl,
       websocketApiId,
+      websocketMessageQueue,
     });
   }
 }
