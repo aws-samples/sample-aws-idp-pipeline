@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FileText,
@@ -12,11 +12,18 @@ import {
   X,
   Eye,
   Trash2,
-  Check,
   Loader2,
   FileX,
+  Check,
+  CircleAlert,
+  ChevronDown,
 } from 'lucide-react';
-import { Document, Workflow, WorkflowProgress } from '../types/project';
+import {
+  Document,
+  Workflow,
+  WorkflowProgress,
+  StepStatus,
+} from '../types/project';
 
 interface DocumentsPanelProps {
   documents: Document[];
@@ -74,6 +81,168 @@ const getStatusBadge = (status: string) => {
     'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400'
   );
 };
+
+function StepProgressBar({
+  steps,
+  segmentProgress,
+}: {
+  steps?: Record<string, StepStatus>;
+  segmentProgress: { completed: number; total: number } | null;
+}) {
+  const { t } = useTranslation();
+
+  const [expanded, setExpanded] = useState(false);
+
+  if (!steps) {
+    return (
+      <div className="mt-2 flex items-center gap-2">
+        <Loader2 className="h-3.5 w-3.5 text-blue-500 animate-spin flex-shrink-0" />
+        <span className="text-xs text-blue-600">
+          {t('workflow.inProgress')}
+        </span>
+      </div>
+    );
+  }
+
+  const STEP_ORDER = [
+    'segment_prep',
+    'bda_processor',
+    'format_parser',
+    'paddleocr_processor',
+    'transcribe',
+    'segment_builder',
+    'segment_analyzer',
+    'document_summarizer',
+  ];
+
+  const visibleSteps = STEP_ORDER.filter(
+    (key) => steps[key] && steps[key].status !== 'skipped',
+  ).map((key) => [key, steps[key]] as [string, StepStatus]);
+
+  const hasSteps = visibleSteps.length > 0;
+  const completedCount = visibleSteps.filter(
+    ([, s]) => s.status === 'completed',
+  ).length;
+  const totalCount = visibleSteps.length;
+  const overallPct = hasSteps
+    ? Math.round((completedCount / totalCount) * 100)
+    : 0;
+  const activeStep = visibleSteps.find(([, s]) => s.status === 'in_progress');
+
+  return (
+    <div className="mt-2">
+      {/* Collapsed: summary bar */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-3 w-3 text-blue-500 animate-spin flex-shrink-0" />
+          <span className="text-[11px] text-blue-700 dark:text-blue-300 font-medium truncate">
+            {activeStep ? activeStep[1].label : t('workflow.inProgress')}
+          </span>
+          {hasSteps && (
+            <span className="text-[10px] text-slate-400 flex-shrink-0 ml-auto">
+              {completedCount}/{totalCount}
+            </span>
+          )}
+          {hasSteps && (
+            <ChevronDown
+              className={`h-3 w-3 text-slate-400 flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            />
+          )}
+        </div>
+        {hasSteps && (
+          <div className="mt-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-blue-500 transition-all duration-300"
+              style={{ width: `${overallPct}%` }}
+            />
+          </div>
+        )}
+      </button>
+
+      {/* Expanded: step details */}
+      {expanded && (
+        <div className="mt-2 space-y-1.5">
+          {visibleSteps.map(([key, step]) => {
+            const isActive = step.status === 'in_progress';
+            const isDone = step.status === 'completed';
+            const isFailed = step.status === 'failed';
+
+            const hasNumericProgress =
+              isActive && segmentProgress && key === 'segment_analyzer';
+            const pct = hasNumericProgress
+              ? Math.round(
+                  (segmentProgress.completed / segmentProgress.total) * 100,
+                )
+              : 0;
+
+            return (
+              <div key={key} className="space-y-0.5">
+                <div className="flex items-center gap-1.5">
+                  {/* status icon */}
+                  {isDone && (
+                    <Check className="h-3 w-3 text-green-500 flex-shrink-0" />
+                  )}
+                  {isActive && (
+                    <Loader2 className="h-3 w-3 text-blue-500 animate-spin flex-shrink-0" />
+                  )}
+                  {isFailed && (
+                    <CircleAlert className="h-3 w-3 text-red-500 flex-shrink-0" />
+                  )}
+                  {step.status === 'pending' && (
+                    <div className="h-3 w-3 rounded-full border border-slate-300 dark:border-slate-500 flex-shrink-0" />
+                  )}
+
+                  {/* label */}
+                  <span
+                    className={`text-[11px] leading-tight truncate ${
+                      isDone
+                        ? 'text-green-600 dark:text-green-400'
+                        : isActive
+                          ? 'text-blue-700 dark:text-blue-300 font-medium'
+                          : isFailed
+                            ? 'text-red-600 dark:text-red-400'
+                            : 'text-slate-400 dark:text-slate-500'
+                    }`}
+                  >
+                    {step.label}
+                  </span>
+
+                  {/* segment numeric progress */}
+                  {hasNumericProgress && (
+                    <span className="text-[10px] text-blue-500 flex-shrink-0 ml-auto">
+                      {segmentProgress.completed}/{segmentProgress.total}
+                    </span>
+                  )}
+                </div>
+
+                {/* paddleocr scaling hint */}
+                {isActive && key === 'paddleocr_processor' && (
+                  <p className="pl-[18px] text-[10px] text-amber-600 dark:text-amber-400">
+                    {t('workflow.steps.paddleocrHint')}
+                  </p>
+                )}
+
+                {/* progress bar for segment analyzer */}
+                {hasNumericProgress && (
+                  <div className="ml-[18px] h-1 rounded-full bg-blue-100 dark:bg-blue-900/40 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function DocumentsPanel({
   documents,
@@ -213,10 +382,13 @@ export default function DocumentsPanel({
                 (wf) => wf.document_id === doc.document_id,
               );
               const workflowProgress = workflowProgressMap[doc.document_id];
+              const isFailed =
+                doc.status === 'failed' ||
+                workflowProgress?.status === 'failed';
               const isProcessing =
+                !isFailed &&
                 workflowProgress &&
-                workflowProgress.status !== 'completed' &&
-                workflowProgress.status !== 'failed';
+                workflowProgress.status !== 'completed';
 
               return (
                 <div
@@ -287,75 +459,12 @@ export default function DocumentsPanel({
                     </div>
                   </div>
 
-                  {/* Processing Progress - only show while processing */}
+                  {/* Processing Progress - step indicators */}
                   {isProcessing && workflowProgress && (
-                    <div className="mt-3 pt-3 border-t border-slate-100">
-                      {/* Current Step Header */}
-                      <div className="flex items-center gap-2 mb-2">
-                        <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
-                        <span className="text-xs font-medium text-blue-700">
-                          {workflowProgress.currentStep}
-                        </span>
-                      </div>
-
-                      {/* Step Progress List */}
-                      {workflowProgress.steps &&
-                        Object.keys(workflowProgress.steps).length > 0 && (
-                          <div className="flex flex-wrap gap-1 mb-2">
-                            {Object.entries(workflowProgress.steps).map(
-                              ([stepName, step]) => (
-                                <span
-                                  key={stepName}
-                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded ${
-                                    step.status === 'completed'
-                                      ? 'bg-green-100 text-green-700'
-                                      : step.status === 'in_progress'
-                                        ? 'bg-blue-100 text-blue-700'
-                                        : step.status === 'failed'
-                                          ? 'bg-red-100 text-red-700'
-                                          : step.status === 'skipped'
-                                            ? 'bg-slate-100 text-slate-500'
-                                            : 'bg-slate-50 text-slate-400'
-                                  }`}
-                                  title={`${step.label}: ${step.status}`}
-                                >
-                                  {step.status === 'completed' && (
-                                    <Check className="h-2.5 w-2.5" />
-                                  )}
-                                  {step.status === 'in_progress' && (
-                                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                                  )}
-                                  {step.status === 'failed' && (
-                                    <X className="h-2.5 w-2.5" />
-                                  )}
-                                  {step.label}
-                                </span>
-                              ),
-                            )}
-                          </div>
-                        )}
-
-                      {/* Segment Progress */}
-                      {workflowProgress.segmentProgress && (
-                        <div className="mt-2">
-                          <div className="flex justify-between text-xs text-blue-600 mb-1">
-                            <span>{t('workflow.segments')}</span>
-                            <span>
-                              {workflowProgress.segmentProgress.completed} /{' '}
-                              {workflowProgress.segmentProgress.total}
-                            </span>
-                          </div>
-                          <div className="h-1.5 bg-blue-200 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                              style={{
-                                width: `${(workflowProgress.segmentProgress.completed / workflowProgress.segmentProgress.total) * 100}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    <StepProgressBar
+                      steps={workflowProgress.steps}
+                      segmentProgress={workflowProgress.segmentProgress}
+                    />
                   )}
                 </div>
               );

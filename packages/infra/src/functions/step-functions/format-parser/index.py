@@ -73,7 +73,6 @@ def process_pdf(
         # Batch save segments with pdf_text
         if segments_to_save:
             batch_save_segments(
-                document_id=document_id,
                 workflow_id=workflow_id,
                 segments=segments_to_save
             )

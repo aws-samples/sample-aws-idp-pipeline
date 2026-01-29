@@ -6,6 +6,7 @@ import {
   useAwsClient,
   StreamEvent,
   ContentBlock,
+  ToolResultContent,
 } from '../../hooks/useAwsClient';
 import { useToast } from '../../components/Toast';
 import {
@@ -35,6 +36,7 @@ import {
   ChatMessage,
   ChatAttachment,
   ChatSession,
+  StepStatus,
   WorkflowProgress,
   Agent,
   Artifact,
@@ -117,6 +119,7 @@ function ProjectDetailPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const progressFetchedRef = useRef(false);
 
   // WebSocket 세션 이벤트 구독
   const handleSessionMessage = useCallback(
@@ -301,17 +304,14 @@ function ProjectDetailPage() {
   // Step labels for display
   const stepLabels = useMemo<Record<string, string>>(
     () => ({
-      segment_prep: t('workflow.segmentPrep', 'Segment Prep'),
-      bda_processor: t('workflow.bdaProcessing', 'BDA Processing'),
-      format_parser: t('workflow.formatParsing', 'Format Parsing'),
-      paddleocr_processor: t(
-        'workflow.paddleocrProcessing',
-        'PaddleOCR Processing',
-      ),
-      transcribe: t('workflow.transcription', 'Transcription'),
-      segment_builder: t('workflow.buildingSegments', 'Building Segments'),
-      segment_analyzer: t('workflow.segmentAiAnalysis', 'Segment AI Analysis'),
-      document_summarizer: t('workflow.documentSummary', 'Document Summary'),
+      segment_prep: t('workflow.steps.segmentPrep'),
+      bda_processor: t('workflow.steps.bdaProcessing'),
+      format_parser: t('workflow.steps.formatParsing'),
+      paddleocr_processor: t('workflow.steps.paddleocrProcessing'),
+      transcribe: t('workflow.steps.transcription'),
+      segment_builder: t('workflow.steps.buildingSegments'),
+      segment_analyzer: t('workflow.steps.segmentAiAnalysis'),
+      document_summarizer: t('workflow.steps.documentSummary'),
     }),
     [t],
   );
@@ -961,62 +961,95 @@ function ProjectDetailPage() {
     loadArtifacts,
   ]);
 
-  // Detect in-progress workflows on page load
+  // Fetch real step progress for in-progress workflows on page load (once)
   useEffect(() => {
     if (loading) return;
+    if (progressFetchedRef.current) return;
 
-    // Find all workflows that are in progress
     const inProgressWorkflows = workflows.filter(
       (w) => w.status === 'in_progress' || w.status === 'processing',
     );
+    if (inProgressWorkflows.length === 0) return;
 
-    if (inProgressWorkflows.length > 0) {
-      setWorkflowProgressMap((prev) => {
-        const newMap = { ...prev };
-        for (const wf of inProgressWorkflows) {
-          // Skip if already tracked
-          if (newMap[wf.document_id]) continue;
+    progressFetchedRef.current = true;
 
-          const document = documents.find(
-            (d) => d.document_id === wf.document_id,
-          );
+    const fetchProgress = async () => {
+      try {
+        const progressData = await fetchApi<
+          {
+            document_id: string;
+            workflow_id: string;
+            status: string;
+            current_step: string;
+            steps: Record<string, { status: string; label: string }>;
+          }[]
+        >(`projects/${projectId}/documents/progress`);
 
-          // Initialize all steps as pending
-          const initialSteps: Record<
-            string,
-            {
-              status:
-                | 'pending'
-                | 'in_progress'
-                | 'completed'
-                | 'failed'
-                | 'skipped';
-              label: string;
+        setWorkflowProgressMap((prev) => {
+          const newMap = { ...prev };
+          for (const wf of inProgressWorkflows) {
+            if (newMap[wf.document_id]) continue;
+
+            const doc = documents.find((d) => d.document_id === wf.document_id);
+            const progress = progressData.find(
+              (p) => p.document_id === wf.document_id,
+            );
+
+            const steps: Record<string, StepStatus> = {};
+            if (progress?.steps) {
+              for (const [key, val] of Object.entries(progress.steps)) {
+                steps[key] = {
+                  status: val.status as StepStatus['status'],
+                  label: stepLabels[key] || val.label,
+                };
+              }
             }
-          > = {};
-          for (const [stepKey, stepLabel] of Object.entries(stepLabels)) {
-            initialSteps[stepKey] = {
-              status: 'pending',
-              label: stepLabel,
+
+            const currentStepLabel = progress?.current_step
+              ? stepLabels[progress.current_step] || progress.current_step
+              : t('workflow.inProgress', 'Processing...');
+
+            newMap[wf.document_id] = {
+              workflowId: wf.workflow_id,
+              documentId: wf.document_id,
+              fileName: doc?.name || wf.file_name,
+              status: 'in_progress',
+              currentStep: currentStepLabel,
+              stepMessage: '',
+              segmentProgress: null,
+              error: null,
+              steps,
             };
           }
+          return newMap;
+        });
+      } catch (error) {
+        console.error('Failed to fetch document progress:', error);
+        // Fallback: initialize with empty steps, WebSocket will populate
+        setWorkflowProgressMap((prev) => {
+          const newMap = { ...prev };
+          for (const wf of inProgressWorkflows) {
+            if (newMap[wf.document_id]) continue;
+            const doc = documents.find((d) => d.document_id === wf.document_id);
+            newMap[wf.document_id] = {
+              workflowId: wf.workflow_id,
+              documentId: wf.document_id,
+              fileName: doc?.name || wf.file_name,
+              status: 'in_progress',
+              currentStep: t('workflow.inProgress', 'Processing...'),
+              stepMessage: '',
+              segmentProgress: null,
+              error: null,
+              steps: {},
+            };
+          }
+          return newMap;
+        });
+      }
+    };
 
-          newMap[wf.document_id] = {
-            workflowId: wf.workflow_id,
-            documentId: wf.document_id,
-            fileName: document?.name || wf.file_name,
-            status: 'in_progress',
-            currentStep: t('workflow.inProgress', 'Processing...'),
-            stepMessage: '',
-            segmentProgress: null,
-            error: null,
-            steps: initialSteps,
-          };
-        }
-        return newMap;
-      });
-    }
-  }, [loading, workflows, documents, t, stepLabels]);
+    fetchProgress();
+  }, [loading, workflows, documents, t, stepLabels, fetchApi, projectId]);
 
   // Handle workflow completion/failure - clear completed/failed after delay
   useEffect(() => {
@@ -1221,26 +1254,6 @@ function ProjectDetailPage() {
             );
 
             if (foundWorkflows.length > 0) {
-              // Initialize all steps as pending
-              const initialSteps: Record<
-                string,
-                {
-                  status:
-                    | 'pending'
-                    | 'in_progress'
-                    | 'completed'
-                    | 'failed'
-                    | 'skipped';
-                  label: string;
-                }
-              > = {};
-              for (const [stepKey, stepLabel] of Object.entries(stepLabels)) {
-                initialSteps[stepKey] = {
-                  status: 'pending',
-                  label: stepLabel,
-                };
-              }
-
               setWorkflowProgressMap((prev) => {
                 const newMap = { ...prev };
                 for (const wf of foundWorkflows) {
@@ -1250,7 +1263,6 @@ function ProjectDetailPage() {
                       workflowId: wf.workflow_id,
                       status: 'in_progress',
                       currentStep: t('workflow.starting', 'Starting...'),
-                      steps: initialSteps,
                     };
                   }
                 }
@@ -1266,6 +1278,75 @@ function ProjectDetailPage() {
                 );
                 return [...prevWorkflows, ...newWorkflows];
               });
+
+              // Fetch step progress (with retry) to get skipped/actual status
+              const fetchUploadProgress = async (retries = 5) => {
+                for (let j = 0; j < retries; j++) {
+                  await new Promise((r) => setTimeout(r, 3000));
+                  try {
+                    const progressData = await fetchApi<
+                      {
+                        document_id: string;
+                        workflow_id: string;
+                        status: string;
+                        current_step: string;
+                        steps: Record<
+                          string,
+                          { status: string; label: string }
+                        >;
+                      }[]
+                    >(`projects/${projectId}/documents/progress`);
+
+                    const hasSteps = progressData.some(
+                      (p) =>
+                        foundWorkflows.some(
+                          (fw) => fw.document_id === p.document_id,
+                        ) && Object.keys(p.steps).length > 0,
+                    );
+                    if (!hasSteps && j < retries - 1) continue;
+
+                    setWorkflowProgressMap((prev) => {
+                      const newMap = { ...prev };
+                      for (const wf of foundWorkflows) {
+                        const progress = progressData.find(
+                          (p) => p.document_id === wf.document_id,
+                        );
+                        if (!progress || !newMap[wf.document_id]) continue;
+
+                        const steps: Record<string, StepStatus> = {};
+                        for (const [key, val] of Object.entries(
+                          progress.steps,
+                        )) {
+                          steps[key] = {
+                            status: val.status as StepStatus['status'],
+                            label: stepLabels[key] || val.label,
+                          };
+                        }
+
+                        const currentStepLabel = progress.current_step
+                          ? stepLabels[progress.current_step] ||
+                            progress.current_step
+                          : newMap[wf.document_id].currentStep;
+
+                        newMap[wf.document_id] = {
+                          ...newMap[wf.document_id],
+                          currentStep: currentStepLabel,
+                          steps: {
+                            ...newMap[wf.document_id].steps,
+                            ...steps,
+                          },
+                        };
+                      }
+                      return newMap;
+                    });
+                    return;
+                  } catch {
+                    // retry
+                  }
+                }
+              };
+              fetchUploadProgress();
+
               return;
             }
           }
@@ -1318,13 +1399,76 @@ function ProjectDetailPage() {
   const handleStreamEvent = useCallback((event: StreamEvent) => {
     switch (event.type) {
       case 'text':
-        if (event.content) {
+        if (event.content && typeof event.content === 'string') {
           setStreamingContent((prev) => prev + event.content);
         }
         break;
       case 'tool_use':
         setCurrentToolUse(event.name ?? null);
         break;
+      case 'tool_result': {
+        setCurrentToolUse(null);
+        if (!Array.isArray(event.content)) break;
+        const contents = event.content as ToolResultContent[];
+
+        const textContent = contents
+          .filter((item) => item.type === 'text' && item.text)
+          .map((item) => item.text)
+          .join('\n');
+
+        let artifact = undefined;
+        let toolResultType: 'image' | 'artifact' | 'text' = 'text';
+
+        try {
+          const parsed = JSON.parse(textContent);
+          if (parsed.artifact_id && parsed.filename && parsed.url) {
+            artifact = {
+              artifact_id: parsed.artifact_id,
+              filename: parsed.filename,
+              url: parsed.url,
+              s3_key: parsed.s3_key,
+              created_at: parsed.created_at,
+            };
+            toolResultType = 'artifact';
+          }
+        } catch {
+          // Not JSON
+        }
+
+        const imageAttachments: ChatAttachment[] = contents
+          .filter(
+            (item) => item.type === 'image' && (item.s3_url || item.source),
+          )
+          .map((item, imgIdx) => ({
+            id: `stream-tool-img-${crypto.randomUUID()}-${imgIdx}`,
+            type: 'image' as const,
+            name: `generated-${imgIdx + 1}.${item.format || 'png'}`,
+            preview: item.s3_url
+              ? item.s3_url
+              : `data:image/${item.format || 'png'};base64,${item.source}`,
+          }));
+
+        if (imageAttachments.length > 0) {
+          toolResultType = 'image';
+        }
+
+        // Skip empty tool results
+        if (!textContent && imageAttachments.length === 0) break;
+
+        const toolResultMessage: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: toolResultType === 'artifact' ? '' : textContent,
+          attachments:
+            imageAttachments.length > 0 ? imageAttachments : undefined,
+          timestamp: new Date(),
+          isToolResult: true,
+          toolResultType,
+          artifact,
+        };
+        setMessages((prev) => [...prev, toolResultMessage]);
+        break;
+      }
       case 'complete':
         setCurrentToolUse(null);
         break;

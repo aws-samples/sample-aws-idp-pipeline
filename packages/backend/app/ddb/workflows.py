@@ -1,7 +1,21 @@
+from decimal import Decimal
+from typing import Any
+
 from boto3.dynamodb.conditions import Key
 
-from app.ddb.client import get_table
+from app.config import get_config
+from app.ddb.client import get_ddb_resource, get_table
 from app.ddb.models import DdbKey, Segment, Workflow
+
+
+def _decimal_to_python(obj: Any) -> Any:
+    if isinstance(obj, Decimal):
+        return int(obj) if obj % 1 == 0 else float(obj)
+    if isinstance(obj, dict):
+        return {k: _decimal_to_python(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_decimal_to_python(i) for i in obj]
+    return obj
 
 
 def make_workflow_key(document_id: str, workflow_id: str) -> DdbKey:
@@ -59,6 +73,45 @@ def update_workflow_status(
         ExpressionAttributeNames={"#data": "data", "#status": "status"},
         ExpressionAttributeValues=expression_values,
     )
+
+
+def get_steps_batch(workflow_ids: list[str]) -> dict[str, dict]:
+    """Batch-get STEP records for multiple workflows.
+
+    Returns a dict mapping workflow_id to its step data dict.
+    DynamoDB BatchGetItem supports up to 100 keys per call.
+    """
+    if not workflow_ids:
+        return {}
+
+    config = get_config()
+    table_name = config.backend_table_name
+    ddb = get_ddb_resource()
+
+    result: dict[str, dict] = {}
+    # BatchGetItem limit is 100 keys
+    for i in range(0, len(workflow_ids), 100):
+        batch = workflow_ids[i : i + 100]
+        keys = [{"PK": f"WF#{wf_id}", "SK": "STEP"} for wf_id in batch]
+
+        response = ddb.batch_get_item(
+            RequestItems={table_name: {"Keys": keys}},
+        )
+
+        for item in response.get("Responses", {}).get(table_name, []):
+            wf_id = item["PK"].replace("WF#", "", 1)
+            result[wf_id] = _decimal_to_python(item.get("data", {}))
+
+        # Handle unprocessed keys
+        unprocessed = response.get("UnprocessedKeys", {})
+        while unprocessed.get(table_name):
+            response = ddb.batch_get_item(RequestItems=unprocessed)
+            for item in response.get("Responses", {}).get(table_name, []):
+                wf_id = item["PK"].replace("WF#", "", 1)
+                result[wf_id] = _decimal_to_python(item.get("data", {}))
+            unprocessed = response.get("UnprocessedKeys", {})
+
+    return result
 
 
 def delete_workflow_item(document_id: str, workflow_id: str) -> int:
