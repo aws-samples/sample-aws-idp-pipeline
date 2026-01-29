@@ -30,10 +30,18 @@ class ToolParameterEnforcerHook(HookProvider):
 
         tool_name = event.selected_tool.tool_name
 
+        target_name = tool_name.split("___")[0] if "___" in tool_name else ""
+
         if tool_name.endswith("save_artifact") and self.user_id:
             event.tool_use["input"]["user_id"] = self.user_id
 
         if tool_name.endswith(("save_artifact", "search_documents")) and self.project_id:
+            event.tool_use["input"]["project_id"] = self.project_id
+
+        if target_name == "pdf" and self.user_id:
+            event.tool_use["input"]["user_id"] = self.user_id
+
+        if target_name == "pdf" and self.project_id:
             event.tool_use["input"]["project_id"] = self.project_id
 
 
