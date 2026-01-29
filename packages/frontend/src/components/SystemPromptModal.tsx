@@ -50,7 +50,12 @@ export default function SystemPromptModal({
         onClose();
       }
       // Cmd/Ctrl+Enter to save
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !saving && !loading) {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.key === 'Enter' &&
+        !saving &&
+        !loading
+      ) {
         e.preventDefault();
         handleSave();
       }
@@ -65,7 +70,7 @@ export default function SystemPromptModal({
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, onClose, saving, loading, content]);
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -143,7 +148,8 @@ export default function SystemPromptModal({
               spellCheck={false}
               className="w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-950/60 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all resize-none p-4"
               style={{
-                fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', Menlo, monospace",
+                fontFamily:
+                  "'SF Mono', 'Fira Code', 'JetBrains Mono', Menlo, monospace",
                 fontSize: '13px',
                 lineHeight: '1.7',
                 height: '420px',

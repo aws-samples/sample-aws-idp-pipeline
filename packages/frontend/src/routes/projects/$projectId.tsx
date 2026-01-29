@@ -524,9 +524,13 @@ function ProjectDetailPage() {
         } else {
           showToast(
             'warning',
-            t('agent.notFound', 'Agent "{{name}}" not found. Using default agent.', {
-              name: session.agent_id,
-            }),
+            t(
+              'agent.notFound',
+              'Agent "{{name}}" not found. Using default agent.',
+              {
+                name: session.agent_id,
+              },
+            ),
           );
           setSelectedAgent(null);
         }
@@ -1483,15 +1487,11 @@ function ProjectDetailPage() {
           .filter(
             (item) =>
               item.type === 'image' &&
-              (item.s3_url ||
-                item.source ||
-                item.image?.source?.bytes),
+              (item.s3_url || item.source || item.image?.source?.bytes),
           )
           .map((item, imgIdx) => {
-            const fmt =
-              item.format || item.image?.format || 'png';
-            const base64Data =
-              item.source || item.image?.source?.bytes || '';
+            const fmt = item.format || item.image?.format || 'png';
+            const base64Data = item.source || item.image?.source?.bytes || '';
             return {
               id: `stream-tool-img-${crypto.randomUUID()}-${imgIdx}`,
               type: 'image' as const,
