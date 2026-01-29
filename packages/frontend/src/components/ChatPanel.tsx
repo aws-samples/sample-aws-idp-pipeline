@@ -1239,7 +1239,9 @@ export default function ChatPanel({
                               <button
                                 type="button"
                                 onClick={() =>
-                                  onArtifactView(message.artifact!.artifact_id)
+                                  onArtifactView(
+                                    message.artifact?.artifact_id ?? '',
+                                  )
                                 }
                                 className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-800/40 transition-colors"
                                 title={t('documents.view', 'View')}
