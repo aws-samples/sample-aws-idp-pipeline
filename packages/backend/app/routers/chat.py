@@ -70,7 +70,9 @@ def get_chat_history(
     if not bucket_name:
         raise HTTPException(status_code=500, detail="Session storage bucket not configured")
 
-    s3_path = f"s3://{bucket_name}/sessions/{x_user_id}/{project_id}/session_{session_id}/agents/*/messages/message_*.json"
+    s3_path = (
+        f"s3://{bucket_name}/sessions/{x_user_id}/{project_id}/session_{session_id}/agents/*/messages/message_*.json"
+    )
 
     conn = get_duckdb_connection()
     try:
