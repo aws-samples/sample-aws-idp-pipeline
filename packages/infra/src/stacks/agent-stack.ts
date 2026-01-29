@@ -1,8 +1,11 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
+import * as cr from 'aws-cdk-lib/custom-resources';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
+import * as fs from 'fs';
 import * as path from 'path';
 import { Gateway, Runtime } from '@aws-cdk/aws-bedrock-agentcore-alpha';
 import { IdpAgent, SSM_KEYS } from ':idp-v2/common-constructs';
@@ -54,6 +57,30 @@ export class AgentStack extends Stack {
       'AgentStorageBucket',
       agentStorageBucketName,
     );
+
+    // Initialize default system prompt in S3 on first deployment
+    const systemPromptPath = path.join(__dirname, '../prompts/system_prompt.txt');
+    const systemPromptContent = fs.readFileSync(systemPromptPath, 'utf-8');
+
+    new cr.AwsCustomResource(this, 'InitSystemPrompt', {
+      onCreate: {
+        service: 'S3',
+        action: 'putObject',
+        parameters: {
+          Bucket: agentStorageBucketName,
+          Key: '__prompts/system_prompt.txt',
+          Body: systemPromptContent,
+          ContentType: 'text/plain',
+        },
+        physicalResourceId: cr.PhysicalResourceId.of('system-prompt-init'),
+      },
+      policy: cr.AwsCustomResourcePolicy.fromStatements([
+        new iam.PolicyStatement({
+          actions: ['s3:PutObject'],
+          resources: [`${agentStorageBucket.bucketArn}/__prompts/*`],
+        }),
+      ]),
+    });
 
     const idpAgent = new IdpAgent(this, 'IdpAgent', {
       agentPath: path.resolve(process.cwd(), '../../packages/agents/idp-agent'),

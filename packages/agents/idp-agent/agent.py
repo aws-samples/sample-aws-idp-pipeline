@@ -1,5 +1,3 @@
-import json
-import logging
 from contextlib import contextmanager
 
 import boto3
@@ -13,52 +11,7 @@ from strands_tools import calculator, current_time, generate_image, http_request
 from agentcore_mcp_client import AgentCoreGatewayMCPClient
 from config import get_config
 from helpers import get_project_language
-
-logger = logging.getLogger(__name__)
-
-
-def fetch_system_prompt() -> str | None:
-    """Fetch system prompt from S3."""
-    config = get_config()
-    if not config.agent_storage_bucket_name:
-        return None
-
-    s3 = boto3.client("s3")
-    key = "__prompts/system_prompt.txt"
-
-    try:
-        response = s3.get_object(
-            Bucket=config.agent_storage_bucket_name,
-            Key=key,
-        )
-        return response["Body"].read().decode("utf-8")
-    except Exception as e:
-        logger.error(f"Failed to fetch system prompt: {e}")
-        return None
-
-
-def fetch_custom_agent_prompt(user_id: str, project_id: str, agent_id: str) -> str | None:
-    """Fetch custom agent prompt from S3."""
-    config = get_config()
-    if not config.agent_storage_bucket_name:
-        return None
-
-    s3 = boto3.client("s3")
-    key = f"{user_id}/{project_id}/agents/{agent_id}.json"
-
-    try:
-        response = s3.get_object(
-            Bucket=config.agent_storage_bucket_name,
-            Key=key,
-        )
-        data = json.loads(response["Body"].read().decode("utf-8"))
-        return data.get("content")
-    except s3.exceptions.NoSuchKey:
-        logger.warning(f"Agent not found: {agent_id}")
-        return None
-    except Exception as e:
-        logger.error(f"Failed to fetch agent prompt: {e}")
-        return None
+from prompts import DEFAULT_SYSTEM_PROMPT, fetch_custom_agent_prompt, fetch_system_prompt
 
 
 class ToolParameterEnforcerHook(HookProvider):
@@ -150,7 +103,7 @@ def get_agent(
 
         tools.append(code_interpreter)
 
-    system_prompt = fetch_system_prompt() or ""
+    system_prompt = fetch_system_prompt() or DEFAULT_SYSTEM_PROMPT
 
     if agent_id and user_id and project_id:
         custom_prompt = fetch_custom_agent_prompt(user_id, project_id, agent_id)
