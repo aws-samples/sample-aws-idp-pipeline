@@ -4,7 +4,7 @@ import io
 
 import pdfplumber
 
-from artifact import get_artifact_content
+from .artifact import get_artifact_content
 
 
 def extract_text(event: dict) -> dict:

@@ -4,7 +4,7 @@ import io
 
 import pdfplumber
 
-from artifact import get_artifact_content
+from .artifact import get_artifact_content
 
 
 def table_to_markdown(table: list[list[str | None]]) -> str:

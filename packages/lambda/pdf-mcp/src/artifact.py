@@ -2,7 +2,7 @@
 
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 import boto3
 from nanoid import generate
@@ -81,7 +81,7 @@ def save_artifact(
         if ext
         else f"{user_id}/{project_id}/artifacts/{artifact_id}"
     )
-    created_at = datetime.now(datetime.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
 
     # Upload to S3
     s3.put_object(

@@ -7,7 +7,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
-from artifact import save_artifact
+from .artifact import save_artifact
 
 
 def text_to_pdf(content: str) -> bytes:

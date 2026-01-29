@@ -1,8 +1,8 @@
 """Main handler for PDF MCP Lambda - routes based on tool name from context."""
 
-from extract_text import extract_text
-from extract_tables import extract_tables
-from create_pdf import create_pdf
+from .create_pdf import create_pdf
+from .extract_tables import extract_tables
+from .extract_text import extract_text
 
 
 def handler(event: dict, context) -> dict:
