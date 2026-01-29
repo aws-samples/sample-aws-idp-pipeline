@@ -117,13 +117,13 @@ Resources:
             build:
               commands:
                 - cd /tmp/project
-                - pnpm nx run-many -t lint,compile,test -p @idp-v2/infra
+                - pnpm nx run-many -t lint,compile,test,bundle -p @idp-v2/infra @idp-v2/frontend
                 - |
                   STACK_STATUS=$(aws cloudformation describe-stacks --stack-name CDKToolkit --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_FOUND")
                   if [ "$STACK_STATUS" = "NOT_FOUND" ] || [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
                     aws cloudformation delete-stack --stack-name CDKToolkit 2>/dev/null || true
                     aws cloudformation wait stack-delete-complete --stack-name CDKToolkit 2>/dev/null || true
-                    pnpm nx bootstrap @idp-v2/infra
+                    cdk bootstrap
                   fi
                 - cd packages/infra && cdk deploy --all --require-approval=never
             post_build:
