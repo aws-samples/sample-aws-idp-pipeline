@@ -222,7 +222,7 @@
     "enterToSend": "Press Enter to send, Shift+Enter for new line",
     "usingTool": "Using {{tool}}...",
     "toolResult": "Tool Result",
-    "artifactSaved": "Artifact Saved",
+    "artifactSaved": "Artifact",
     "clickToDownload": "Click to download",
     "welcomeTitle": "How can I help you?",
     "welcomeDescription": "Ask questions about your uploaded documents",
@@ -271,7 +271,8 @@
     "changeConfirmMessage": "Changing agent will start a new conversation. Current conversation will be saved in history.",
     "startNewChat": "Start New Chat",
     "deleteAgent": "Delete Agent",
-    "deleteConfirmMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
+    "deleteConfirmMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
+    "notFound": "Agent \"{{name}}\" not found. Using default agent."
   },
   "artifacts": {
     "heroTag": "AI Generated Artifacts",
@@ -324,5 +325,11 @@
     "he": "Hebrew",
     "mn": "Mongolian",
     "sw": "Swahili"
+  },
+  "systemPrompt": {
+    "title": "System Prompt",
+    "placeholder": "Enter system prompt...",
+    "saveHint": "Cmd+Enter to save",
+    "saveSuccess": "System prompt saved successfully"
   }
 }

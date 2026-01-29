@@ -45,6 +45,7 @@ import {
 import AgentSelectModal from '../../components/AgentSelectModal';
 import DocumentUploadModal from '../../components/DocumentUploadModal';
 import ArtifactViewer from '../../components/ArtifactViewer';
+import SystemPromptModal from '../../components/SystemPromptModal';
 
 interface DocumentWorkflows {
   document_id: string;
@@ -117,40 +118,43 @@ function ProjectDetailPage() {
     null,
   );
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showSystemPrompt, setShowSystemPrompt] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const progressFetchedRef = useRef(false);
 
-  // WebSocket 세션 이벤트 구독
-  const handleSessionMessage = useCallback(
-    (data: {
-      event: string;
-      sessionId: string;
-      sessionName: string;
-      timestamp: string;
-    }) => {
-      if (data.event === 'created') {
-        // Remove 'session_' prefix if present for matching
-        const sessionIdWithoutPrefix = data.sessionId.replace(/^session_/, '');
-
-        setSessions((prev) =>
-          prev.map((session) =>
-            session.session_id === sessionIdWithoutPrefix ||
-            session.session_id === data.sessionId
-              ? {
-                  ...session,
-                  session_name: data.sessionName,
-                  updated_at: data.timestamp,
-                }
-              : session,
-          ),
-        );
+  // Ctrl+Shift+S keyboard shortcut for system prompt modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyS') {
+        e.preventDefault();
+        setShowSystemPrompt(true);
       }
-    },
-    [],
-  );
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
-  useWebSocketMessage('sessions', handleSessionMessage);
+  const loadSystemPrompt = useCallback(async () => {
+    try {
+      const data = await fetchApi<{ content: string }>('prompts/system');
+      return data.content;
+    } catch {
+      return '';
+    }
+  }, [fetchApi]);
+
+  const saveSystemPrompt = useCallback(
+    async (content: string) => {
+      await fetchApi('prompts/system', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      showToast('success', t('systemPrompt.saveSuccess'));
+    },
+    [fetchApi, showToast, t],
+  );
 
   const loadProject = useCallback(async () => {
     try {
@@ -210,6 +214,22 @@ function ProjectDetailPage() {
       setSessionsNextCursor(null);
     }
   }, [fetchApi, projectId]);
+
+  const handleSessionMessage = useCallback(
+    (data: {
+      event: string;
+      sessionId: string;
+      sessionName: string;
+      timestamp: string;
+    }) => {
+      if (data.event === 'created') {
+        loadSessions();
+      }
+    },
+    [loadSessions],
+  );
+
+  useWebSocketMessage('sessions', handleSessionMessage);
 
   const handleNewSession = useCallback(() => {
     const newSessionId = nanoid(33);
@@ -492,6 +512,28 @@ function ProjectDetailPage() {
       setCurrentSessionId(sessionId);
       setMessages([]);
       setLoadingHistory(true);
+
+      // Match agent from session
+      const session = sessions.find((s) => s.session_id === sessionId);
+      if (session?.agent_id && session.agent_id !== 'default') {
+        const agent = agents.find(
+          (a) => a.agent_id === session.agent_id || a.name === session.agent_id,
+        );
+        if (agent) {
+          setSelectedAgent(agent);
+        } else {
+          showToast(
+            'warning',
+            t('agent.notFound', 'Agent "{{name}}" not found. Using default agent.', {
+              name: session.agent_id,
+            }),
+          );
+          setSelectedAgent(null);
+        }
+      } else {
+        setSelectedAgent(null);
+      }
+
       try {
         const response = await fetchApi<{
           session_id: string;
@@ -546,12 +588,13 @@ function ProjectDetailPage() {
 
                 try {
                   const parsed = JSON.parse(textContent);
-                  if (parsed.artifact_id && parsed.filename && parsed.url) {
+                  if (parsed.artifact_id && parsed.filename) {
                     artifact = {
                       artifact_id: parsed.artifact_id,
                       filename: parsed.filename,
-                      url: parsed.url,
+                      url: parsed.url || '',
                       s3_key: parsed.s3_key,
+                      s3_bucket: parsed.s3_bucket,
                       created_at: parsed.created_at,
                     };
                     toolResultType = 'artifact';
@@ -657,7 +700,7 @@ function ProjectDetailPage() {
         setLoadingHistory(false);
       }
     },
-    [fetchApi, projectId, showToast, t],
+    [fetchApi, projectId, showToast, t, sessions, agents],
   );
 
   const handleSessionRename = useCallback(
@@ -1421,12 +1464,13 @@ function ProjectDetailPage() {
 
         try {
           const parsed = JSON.parse(textContent);
-          if (parsed.artifact_id && parsed.filename && parsed.url) {
+          if (parsed.artifact_id && parsed.filename) {
             artifact = {
               artifact_id: parsed.artifact_id,
               filename: parsed.filename,
-              url: parsed.url,
+              url: parsed.url || '',
               s3_key: parsed.s3_key,
+              s3_bucket: parsed.s3_bucket,
               created_at: parsed.created_at,
             };
             toolResultType = 'artifact';
@@ -1437,16 +1481,26 @@ function ProjectDetailPage() {
 
         const imageAttachments: ChatAttachment[] = contents
           .filter(
-            (item) => item.type === 'image' && (item.s3_url || item.source),
+            (item) =>
+              item.type === 'image' &&
+              (item.s3_url ||
+                item.source ||
+                item.image?.source?.bytes),
           )
-          .map((item, imgIdx) => ({
-            id: `stream-tool-img-${crypto.randomUUID()}-${imgIdx}`,
-            type: 'image' as const,
-            name: `generated-${imgIdx + 1}.${item.format || 'png'}`,
-            preview: item.s3_url
-              ? item.s3_url
-              : `data:image/${item.format || 'png'};base64,${item.source}`,
-          }));
+          .map((item, imgIdx) => {
+            const fmt =
+              item.format || item.image?.format || 'png';
+            const base64Data =
+              item.source || item.image?.source?.bytes || '';
+            return {
+              id: `stream-tool-img-${crypto.randomUUID()}-${imgIdx}`,
+              type: 'image' as const,
+              name: `generated-${imgIdx + 1}.${fmt}`,
+              preview: item.s3_url
+                ? item.s3_url
+                : `data:image/${fmt};base64,${base64Data}`,
+            };
+          });
 
         if (imageAttachments.length > 0) {
           toolResultType = 'image';
@@ -1703,6 +1757,7 @@ function ProjectDetailPage() {
                 onSendMessage={handleSendMessage}
                 onAgentClick={() => setShowAgentModal(true)}
                 onNewChat={handleNewSession}
+                onArtifactView={handleArtifactSelect}
               />
             </div>
           </ResizablePanel>
@@ -1809,6 +1864,14 @@ function ProjectDetailPage() {
         documentPrompt={project?.document_prompt || undefined}
         onClose={() => setShowUploadModal(false)}
         onUpload={processFiles}
+      />
+
+      {/* System Prompt Modal (Ctrl+Shift+S) */}
+      <SystemPromptModal
+        isOpen={showSystemPrompt}
+        onClose={() => setShowSystemPrompt(false)}
+        onLoad={loadSystemPrompt}
+        onSave={saveSystemPrompt}
       />
     </div>
   );

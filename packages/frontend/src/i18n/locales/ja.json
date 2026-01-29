@@ -222,7 +222,7 @@
     "enterToSend": "Enterで送信、Shift+Enterで改行",
     "usingTool": "{{tool}}を使用中...",
     "toolResult": "ツール実行結果",
-    "artifactSaved": "ファイル保存完了",
+    "artifactSaved": "アーティファクト",
     "clickToDownload": "クリックしてダウンロード",
     "welcomeTitle": "何をお手伝いしましょうか？",
     "welcomeDescription": "アップロードされたドキュメントについて質問してください",
@@ -271,7 +271,8 @@
     "changeConfirmMessage": "エージェントを変更すると新しい会話が始まります。現在の会話は履歴に保存されます。",
     "startNewChat": "新しい会話を開始",
     "deleteAgent": "エージェント削除",
-    "deleteConfirmMessage": "「{{name}}」を削除しますか？この操作は取り消せません。"
+    "deleteConfirmMessage": "「{{name}}」を削除しますか？この操作は取り消せません。",
+    "notFound": "「{{name}}」エージェントが見つかりません。デフォルトエージェントを使用します。"
   },
   "artifacts": {
     "heroTag": "AI Generated Artifacts",
@@ -324,5 +325,11 @@
     "he": "ヘブライ語",
     "mn": "モンゴル語",
     "sw": "スワヒリ語"
+  },
+  "systemPrompt": {
+    "title": "System Prompt",
+    "placeholder": "システムプロンプトを入力してください...",
+    "saveHint": "Cmd+Enterで保存",
+    "saveSuccess": "システムプロンプトが保存されました"
   }
 }

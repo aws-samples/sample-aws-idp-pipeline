@@ -65,6 +65,10 @@ export interface ToolResultContent {
   format?: string;
   source?: string;
   s3_url?: string | null;
+  image?: {
+    format?: string;
+    source?: { bytes?: string };
+  };
 }
 
 export interface ContentSource {
@@ -112,9 +116,20 @@ async function parseStream(
       if (buffer[i] === '{') {
         let braceCount = 1;
         let j = i + 1;
+        let inString = false;
+        let escape = false;
         while (j < buffer.length && braceCount > 0) {
-          if (buffer[j] === '{') braceCount++;
-          else if (buffer[j] === '}') braceCount--;
+          const ch = buffer[j];
+          if (escape) {
+            escape = false;
+          } else if (ch === '\\') {
+            escape = true;
+          } else if (ch === '"') {
+            inString = !inString;
+          } else if (!inString) {
+            if (ch === '{') braceCount++;
+            else if (ch === '}') braceCount--;
+          }
           j++;
         }
         if (braceCount === 0) {
@@ -122,7 +137,11 @@ async function parseStream(
           try {
             const event = JSON.parse(jsonStr) as StreamEvent;
             onEvent?.(event);
-            if (event.type === 'text' && event.content) {
+            if (
+              event.type === 'text' &&
+              event.content &&
+              typeof event.content === 'string'
+            ) {
               result += event.content;
             }
           } catch {
@@ -130,6 +149,10 @@ async function parseStream(
           }
           startIdx = j;
           i = j - 1;
+        } else {
+          // 불완전한 JSON - 다음 chunk에서 완성될 때까지 버퍼에 유지
+          startIdx = i;
+          break;
         }
       }
     }

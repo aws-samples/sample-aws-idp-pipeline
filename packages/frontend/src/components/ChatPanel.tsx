@@ -12,6 +12,7 @@ import {
   ChevronUp,
   MessageSquarePlus,
   Download,
+  Eye,
   File,
   Search,
   Loader2,
@@ -55,6 +56,7 @@ interface ChatPanelProps {
   onSendMessage: (files: AttachedFile[], message?: string) => void;
   onAgentClick: () => void;
   onNewChat: () => void;
+  onArtifactView?: (artifactId: string) => void;
 }
 
 const formatFileSize = (bytes: number) => {
@@ -249,6 +251,7 @@ export default function ChatPanel({
   onSendMessage,
   onAgentClick,
   onNewChat,
+  onArtifactView,
 }: ChatPanelProps) {
   const { t } = useTranslation();
   const { getPresignedDownloadUrl } = useAwsClient();
@@ -284,15 +287,17 @@ export default function ChatPanel({
     async (artifact: ChatArtifact) => {
       setDownloadingArtifact(artifact.artifact_id);
       try {
-        // Extract bucket from the original URL
-        // URL format: https://{bucket}.s3.{region}.amazonaws.com/...
-        const urlMatch = artifact.url.match(
-          /https:\/\/([^.]+)\.s3\.[^.]+\.amazonaws\.com\//,
-        );
-        if (!urlMatch || !artifact.s3_key) {
-          throw new Error('Invalid artifact URL or missing s3_key');
+        // Get bucket from s3_bucket field or extract from URL
+        let bucket = artifact.s3_bucket;
+        if (!bucket && artifact.url) {
+          const urlMatch = artifact.url.match(
+            /https:\/\/([^.]+)\.s3\.[^.]+\.amazonaws\.com\//,
+          );
+          bucket = urlMatch?.[1];
         }
-        const bucket = urlMatch[1];
+        if (!bucket || !artifact.s3_key) {
+          throw new Error('Missing bucket or s3_key for artifact');
+        }
 
         const presignedUrl = await getPresignedDownloadUrl(
           bucket,
@@ -906,7 +911,7 @@ export default function ChatPanel({
         (filteredArtifacts.length > 0 || filteredDocuments.length > 0) && (
           <div
             ref={mentionDropdownRef}
-            className="absolute bottom-full left-0 right-0 mb-2 max-h-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-50 overflow-hidden"
+            className="absolute bottom-full left-0 mb-2 w-72 max-h-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-50 overflow-hidden"
           >
             {/* Tabs */}
             <div className="flex border-b border-slate-100 dark:border-slate-700">
@@ -1208,7 +1213,7 @@ export default function ChatPanel({
                     </div>
                     <span className="text-xs font-semibold text-slate-600 dark:text-fuchsia-300">
                       {message.toolResultType === 'artifact'
-                        ? t('chat.artifactSaved', 'Artifact Saved')
+                        ? t('chat.artifactSaved', 'Artifact')
                         : t('chat.toolResult', 'Tool Result')}
                     </span>
                     <div className="flex-1" />
@@ -1220,36 +1225,53 @@ export default function ChatPanel({
                     {/* Artifact card */}
                     {message.toolResultType === 'artifact' &&
                       message.artifact && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (message.artifact) {
-                              handleArtifactDownload(message.artifact);
-                            }
-                          }}
-                          disabled={
-                            downloadingArtifact === message.artifact.artifact_id
-                          }
-                          className="w-full flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/30 dark:to-teal-900/30 border border-emerald-200 dark:border-emerald-500/40 hover:border-emerald-300 dark:hover:border-emerald-400/60 transition-colors group disabled:opacity-70 disabled:cursor-wait"
-                        >
-                          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm">
+                        <div className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/30 dark:to-teal-900/30 border border-emerald-200 dark:border-emerald-500/40">
+                          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm flex-shrink-0">
                             <FileText className="w-5 h-5 text-white" />
                           </div>
                           <div className="flex-1 min-w-0 text-left">
                             <p className="text-sm font-medium text-slate-800 dark:text-emerald-100 truncate">
                               {message.artifact.filename}
                             </p>
-                            <p className="text-xs text-slate-500 dark:text-emerald-300/70">
-                              {t('chat.clickToDownload', 'Click to download')}
-                            </p>
                           </div>
-                          {downloadingArtifact ===
-                          message.artifact.artifact_id ? (
-                            <Loader2 className="w-5 h-5 text-emerald-500 dark:text-emerald-400 animate-spin" />
-                          ) : (
-                            <Download className="w-5 h-5 text-emerald-500 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
-                          )}
-                        </button>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {onArtifactView && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onArtifactView(
+                                    message.artifact!.artifact_id,
+                                  )
+                                }
+                                className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-800/40 transition-colors"
+                                title={t('documents.view', 'View')}
+                              >
+                                <Eye className="w-4.5 h-4.5" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (message.artifact) {
+                                  handleArtifactDownload(message.artifact);
+                                }
+                              }}
+                              disabled={
+                                downloadingArtifact ===
+                                message.artifact.artifact_id
+                              }
+                              className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-800/40 transition-colors disabled:opacity-70 disabled:cursor-wait"
+                              title={t('chat.download', 'Download')}
+                            >
+                              {downloadingArtifact ===
+                              message.artifact.artifact_id ? (
+                                <Loader2 className="w-4.5 h-4.5 animate-spin" />
+                              ) : (
+                                <Download className="w-4.5 h-4.5" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
                       )}
                     {/* Generated images */}
                     {message.attachments && message.attachments.length > 0 && (

@@ -105,6 +105,7 @@ export interface ChatArtifact {
   filename: string;
   url: string;
   s3_key?: string;
+  s3_bucket?: string;
   created_at?: string;
 }
 
@@ -125,6 +126,7 @@ export interface ChatSession {
   created_at: string;
   updated_at: string;
   session_name: string | null;
+  agent_id?: string | null;
 }
 
 export interface StepStatus {
