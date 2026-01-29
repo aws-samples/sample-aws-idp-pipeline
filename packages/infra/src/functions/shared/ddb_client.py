@@ -201,6 +201,8 @@ def create_workflow(
     steps_item = {
         'PK': f'WF#{workflow_id}',
         'SK': 'STEP',
+        'GSI1PK': 'STEP#ANALYSIS_STATUS',
+        'GSI1SK': 'pending',
         'data': steps_data,
         'created_at': now,
         'updated_at': now
@@ -365,6 +367,21 @@ def is_preprocess_complete(document_id: str, workflow_id: str) -> dict:
     }
 
 
+def is_analysis_busy(workflow_id: str) -> bool:
+    """Check if another workflow's segment analysis is currently in progress.
+
+    Uses GSI1 to query STEP records with GSI1PK='STEP#ANALYSIS_STATUS'
+    and GSI1SK='in_progress'. Returns True if any other workflow is running analysis.
+    """
+    table = get_table()
+    response = table.query(
+        IndexName='GSI1',
+        KeyConditionExpression=Key('GSI1PK').eq('STEP#ANALYSIS_STATUS') & Key('GSI1SK').eq('in_progress')
+    )
+    items = response.get('Items', [])
+    return any(item['PK'] != f'WF#{workflow_id}' for item in items)
+
+
 def get_steps(workflow_id: str) -> Optional[dict]:
     """Get workflow steps progress (SK: STEP)"""
     table = get_table()
@@ -408,11 +425,19 @@ def record_step_start(workflow_id: str, step_name: str, **kwargs) -> dict:
     data[step_name] = step_data
     data['current_step'] = step_name
 
+    update_expr = 'SET #data = :data'
+    expr_names = {'#data': 'data'}
+    expr_values = {':data': data}
+
+    if step_name == StepName.SEGMENT_ANALYZER:
+        update_expr += ', GSI1SK = :gsi1sk'
+        expr_values[':gsi1sk'] = 'in_progress'
+
     response = table.update_item(
         Key={'PK': f'WF#{workflow_id}', 'SK': 'STEP'},
-        UpdateExpression='SET #data = :data',
-        ExpressionAttributeNames={'#data': 'data'},
-        ExpressionAttributeValues={':data': data},
+        UpdateExpression=update_expr,
+        ExpressionAttributeNames=expr_names,
+        ExpressionAttributeValues=expr_values,
         ReturnValues='ALL_NEW'
     )
     return decimal_to_python(response.get('Attributes', {}))
@@ -443,11 +468,19 @@ def record_step_complete(workflow_id: str, step_name: str, **kwargs) -> dict:
             break
     data['current_step'] = current_step
 
+    update_expr = 'SET #data = :data, updated_at = :updated_at'
+    expr_names = {'#data': 'data'}
+    expr_values = {':data': data, ':updated_at': now}
+
+    if step_name == StepName.SEGMENT_ANALYZER:
+        update_expr += ', GSI1SK = :gsi1sk'
+        expr_values[':gsi1sk'] = 'completed'
+
     response = table.update_item(
         Key={'PK': f'WF#{workflow_id}', 'SK': 'STEP'},
-        UpdateExpression='SET #data = :data, updated_at = :updated_at',
-        ExpressionAttributeNames={'#data': 'data'},
-        ExpressionAttributeValues={':data': data, ':updated_at': now},
+        UpdateExpression=update_expr,
+        ExpressionAttributeNames=expr_names,
+        ExpressionAttributeValues=expr_values,
         ReturnValues='ALL_NEW'
     )
     return decimal_to_python(response.get('Attributes', {}))
@@ -469,11 +502,19 @@ def record_step_error(workflow_id: str, step_name: str, error: str) -> dict:
     data[step_name] = step_data
     data['current_step'] = ''
 
+    update_expr = 'SET #data = :data, updated_at = :updated_at'
+    expr_names = {'#data': 'data'}
+    expr_values = {':data': data, ':updated_at': now}
+
+    if step_name == StepName.SEGMENT_ANALYZER:
+        update_expr += ', GSI1SK = :gsi1sk'
+        expr_values[':gsi1sk'] = 'failed'
+
     response = table.update_item(
         Key={'PK': f'WF#{workflow_id}', 'SK': 'STEP'},
-        UpdateExpression='SET #data = :data, updated_at = :updated_at',
-        ExpressionAttributeNames={'#data': 'data'},
-        ExpressionAttributeValues={':data': data, ':updated_at': now},
+        UpdateExpression=update_expr,
+        ExpressionAttributeNames=expr_names,
+        ExpressionAttributeValues=expr_values,
         ReturnValues='ALL_NEW'
     )
     return decimal_to_python(response.get('Attributes', {}))

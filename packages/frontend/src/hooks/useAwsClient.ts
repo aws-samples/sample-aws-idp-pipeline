@@ -53,9 +53,18 @@ interface Credentials {
 }
 
 export interface StreamEvent {
-  type: 'text' | 'tool_use' | 'complete';
-  content?: string;
+  type: 'text' | 'tool_use' | 'tool_result' | 'complete';
+  content?: string | ToolResultContent[];
   name?: string;
+  tool_use_id?: string;
+}
+
+export interface ToolResultContent {
+  type: string;
+  text?: string;
+  format?: string;
+  source?: string;
+  s3_url?: string | null;
 }
 
 export interface ContentSource {

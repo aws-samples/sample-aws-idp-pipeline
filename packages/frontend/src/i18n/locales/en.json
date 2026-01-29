@@ -148,7 +148,22 @@
     "addingQa": "Adding question...",
     "deleteQa": "Delete",
     "deleteQaTitle": "Delete Q&A",
-    "deleteQaConfirm": "Are you sure you want to delete this Q&A? This action cannot be undone."
+    "deleteQaConfirm": "Are you sure you want to delete this Q&A? This action cannot be undone.",
+    "steps": {
+      "segmentPrep": "Segment Prep",
+      "bdaProcessing": "BDA Processing",
+      "formatParsing": "Format Parsing",
+      "paddleocrProcessing": "PaddleOCR Processing",
+      "paddleocrHint": "Endpoint may be scaling up",
+      "transcription": "Transcription",
+      "buildingSegments": "Building Segments",
+      "segmentAiAnalysis": "AI Analysis",
+      "documentSummary": "Document Summary"
+    },
+    "inProgress": "Processing...",
+    "uploading": "Uploading...",
+    "preparing": "Preparing...",
+    "starting": "Starting..."
   },
   "ocr": {
     "title": "OCR Settings",

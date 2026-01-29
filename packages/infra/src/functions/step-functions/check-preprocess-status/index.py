@@ -5,7 +5,7 @@ Returns status information for the polling loop.
 """
 import json
 
-from shared.ddb_client import is_preprocess_complete
+from shared.ddb_client import is_preprocess_complete, is_analysis_busy
 
 
 def handler(event, context):
@@ -25,6 +25,11 @@ def handler(event, context):
         }
 
     result = is_preprocess_complete(document_id, workflow_id)
+    result['analysis_busy'] = False
+
+    if result['all_completed'] and not result['any_failed']:
+        result['analysis_busy'] = is_analysis_busy(workflow_id)
+        print(f'Analysis busy check for {workflow_id}: {result["analysis_busy"]}')
 
     print(f'Preprocess status for {workflow_id}: all_completed={result["all_completed"]}, any_failed={result["any_failed"]}')
     print(f'Status details: {json.dumps(result["status"])}')

@@ -16,7 +16,7 @@ from app.ddb import (
     query_documents,
     update_document_data,
 )
-from app.ddb.workflows import delete_workflow_item, query_workflows
+from app.ddb.workflows import delete_workflow_item, get_steps_batch, query_workflows
 from app.s3 import delete_s3_prefix, get_s3_client
 
 router = APIRouter(prefix="/projects/{project_id}/documents", tags=["documents"])
@@ -78,6 +78,66 @@ class DeletedDocumentInfo(BaseModel):
 class DeleteDocumentResponse(BaseModel):
     message: str
     details: DeletedDocumentInfo
+
+
+class StepProgress(BaseModel):
+    status: str
+    label: str
+
+
+class DocumentProgress(BaseModel):
+    document_id: str
+    workflow_id: str
+    status: str
+    current_step: str
+    steps: dict[str, StepProgress]
+
+
+@router.get("/progress")
+def get_documents_progress(project_id: str) -> list[DocumentProgress]:
+    """Get workflow step progress for non-completed documents."""
+    documents = query_documents(project_id)
+    non_completed = [doc for doc in documents if doc.data.status not in ("completed", "deleted")]
+
+    if not non_completed:
+        return []
+
+    # Collect workflow_ids for each document
+    doc_workflow_map: dict[str, tuple[str, str]] = {}  # workflow_id -> (document_id, wf_status)
+    for doc in non_completed:
+        workflows = query_workflows(doc.data.document_id)
+        if workflows:
+            wf = workflows[0]
+            wf_id = wf.SK.replace("WF#", "")
+            doc_workflow_map[wf_id] = (doc.data.document_id, wf.data.status)
+
+    if not doc_workflow_map:
+        return []
+
+    # Batch-get all STEP records
+    steps_by_wf = get_steps_batch(list(doc_workflow_map.keys()))
+
+    results: list[DocumentProgress] = []
+    for wf_id, (document_id, wf_status) in doc_workflow_map.items():
+        steps_data = steps_by_wf.get(wf_id, {})
+        current_step = steps_data.get("current_step", "")
+
+        steps: dict[str, StepProgress] = {}
+        for key, value in steps_data.items():
+            if isinstance(value, dict) and "status" in value and "label" in value:
+                steps[key] = StepProgress(status=value["status"], label=value["label"])
+
+        results.append(
+            DocumentProgress(
+                document_id=document_id,
+                workflow_id=wf_id,
+                status=wf_status,
+                current_step=current_step,
+                steps=steps,
+            )
+        )
+
+    return results
 
 
 @router.get("")
