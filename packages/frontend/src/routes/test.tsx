@@ -519,7 +519,7 @@ function RouteComponent() {
                           <span style={{ color: '#dcdcaa' }}>{event.name}</span>
                         )}
                         {event.type === 'text' &&
-                          event.content &&
+                          typeof event.content === 'string' &&
                           event.content.slice(0, 50)}
                       </div>
                     ))}

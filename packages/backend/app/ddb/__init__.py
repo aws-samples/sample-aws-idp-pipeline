@@ -17,6 +17,7 @@ from app.ddb.projects import (
 )
 from app.ddb.workflows import (
     delete_workflow_item,
+    get_steps_batch,
     get_workflow_item,
     query_workflows,
 )
@@ -48,5 +49,6 @@ __all__ = [
     # workflows
     "get_workflow_item",
     "query_workflows",
+    "get_steps_batch",
     "delete_workflow_item",
 ]

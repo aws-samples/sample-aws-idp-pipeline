@@ -354,6 +354,26 @@ export class WorkflowStack extends Stack {
       },
     });
 
+    // Workflow Error Handler (centralized error handling for Step Functions)
+    const workflowErrorHandler = new lambda.Function(
+      this,
+      'WorkflowErrorHandler',
+      {
+        ...commonLambdaProps,
+        functionName: 'idp-v2-workflow-error-handler',
+        handler: 'index.handler',
+        timeout: Duration.minutes(1),
+        memorySize: 256,
+        code: lambda.Code.fromAsset(
+          path.join(
+            __dirname,
+            '../functions/step-functions/workflow-error-handler',
+          ),
+        ),
+        layers: [sharedLayer],
+      },
+    );
+
     // QA Regenerator Lambda (single Q&A re-generation via Bedrock vision)
     const qaRegenerator = new lambda.Function(this, 'QaRegenerator', {
       ...commonLambdaProps,
@@ -442,6 +462,33 @@ export class WorkflowStack extends Stack {
       },
     );
 
+    const errorHandlerTask = new tasks.LambdaInvoke(
+      this,
+      'HandleWorkflowError',
+      {
+        lambdaFunction: workflowErrorHandler,
+        outputPath: '$.Payload',
+      },
+    );
+
+    const workflowFailed = new sfn.Fail(this, 'WorkflowFailed', {
+      cause: 'Workflow failed',
+      error: 'WORKFLOW_FAILED',
+    });
+
+    errorHandlerTask.next(workflowFailed);
+
+    // Add catch to all task states
+    const catchConfig: sfn.CatchProps = {
+      resultPath: '$.error_info',
+    };
+
+    // Catch on top-level tasks (not inside Parallel/Map)
+    checkPreprocessStatusTask.addCatch(errorHandlerTask, catchConfig);
+    segmentBuilderTask.addCatch(errorHandlerTask, catchConfig);
+    reanalysisPrepTask.addCatch(errorHandlerTask, catchConfig);
+    documentSummarizerTask.addCatch(errorHandlerTask, catchConfig);
+
     // ========================================
     // Segment Processing
     // ========================================
@@ -471,6 +518,7 @@ export class WorkflowStack extends Stack {
       },
     );
     parallelSegmentProcessing.itemProcessor(segmentProcessing);
+    parallelSegmentProcessing.addCatch(errorHandlerTask, catchConfig);
 
     // ========================================
     // Preprocess Polling Loop
@@ -481,21 +529,19 @@ export class WorkflowStack extends Stack {
       time: sfn.WaitTime.duration(Duration.seconds(10)),
     });
 
-    // Fail state when preprocessing fails
-    const preprocessFailed = new sfn.Fail(this, 'PreprocessFailed', {
-      cause: 'One or more preprocessing tasks failed',
-      error: 'PREPROCESS_FAILED',
-    });
-
     // Choice: check if preprocess is complete
-    // Routes to: fail, continue to analysis, or loop back to wait
+    // Routes to: fail (via error handler), continue to analysis, or loop back to wait
     const preprocessStatusChoice = new sfn.Choice(
       this,
       'PreprocessStatusChoice',
     )
       .when(
         sfn.Condition.booleanEquals('$.preprocess_check.any_failed', true),
-        preprocessFailed,
+        errorHandlerTask,
+      )
+      .when(
+        sfn.Condition.booleanEquals('$.preprocess_check.analysis_busy', true),
+        waitForPreprocess,
       )
       .when(
         sfn.Condition.booleanEquals('$.preprocess_check.all_completed', true),
@@ -538,6 +584,7 @@ export class WorkflowStack extends Stack {
     );
     parallelPreprocessing.branch(segmentPrepTask);
     parallelPreprocessing.branch(formatParserTask);
+    parallelPreprocessing.addCatch(errorHandlerTask, catchConfig);
 
     // Flow: Parallel(Preprocessor, FormatParser) → Check → Choice → (loop or continue) → SegmentBuilder → Map(Analyze) → Summarize
     parallelPreprocessing.next(checkPreprocessStatusTask);
@@ -604,6 +651,7 @@ export class WorkflowStack extends Stack {
       segmentAnalyzer,
       analysisFinalizer,
       documentSummarizer,
+      workflowErrorHandler,
       triggerFunction,
       lancedbService,
       lancedbWriter,
@@ -644,8 +692,14 @@ export class WorkflowStack extends Stack {
       // DynamoDB permissions for LanceDB Lock table
       lancedbLockTable.grantReadWriteData(fn);
 
-      // DynamoDB permissions for Backend table (workflow state)
+      // DynamoDB permissions for Backend table (workflow state) + GSI indexes
       backendTable.grantReadWriteData(fn);
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['dynamodb:Query'],
+          resources: [`${backendTable.tableArn}/index/*`],
+        }),
+      );
 
       // SSM permissions
       fn.addToRolePolicy(

@@ -148,7 +148,22 @@
     "addingQa": "질문 추가 중...",
     "deleteQa": "삭제",
     "deleteQaTitle": "Q&A 삭제",
-    "deleteQaConfirm": "이 Q&A를 삭제하시겠습니까? 삭제된 항목은 복구할 수 없습니다."
+    "deleteQaConfirm": "이 Q&A를 삭제하시겠습니까? 삭제된 항목은 복구할 수 없습니다.",
+    "steps": {
+      "segmentPrep": "세그먼트 준비",
+      "bdaProcessing": "BDA 분석",
+      "formatParsing": "포맷 파싱",
+      "paddleocrProcessing": "PaddleOCR 처리",
+      "paddleocrHint": "엔드포인트 활성화 중일 수 있습니다",
+      "transcription": "음성 변환",
+      "buildingSegments": "세그먼트 구성",
+      "segmentAiAnalysis": "AI 분석",
+      "documentSummary": "문서 요약"
+    },
+    "inProgress": "처리 중...",
+    "uploading": "업로드 중...",
+    "preparing": "준비 중...",
+    "starting": "시작 중..."
   },
   "ocr": {
     "title": "OCR 설정",
