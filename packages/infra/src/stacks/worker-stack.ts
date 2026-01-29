@@ -43,14 +43,6 @@ export class WorkerStack extends Stack {
       SSM_KEYS.WEBSOCKET_API_ID,
     );
 
-    new MessageProcess(this, 'MessageProcess', {
-      bucket: sessionStorageBucket,
-      vpc,
-      elasticacheEndpoint,
-      websocketCallbackUrl,
-      websocketApiId,
-    });
-
     const websocketMessageQueueArn = StringParameter.valueForStringParameter(
       this,
       SSM_KEYS.WEBSOCKET_MESSAGE_QUEUE_ARN,
@@ -61,6 +53,12 @@ export class WorkerStack extends Stack {
       'WebsocketMessageQueue',
       websocketMessageQueueArn,
     );
+
+    new MessageProcess(this, 'MessageProcess', {
+      bucket: sessionStorageBucket,
+      vpc,
+      websocketMessageQueue,
+    });
 
     new WebsocketBroker(this, 'WebsocketBroker', {
       vpc,

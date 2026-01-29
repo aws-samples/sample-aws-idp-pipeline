@@ -5,15 +5,14 @@ import { Runtime, Architecture } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { S3EventSourceV2 } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { IBucket, EventType } from 'aws-cdk-lib/aws-s3';
+import { IQueue } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
 export interface MessageProcessProps {
   bucket: IBucket;
   vpc: IVpc;
-  elasticacheEndpoint: string;
-  websocketCallbackUrl: string;
-  websocketApiId: string;
+  websocketMessageQueue: IQueue;
 }
 
 export class MessageProcess extends Construct {
@@ -33,15 +32,12 @@ export class MessageProcess extends Construct {
       timeout: Duration.seconds(30),
       vpc: props.vpc,
       environment: {
-        ELASTICACHE_ENDPOINT: props.elasticacheEndpoint,
-        WEBSOCKET_CALLBACK_URL: props.websocketCallbackUrl,
-      },
-      bundling: {
-        nodeModules: ['iovalkey'],
+        WEBSOCKET_MESSAGE_QUEUE_URL: props.websocketMessageQueue.queueUrl,
       },
     });
 
     props.bucket.grantReadWrite(this.function);
+    props.websocketMessageQueue.grantSendMessages(this.function);
 
     const stack = Stack.of(this);
     this.function.addToRolePolicy(
@@ -50,15 +46,6 @@ export class MessageProcess extends Construct {
         resources: [
           'arn:aws:bedrock:*::foundation-model/*',
           `arn:aws:bedrock:*:${stack.account}:inference-profile/*`,
-        ],
-      }),
-    );
-
-    this.function.addToRolePolicy(
-      new PolicyStatement({
-        actions: ['execute-api:ManageConnections'],
-        resources: [
-          `arn:aws:execute-api:${stack.region}:${stack.account}:${props.websocketApiId}/*/@connections/*`,
         ],
       }),
     );
