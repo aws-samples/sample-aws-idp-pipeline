@@ -59,7 +59,7 @@ export async function handleNameUpdate(
       timestamp: new Date().toISOString(),
     },
   };
-  await sendWebsocketMessage(keyInfo.userId, message);
+  await sendWebsocketMessage(keyInfo.userId, message, keyInfo.projectId);
 
   console.log(`Updated session_name for ${sessionJsonKey}`);
 }

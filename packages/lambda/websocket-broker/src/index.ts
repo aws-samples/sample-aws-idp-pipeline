@@ -27,7 +27,18 @@ async function getAllConnectionIds(): Promise<string[]> {
 
 export const handler: SQSHandler = async (event) => {
   for (const record of event.Records) {
-    const { username, message } = JSON.parse(record.body);
+    const { username, message, projectId } = JSON.parse(record.body);
+
+    // sessions created 이벤트 시 캐시 무효화
+    if (
+      message?.action === 'sessions' &&
+      message?.data?.event === 'created' &&
+      username &&
+      projectId
+    ) {
+      const cacheKey = `session_list:${username}:${projectId}`;
+      await valkey.del(cacheKey);
+    }
 
     const connectionIds = username
       ? await valkey.smembers(`ws:username:${username}`)

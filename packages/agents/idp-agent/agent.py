@@ -8,10 +8,10 @@ from strands.models import BedrockModel
 from strands.session import S3SessionManager
 from strands_tools import calculator, current_time, generate_image, http_request
 
-from .agentcore_mcp_client import AgentCoreGatewayMCPClient
-from .config import get_config
-from .helpers import get_project_language
-from .prompts import DEFAULT_SYSTEM_PROMPT, fetch_custom_agent_prompt, fetch_system_prompt
+from agentcore_mcp_client import AgentCoreGatewayMCPClient
+from config import get_config
+from helpers import get_project_language
+from prompts import DEFAULT_SYSTEM_PROMPT, fetch_custom_agent_prompt, fetch_system_prompt
 
 
 class ToolParameterEnforcerHook(HookProvider):
