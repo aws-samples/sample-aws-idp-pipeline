@@ -4,16 +4,6 @@ import {
   GoneException,
 } from '@aws-sdk/client-apigatewaymanagementapi';
 
-export interface SessionsMessage {
-  action: 'sessions';
-  data: {
-    event: 'created' | 'updated' | 'deleted';
-    sessionId: string;
-    sessionName: string;
-    timestamp: string;
-  };
-}
-
 const client = new ApiGatewayManagementApiClient({
   endpoint: process.env.WEBSOCKET_CALLBACK_URL,
 });

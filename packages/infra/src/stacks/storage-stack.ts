@@ -183,9 +183,9 @@ export class StorageStack extends Stack {
       },
     });
 
-    new StringParameter(this, 'WebsocketMessageQueueUrlParam', {
-      parameterName: SSM_KEYS.WEBSOCKET_MESSAGE_QUEUE_URL,
-      stringValue: websocketMessageQueue.queueUrl,
+    new StringParameter(this, 'WebsocketMessageQueueArnParam', {
+      parameterName: SSM_KEYS.WEBSOCKET_MESSAGE_QUEUE_ARN,
+      stringValue: websocketMessageQueue.queueArn,
     });
   }
 }
