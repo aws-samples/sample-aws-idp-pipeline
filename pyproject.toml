@@ -19,6 +19,7 @@ members = [
   "packages/backend",
   "packages/agents/bidi-agent",
   "packages/agents/research-agent",
+  "packages/lambda/pdf-mcp",
 ]
 
 [tool.uv.sources."idp_v2.backend"]
@@ -36,3 +37,19 @@ dev = [
   "pytest-cov>=6.0.0",
   "pytest-html>=4.1.1"
 ]
+
+[tool.pyright]
+reportArgumentType = false
+reportUnusedCallResult = false
+reportExplicitAny = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownParameterType = false
+reportUnknownArgumentType = false
+reportUnannotatedClassAttribute = false
+reportMissingTypeStubs = false
+reportCallInDefaultInitializer = false
+reportInvalidTypeForm = false
+reportAny = false
+reportMissingParameterType = false
+reportImplicitOverride = false
