@@ -411,6 +411,25 @@ importers:
         specifier: ^4.0.16
         version: 4.0.16(@types/node@22.19.1)(@vitest/ui@4.0.16)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.6)(yaml@2.8.2)
 
+  packages/lambda/websocket-broker:
+    dependencies:
+      '@aws-sdk/client-apigatewaymanagementapi':
+        specifier: ^3.974.0
+        version: 3.975.0
+      iovalkey:
+        specifier: ^0.3.3
+        version: 0.3.3
+    devDependencies:
+      '@types/aws-lambda':
+        specifier: ^8.10.145
+        version: 8.10.160
+      '@types/node':
+        specifier: ^22.19.1
+        version: 22.19.1
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+
   packages/lambda/workflow-stream:
     dependencies:
       '@aws-sdk/client-apigatewaymanagementapi':
