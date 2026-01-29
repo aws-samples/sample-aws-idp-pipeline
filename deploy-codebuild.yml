@@ -123,7 +123,7 @@ Resources:
                   if [ "$STACK_STATUS" = "NOT_FOUND" ] || [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
                     aws cloudformation delete-stack --stack-name CDKToolkit 2>/dev/null || true
                     aws cloudformation wait stack-delete-complete --stack-name CDKToolkit 2>/dev/null || true
-                    cdk bootstrap
+                    npx cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_DEFAULT_REGION --require-approval never
                   fi
                 - cd packages/infra && cdk deploy --all --require-approval=never
             post_build:
