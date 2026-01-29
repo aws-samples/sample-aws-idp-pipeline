@@ -5,9 +5,15 @@ import io
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 from .artifact import save_artifact
+
+# Register CJK font for Korean support
+pdfmetrics.registerFont(UnicodeCIDFont("HYGothic-Medium"))
+CJK_FONT = "HYGothic-Medium"
 
 
 def text_to_pdf(content: str) -> bytes:
@@ -23,7 +29,11 @@ def text_to_pdf(content: str) -> bytes:
     )
 
     styles = getSampleStyleSheet()
-    normal_style = styles["Normal"]
+    normal_style = ParagraphStyle(
+        "NormalCJK",
+        parent=styles["Normal"],
+        fontName=CJK_FONT,
+    )
 
     story = []
     paragraphs = content.split("\n\n")
@@ -53,26 +63,33 @@ def markdown_to_pdf(content: str) -> bytes:
 
     styles = getSampleStyleSheet()
 
-    # Custom styles for markdown elements
+    # Custom styles for markdown elements with CJK font
     h1_style = ParagraphStyle(
-        "Heading1",
+        "Heading1CJK",
         parent=styles["Heading1"],
+        fontName=CJK_FONT,
         fontSize=18,
         spaceAfter=12,
     )
     h2_style = ParagraphStyle(
-        "Heading2",
+        "Heading2CJK",
         parent=styles["Heading2"],
+        fontName=CJK_FONT,
         fontSize=14,
         spaceAfter=10,
     )
     h3_style = ParagraphStyle(
-        "Heading3",
+        "Heading3CJK",
         parent=styles["Heading3"],
+        fontName=CJK_FONT,
         fontSize=12,
         spaceAfter=8,
     )
-    normal_style = styles["Normal"]
+    normal_style = ParagraphStyle(
+        "NormalCJK",
+        parent=styles["Normal"],
+        fontName=CJK_FONT,
+    )
 
     story = []
     lines = content.split("\n")
