@@ -37,6 +37,13 @@ export class SearchMcp extends Construct {
       }),
     );
 
+    this.function.addToRolePolicy(
+      new PolicyStatement({
+        actions: ['bedrock:InvokeModel'],
+        resources: ['*'],
+      }),
+    );
+
     new StringParameter(this, 'FunctionArnParam', {
       parameterName: SSM_KEYS.SEARCH_MCP_FUNCTION_ARN,
       stringValue: this.function.functionArn,
