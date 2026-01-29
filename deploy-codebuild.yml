@@ -105,7 +105,7 @@ Resources:
                 python: 3.12
               commands:
                 - npm install -g pnpm aws-cdk@latest
-                - docker run --rm --privileged tonistiigi/binfmt --install amd64
+                - docker run --rm --privileged public.ecr.aws/eks-distro-build-tooling/binfmt-misc:qemu-v7.0.0 --install amd64
             pre_build:
               commands:
                 - git clone $REPO_URL /tmp/project
