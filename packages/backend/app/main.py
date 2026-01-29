@@ -9,6 +9,7 @@ from app.routers import (
     documents,
     health,
     projects,
+    prompts,
     search,
     workflows,
 )
@@ -25,6 +26,7 @@ app = FastAPI(
         {"name": "chat", "description": "채팅 기록 관리"},
         {"name": "agents", "description": "커스텀 에이전트 관리"},
         {"name": "artifacts", "description": "아티팩트 관리"},
+        {"name": "prompts", "description": "프롬프트 관리"},
     ]
 )
 
@@ -42,5 +44,6 @@ app.include_router(chat.router)
 app.include_router(documents.router)
 app.include_router(health.router)
 app.include_router(projects.router)
+app.include_router(prompts.router)
 app.include_router(search.router)
 app.include_router(workflows.router)
