@@ -59,7 +59,10 @@ export class AgentStack extends Stack {
     );
 
     // Initialize default system prompt in S3 on first deployment
-    const systemPromptPath = path.join(__dirname, '../prompts/system_prompt.txt');
+    const systemPromptPath = path.resolve(
+      process.cwd(),
+      'src/prompts/system_prompt.txt',
+    );
     const systemPromptContent = fs.readFileSync(systemPromptPath, 'utf-8');
 
     new cr.AwsCustomResource(this, 'InitSystemPrompt', {
