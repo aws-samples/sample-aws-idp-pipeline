@@ -126,6 +126,8 @@ Resources:
                     npx cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_DEFAULT_REGION --require-approval never
                   fi
                 - cd /tmp/project/packages/infra && npx cdk deploy IDP-V2-Vpc --require-approval=never
+                - cd /tmp/project/packages/infra && npx cdk deploy IDP-V2-Storage --require-approval=never
+                - cd /tmp/project/packages/infra && npx cdk deploy IDP-V2-Event --require-approval=never
                 - cd /tmp/project/packages/infra && npx cdk deploy --all --require-approval=never
             post_build:
               commands:
