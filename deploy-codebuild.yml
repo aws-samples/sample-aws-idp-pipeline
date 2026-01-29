@@ -112,6 +112,7 @@ Resources:
                 - git clone $REPO_URL /tmp/project
                 - cd /tmp/project
                 - git checkout $VERSION
+                - pyenv install -s 3.12.0 && pyenv global 3.12.0
                 - pnpm install --frozen-lockfile
             build:
               commands:
