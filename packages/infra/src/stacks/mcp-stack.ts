@@ -8,6 +8,7 @@ import {
   SearchMcp,
   MdMcp,
   PdfMcp,
+  DocxMcp,
   SSM_KEYS,
 } from ':idp-v2/common-constructs';
 import * as agentcore from '@aws-cdk/aws-bedrock-agentcore-alpha';
@@ -17,6 +18,7 @@ export class McpStack extends Stack {
   public readonly searchMcp: SearchMcp;
   public readonly mdMcp: MdMcp;
   public readonly pdfMcp: PdfMcp;
+  public readonly docxMcp: DocxMcp;
   public readonly gateway: agentcore.Gateway;
 
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -59,6 +61,11 @@ export class McpStack extends Stack {
       websocketMessageQueue,
     });
     this.pdfMcp = new PdfMcp(this, 'PdfMcp', {
+      backendTable,
+      storageBucket: agentStorageBucket,
+      websocketMessageQueue,
+    });
+    this.docxMcp = new DocxMcp(this, 'DocxMcp', {
       backendTable,
       storageBucket: agentStorageBucket,
       websocketMessageQueue,
@@ -124,5 +131,22 @@ export class McpStack extends Stack {
     // Workaround: CDK timing issue - explicitly grant and add dependency
     this.pdfMcp.function.grantInvoke(this.gateway.role);
     pdfTarget.node.addDependency(this.gateway.role);
+
+    const docxTarget = this.gateway.addLambdaTarget('DocxMcpTarget', {
+      gatewayTargetName: 'docx',
+      description:
+        'DOCX processing tools: extract text, extract tables, and create Word documents. Use these tools when working with DOCX documents.',
+      lambdaFunction: this.docxMcp.function,
+      toolSchema: agentcore.ToolSchema.fromLocalAsset(
+        path.resolve(
+          process.cwd(),
+          '../../packages/lambda/docx-mcp/schema.json',
+        ),
+      ),
+    });
+
+    // Workaround: CDK timing issue - explicitly grant and add dependency
+    this.docxMcp.function.grantInvoke(this.gateway.role);
+    docxTarget.node.addDependency(this.gateway.role);
   }
 }

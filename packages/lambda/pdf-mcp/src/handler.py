@@ -1,6 +1,7 @@
 """Main handler for PDF MCP Lambda - routes based on tool name from context."""
 
 from .create_pdf import create_pdf
+from .edit_pdf import edit_pdf
 from .extract_tables import extract_tables
 from .extract_text import extract_text
 
@@ -28,5 +29,7 @@ def handler(event: dict, context) -> dict:
         return extract_tables(event)
     elif action == "create_pdf":
         return create_pdf(event)
+    elif action == "edit_pdf":
+        return edit_pdf(event)
     else:
         raise ValueError(f"Unknown tool: {tool_name}")

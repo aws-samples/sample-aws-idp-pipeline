@@ -15,13 +15,15 @@ def serialize_tool_result_content(content: list) -> list:
             image = item["image"]
             bytes_data = image.get("source", {}).get("bytes")
             if isinstance(bytes_data, bytes):
-                serialized.append({
-                    "type": "image",
-                    "image": {
-                        "format": image.get("format", "jpeg"),
-                        "source": {"bytes": base64.b64encode(bytes_data).decode("utf-8")},
-                    },
-                })
+                serialized.append(
+                    {
+                        "type": "image",
+                        "image": {
+                            "format": image.get("format", "jpeg"),
+                            "source": {"bytes": base64.b64encode(bytes_data).decode("utf-8")},
+                        },
+                    }
+                )
             else:
                 serialized.append({"type": "image", "image": image})
         elif "text" in item:
@@ -29,6 +31,7 @@ def serialize_tool_result_content(content: list) -> list:
         else:
             serialized.append(item)
     return serialized
+
 
 app = BedrockAgentCoreApp()
 
