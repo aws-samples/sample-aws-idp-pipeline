@@ -1,0 +1,190 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CodeBuild project for destroying Sample AWS IDP Pipeline
+
+Parameters:
+  RepoUrl:
+    Type: String
+    Default: 'https://github.com/aws-samples/sample-aws-idp-pipeline.git'
+    Description: Repository URL
+
+  Version:
+    Type: String
+    Default: 'main'
+    Description: Branch or tag to use
+
+Resources:
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/PowerUserAccess
+      Policies:
+        - PolicyName: CodeBuildIAMPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRole
+                  - iam:GetRolePolicy
+                  - iam:PassRole
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:ListRolePolicies
+                  - iam:ListAttachedRolePolicies
+                  - iam:CreatePolicy
+                  - iam:DeletePolicy
+                  - iam:GetPolicy
+                  - iam:GetPolicyVersion
+                  - iam:ListPolicyVersions
+                  - iam:CreateServiceLinkedRole
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:UpdateRole
+                  - iam:CreateInstanceProfile
+                  - iam:DeleteInstanceProfile
+                  - iam:AddRoleToInstanceProfile
+                  - iam:RemoveRoleFromInstanceProfile
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:PutParameter
+                  - ssm:DeleteParameter
+                Resource: '*'
+
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: sample-aws-idp-pipeline-destroy
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: ARM_CONTAINER
+        ComputeType: BUILD_GENERAL1_LARGE
+        Image: aws/codebuild/amazonlinux-aarch64-standard:3.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: REPO_URL
+            Value: !Ref RepoUrl
+          - Name: VERSION
+            Value: !Ref Version
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref 'AWS::Region'
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref 'AWS::AccountId'
+      Source:
+        Type: NO_SOURCE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 22
+                python: 3.13
+              commands:
+                - npm install -g pnpm aws-cdk@latest
+            pre_build:
+              commands:
+                - git clone $REPO_URL /tmp/project
+                - cd /tmp/project
+                - git checkout $VERSION
+                - find /tmp/project -name ".python-version" -exec sh -c 'echo "3.13" > "$1"' _ {} \;
+                - pip install uv
+                - pnpm install --frozen-lockfile
+            build:
+              commands:
+                - cd /tmp/project
+                - pnpm nx run-many -t compile,bundle -p @idp-v2/infra @idp-v2/frontend
+                - |
+                  echo "=== Pre-cleanup: SageMaker endpoint ==="
+                  ENDPOINT_STATUS=$(aws sagemaker describe-endpoint --endpoint-name paddleocr-endpoint --query 'EndpointStatus' --output text 2>/dev/null || echo "NOT_FOUND")
+                  if [ "$ENDPOINT_STATUS" != "NOT_FOUND" ]; then
+                    echo "Scaling down SageMaker endpoint..."
+                    aws sagemaker update-endpoint-weights-and-capacities \
+                      --endpoint-name paddleocr-endpoint \
+                      --desired-weights-and-capacities VariantName=AllTraffic,DesiredInstanceCount=0 2>/dev/null || true
+                  fi
+                - |
+                  echo "=== Pre-cleanup: S3 Express Directory Buckets ==="
+                  aws s3api list-directory-buckets --query 'Buckets[].BucketName' --output text 2>/dev/null | tr '\t' '\n' | grep 'idp' | while read bucket; do
+                    if [ -n "$bucket" ]; then
+                      echo "Deleting objects in directory bucket: $bucket"
+                      aws s3api list-objects-v2 --bucket "$bucket" --query 'Contents[].Key' --output text 2>/dev/null | tr '\t' '\n' | while read key; do
+                        if [ -n "$key" ] && [ "$key" != "None" ]; then
+                          aws s3api delete-object --bucket "$bucket" --key "$key" 2>/dev/null || true
+                        fi
+                      done
+                      echo "Deleting directory bucket: $bucket"
+                      aws s3api delete-bucket --bucket "$bucket" 2>/dev/null || true
+                    fi
+                  done
+                - |
+                  echo "=== CDK Destroy ==="
+                  cd /tmp/project/packages/infra && npx cdk destroy --all --force || echo "CDK destroy completed with some issues"
+                - |
+                  echo "=== Post-cleanup: Retry failed stacks ==="
+                  FAILED_STACKS=$(aws cloudformation list-stacks \
+                    --stack-status-filter DELETE_FAILED \
+                    --query 'StackSummaries[?contains(StackName,`IDP-V2`)].StackName' \
+                    --output text 2>/dev/null || echo "")
+                  for stack in $FAILED_STACKS; do
+                    if [ -n "$stack" ]; then
+                      echo "Retrying deletion of $stack..."
+                      aws cloudformation delete-stack --stack-name "$stack" 2>/dev/null || true
+                      aws cloudformation wait stack-delete-complete --stack-name "$stack" 2>/dev/null || true
+                    fi
+                  done
+                - |
+                  echo "=== Post-cleanup: CloudWatch Log Groups ==="
+                  aws logs describe-log-groups --log-group-name-prefix "/aws/lambda/idp-v2" \
+                    --query 'logGroups[].logGroupName' --output text 2>/dev/null | tr '\t' '\n' | while read lg; do
+                    if [ -n "$lg" ]; then
+                      echo "Deleting log group: $lg"
+                      aws logs delete-log-group --log-group-name "$lg" 2>/dev/null || true
+                    fi
+                  done
+                  aws logs describe-log-groups --log-group-name-prefix "/aws/codebuild/sample-aws-idp-pipeline" \
+                    --query 'logGroups[].logGroupName' --output text 2>/dev/null | tr '\t' '\n' | while read lg; do
+                    if [ -n "$lg" ]; then
+                      echo "Deleting log group: $lg"
+                      aws logs delete-log-group --log-group-name "$lg" 2>/dev/null || true
+                    fi
+                  done
+            post_build:
+              commands:
+                - |
+                  echo "=== Final verification ==="
+                  REMAINING=$(aws cloudformation list-stacks \
+                    --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE DELETE_FAILED ROLLBACK_COMPLETE \
+                    --query 'StackSummaries[?contains(StackName,`IDP-V2`)].StackName' \
+                    --output text 2>/dev/null || echo "")
+                  if [ -z "$REMAINING" ]; then
+                    echo "All IDP-V2 stacks deleted successfully."
+                  else
+                    echo "Warning: Some stacks still remain:"
+                    echo "$REMAINING"
+                  fi
+                - |
+                  echo "=== Cleanup: Deploy CodeBuild stack ==="
+                  aws cloudformation delete-stack --stack-name sample-aws-idp-pipeline-codebuild 2>/dev/null || true
+                - echo "Destroy completed at $(date)"
+      TimeoutInMinutes: 180
+
+Outputs:
+  ProjectName:
+    Value: !Ref CodeBuildProject
+    Description: CodeBuild project name
