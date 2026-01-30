@@ -37,6 +37,9 @@ class HorizontalRule(Flowable):
         self.color = color if color is not None else COLORS["border"]
         self.thickness = thickness
 
+    def wrap(self, availWidth, availHeight):
+        return (self.width, self.thickness)
+
     def draw(self):
         self.canv.setStrokeColor(self.color)
         self.canv.setLineWidth(self.thickness)
