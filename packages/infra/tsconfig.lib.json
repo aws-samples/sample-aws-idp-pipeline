@@ -5,9 +5,10 @@
     "outDir": "../../dist/packages/infra/tsc",
     "tsBuildInfoFile": "../../dist/packages/infra/tsc/tsconfig.lib.tsbuildinfo",
     "emitDeclarationOnly": false,
+    "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.json"],
   "references": [
     {
       "path": "../common/constructs/tsconfig.lib.json"

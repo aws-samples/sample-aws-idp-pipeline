@@ -14,6 +14,7 @@ import * as fs from 'fs';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { SSM_KEYS } from ':idp-v2/common-constructs';
+import models from '../models.json' with { type: 'json' };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -210,6 +211,7 @@ export class WorkflowStack extends Stack {
       environment: {
         BDA_OUTPUT_BUCKET: this.documentBucket.bucketName,
         BACKEND_TABLE_NAME: backendTableName,
+        EMBEDDING_MODEL_ID: models.embedding,
       },
     };
 
@@ -296,8 +298,8 @@ export class WorkflowStack extends Stack {
       layers: [coreLayer, strandsLayer, sharedLayer],
       environment: {
         ...commonLambdaProps.environment,
-        BEDROCK_MODEL_ID: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
-        BEDROCK_VIDEO_MODEL_ID: 'us.twelvelabs.pegasus-1-2-v1:0',
+        BEDROCK_MODEL_ID: models.analysis,
+        BEDROCK_VIDEO_MODEL_ID: models.videoAnalysis,
         BUCKET_OWNER_ACCOUNT_ID: this.account,
       },
     });
@@ -332,7 +334,7 @@ export class WorkflowStack extends Stack {
       environment: {
         ...commonLambdaProps.environment,
         LANCEDB_FUNCTION_NAME: lancedbService.functionName,
-        SUMMARIZER_MODEL_ID: 'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+        SUMMARIZER_MODEL_ID: models.summarizer,
       },
     });
 
@@ -387,7 +389,7 @@ export class WorkflowStack extends Stack {
       layers: [coreLayer, strandsLayer, sharedLayer],
       environment: {
         ...commonLambdaProps.environment,
-        BEDROCK_MODEL_ID: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
+        BEDROCK_MODEL_ID: models.analysis,
         LANCEDB_FUNCTION_NAME: lancedbService.functionName,
       },
     });

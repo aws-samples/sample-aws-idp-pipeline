@@ -96,9 +96,9 @@ def handler(event, _context):
 
     try:
         agent = VisionReactAgent(
-            model_id=os.environ.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-3-7-sonnet-20250219-v1:0'),
+            model_id=os.environ['BEDROCK_MODEL_ID'],
             region=os.environ.get('AWS_REGION', 'us-east-1'),
-            video_model_id=os.environ.get('BEDROCK_VIDEO_MODEL_ID', 'us.twelvelabs.pegasus-1-2-v1:0'),
+            video_model_id=os.environ['BEDROCK_VIDEO_MODEL_ID'],
             bucket_owner_account_id=os.environ.get('BUCKET_OWNER_ACCOUNT_ID', '')
         )
 
