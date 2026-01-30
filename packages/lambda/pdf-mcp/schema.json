@@ -155,5 +155,54 @@
         }
       }
     }
+  },
+  {
+    "name": "edit_pdf",
+    "description": "Edit an existing PDF artifact by replacing its content. Use this tool when you need to update a PDF document.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "description": "The unique identifier of the PDF artifact to edit"
+        },
+        "content": {
+          "type": "string",
+          "description": "The new text or markdown content for the PDF"
+        },
+        "format": {
+          "type": "string",
+          "enum": ["text", "markdown"],
+          "default": "text",
+          "description": "The format of the input content"
+        }
+      },
+      "required": ["artifact_id", "content"]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "description": "The unique identifier of the edited artifact"
+        },
+        "filename": {
+          "type": "string",
+          "description": "The filename of the PDF"
+        },
+        "s3_bucket": {
+          "type": "string",
+          "description": "The S3 bucket where the PDF is stored"
+        },
+        "s3_key": {
+          "type": "string",
+          "description": "The S3 key of the PDF"
+        },
+        "updated_at": {
+          "type": "string",
+          "description": "ISO 8601 timestamp of when the artifact was updated"
+        }
+      }
+    }
   }
 ]

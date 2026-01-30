@@ -142,3 +142,68 @@ def save_artifact(
         "s3_key": s3_key,
         "created_at": created_at,
     }
+
+
+def update_artifact(artifact_id: str, content: bytes) -> dict:
+    """Update existing artifact content in S3.
+
+    Args:
+        artifact_id: The artifact ID to update
+        content: New content bytes
+
+    Returns:
+        Updated artifact metadata
+    """
+    metadata = get_artifact_metadata(artifact_id)
+    if not metadata:
+        raise ValueError(f"Artifact not found: {artifact_id}")
+
+    # Upload new content to S3
+    s3.put_object(
+        Bucket=metadata.s3_bucket,
+        Key=metadata.s3_key,
+        Body=content,
+        ContentType=metadata.content_type,
+    )
+
+    # Update file_size in DynamoDB
+    table_name = os.environ["BACKEND_TABLE_NAME"]
+    table = dynamodb.Table(table_name)
+    updated_at = datetime.now(UTC).isoformat()
+
+    table.update_item(
+        Key={"PK": f"ART#{artifact_id}", "SK": "META"},
+        UpdateExpression="SET #data.file_size = :size, updated_at = :updated_at",
+        ExpressionAttributeNames={"#data": "data"},
+        ExpressionAttributeValues={
+            ":size": len(content),
+            ":updated_at": updated_at,
+        },
+    )
+
+    # Send notification to websocket broker
+    queue_url = os.environ.get("WEBSOCKET_MESSAGE_QUEUE_URL")
+    if queue_url:
+        sqs.send_message(
+            QueueUrl=queue_url,
+            MessageBody=json.dumps({
+                "username": metadata.user_id,
+                "message": {
+                    "action": "artifacts",
+                    "data": {
+                        "event": "updated",
+                        "artifact_id": artifact_id,
+                        "filename": metadata.filename,
+                        "updated_at": updated_at,
+                    },
+                },
+            }),
+        )
+
+    return {
+        "artifact_id": artifact_id,
+        "filename": metadata.filename,
+        "s3_bucket": metadata.s3_bucket,
+        "s3_key": metadata.s3_key,
+        "updated_at": updated_at,
+    }
