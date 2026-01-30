@@ -290,26 +290,23 @@ importers:
         specifier: ^4.0.16
         version: 4.0.16(@types/node@22.19.1)(@vitest/ui@4.0.16)(jiti@2.4.2)(jsdom@22.1.0)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.6)(yaml@2.8.2)
 
-  packages/lambda/artifact-mcp:
+  packages/lambda/md-mcp:
     dependencies:
-      '@aws-sdk/client-apigatewaymanagementapi':
-        specifier: ^3.975.0
-        version: 3.975.0
       '@aws-sdk/client-dynamodb':
         specifier: ^3.972.0
         version: 3.974.0
       '@aws-sdk/client-s3':
         specifier: ^3.972.0
-        version: 3.972.0
+        version: 3.975.0
+      '@aws-sdk/client-sqs':
+        specifier: ^3.972.0
+        version: 3.978.0
       '@aws-sdk/lib-dynamodb':
         specifier: ^3.972.0
         version: 3.974.0(@aws-sdk/client-dynamodb@3.974.0)
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.972.0
-        version: 3.972.0
-      iovalkey:
-        specifier: ^0.3.3
-        version: 0.3.3
+        version: 3.975.0
       nanoid:
         specifier: ^5.1.6
         version: 5.1.6
@@ -1018,10 +1015,6 @@ packages:
     resolution: {integrity: sha512-/7vRBsfmiOlg2X67EdKrzzQGw5/SbkXb7ALHQmlQLkZh8qNgvS2G2dDC6NtF3hzFlpP3j2k+KIEtql/6VrI6JA==}
     engines: {node: '>=20.0.0'}
 
-  '@aws-sdk/s3-request-presigner@3.972.0':
-    resolution: {integrity: sha512-AsmnNkW+RF+UQ86bYduMN4e6DuEAsy9nragtBAdGnlVYILTB7C2AjMVzp2EM1WOzjZ4dDsOUS/t099rzi+GcfQ==}
-    engines: {node: '>=20.0.0'}
-
   '@aws-sdk/s3-request-presigner@3.975.0':
     resolution: {integrity: sha512-rqDktHVSB7Ah7XXqr6BWMqDhGXEccp0h1EivaOGED73JjeG/S7taoywJPqi7YkalRb3Ka+LRc7wVoN9wSa4KQA==}
     engines: {node: '>=20.0.0'}
@@ -1099,10 +1092,6 @@ packages:
 
   '@aws-sdk/util-endpoints@3.972.0':
     resolution: {integrity: sha512-6JHsl1V/a1ZW8D8AFfd4R52fwZPnZ5H4U6DS8m/bWT8qad72NvbOFAC7U2cDtFs2TShqUO3TEiX/EJibtY3ijg==}
-    engines: {node: '>=20.0.0'}
-
-  '@aws-sdk/util-format-url@3.972.0':
-    resolution: {integrity: sha512-o4zqsW/PxrcsTla/Yh2dkRS26kP76QQWZq/i/JgVNFBAr9x0E2oJcCeh8Daj2AA+8AZ8VWln9x706FFzWWQwvQ==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/util-format-url@3.972.1':
@@ -11111,17 +11100,6 @@ snapshots:
       '@smithy/types': 4.12.0
       tslib: 2.8.1
 
-  '@aws-sdk/s3-request-presigner@3.972.0':
-    dependencies:
-      '@aws-sdk/signature-v4-multi-region': 3.972.0
-      '@aws-sdk/types': 3.972.0
-      '@aws-sdk/util-format-url': 3.972.0
-      '@smithy/middleware-endpoint': 4.4.10
-      '@smithy/protocol-http': 5.3.8
-      '@smithy/smithy-client': 4.10.11
-      '@smithy/types': 4.12.0
-      tslib: 2.8.1
-
   '@aws-sdk/s3-request-presigner@3.975.0':
     dependencies:
       '@aws-sdk/signature-v4-multi-region': 3.972.0
@@ -11267,13 +11245,6 @@ snapshots:
       '@smithy/types': 4.12.0
       '@smithy/url-parser': 4.2.8
       '@smithy/util-endpoints': 3.2.8
-      tslib: 2.8.1
-
-  '@aws-sdk/util-format-url@3.972.0':
-    dependencies:
-      '@aws-sdk/types': 3.972.0
-      '@smithy/querystring-builder': 4.2.8
-      '@smithy/types': 4.12.0
       tslib: 2.8.1
 
   '@aws-sdk/util-format-url@3.972.1':

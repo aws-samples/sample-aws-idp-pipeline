@@ -1,0 +1,131 @@
+[
+  {
+    "name": "save_markdown",
+    "description": "Save markdown content as an artifact in the project. Use this tool when you need to create a new markdown document.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "description": "The unique identifier of the user"
+        },
+        "project_id": {
+          "type": "string",
+          "description": "The unique identifier of the project to save the artifact in"
+        },
+        "filename": {
+          "type": "string",
+          "description": "Filename for the markdown artifact (e.g., 'report.md')"
+        },
+        "content": {
+          "type": "string",
+          "description": "The markdown content to save"
+        }
+      },
+      "required": ["user_id", "project_id", "filename", "content"]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "description": "Unique identifier of the saved artifact"
+        },
+        "filename": {
+          "type": "string",
+          "description": "Filename of the saved markdown"
+        },
+        "s3_bucket": {
+          "type": "string",
+          "description": "S3 bucket where the artifact is stored"
+        },
+        "s3_key": {
+          "type": "string",
+          "description": "S3 object key where the artifact is stored"
+        },
+        "created_at": {
+          "type": "string",
+          "description": "ISO 8601 timestamp of when the artifact was created"
+        }
+      }
+    }
+  },
+  {
+    "name": "load_markdown",
+    "description": "Load an existing markdown artifact from the project. Use this tool when you need to read a previously saved markdown document.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "description": "The unique identifier of the markdown artifact to load"
+        }
+      },
+      "required": ["artifact_id"]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "description": "Unique identifier of the artifact"
+        },
+        "filename": {
+          "type": "string",
+          "description": "Filename of the markdown"
+        },
+        "content": {
+          "type": "string",
+          "description": "The markdown content"
+        },
+        "created_at": {
+          "type": "string",
+          "description": "ISO 8601 timestamp of when the artifact was created"
+        }
+      }
+    }
+  },
+  {
+    "name": "edit_markdown",
+    "description": "Edit an existing markdown artifact's content. Use this tool when you need to update the content of a previously saved markdown document.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "description": "The unique identifier of the markdown artifact to edit"
+        },
+        "content": {
+          "type": "string",
+          "description": "The new markdown content"
+        }
+      },
+      "required": ["artifact_id", "content"]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "description": "Unique identifier of the edited artifact"
+        },
+        "filename": {
+          "type": "string",
+          "description": "Filename of the markdown"
+        },
+        "s3_bucket": {
+          "type": "string",
+          "description": "S3 bucket where the artifact is stored"
+        },
+        "s3_key": {
+          "type": "string",
+          "description": "S3 object key where the artifact is stored"
+        },
+        "updated_at": {
+          "type": "string",
+          "description": "ISO 8601 timestamp of when the artifact was updated"
+        }
+      }
+    }
+  }
+]

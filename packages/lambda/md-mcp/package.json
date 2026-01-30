@@ -1,9 +1,9 @@
 {
-  "name": "@idp-v2/artifact-mcp",
+  "name": "@idp-v2/md-mcp",
   "version": "1.0.0",
-  "description": "Artifact MCP Lambda handler for AgentCore Gateway",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "description": "Markdown MCP Lambda handler for AgentCore Gateway",
+  "main": "dist/handler.js",
+  "types": "dist/handler.d.ts",
   "type": "module",
   "scripts": {
     "build": "tsc",
@@ -13,12 +13,11 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@aws-sdk/client-apigatewaymanagementapi": "^3.975.0",
     "@aws-sdk/client-dynamodb": "^3.972.0",
     "@aws-sdk/client-s3": "^3.972.0",
+    "@aws-sdk/client-sqs": "^3.972.0",
     "@aws-sdk/lib-dynamodb": "^3.972.0",
     "@aws-sdk/s3-request-presigner": "^3.972.0",
-    "iovalkey": "^0.3.3",
     "nanoid": "^5.1.6"
   },
   "devDependencies": {

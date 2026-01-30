@@ -1,13 +1,11 @@
-export interface SaveArtifactInput {
+export interface SaveMarkdownInput {
   user_id: string;
   project_id: string;
   filename: string;
   content: string;
-  content_type: string;
-  encoding?: 'text' | 'base64';
 }
 
-export interface SaveArtifactOutput {
+export interface SaveMarkdownOutput {
   artifact_id: string;
   filename: string;
   s3_bucket: string;
@@ -15,26 +13,23 @@ export interface SaveArtifactOutput {
   created_at: string;
 }
 
-export interface LoadArtifactInput {
+export interface LoadMarkdownInput {
   artifact_id: string;
 }
 
-export interface LoadArtifactOutput {
+export interface LoadMarkdownOutput {
   artifact_id: string;
   filename: string;
-  content_type: string;
   content: string;
-  encoding: 'text' | 'base64';
   created_at: string;
 }
 
-export interface EditArtifactInput {
+export interface EditMarkdownInput {
   artifact_id: string;
   content: string;
-  encoding?: 'text' | 'base64';
 }
 
-export interface EditArtifactOutput {
+export interface EditMarkdownOutput {
   artifact_id: string;
   filename: string;
   s3_bucket: string;
