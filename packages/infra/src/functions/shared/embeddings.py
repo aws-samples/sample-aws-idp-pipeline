@@ -7,9 +7,12 @@ from lancedb.embeddings import TextEmbeddingFunction, register
 from pydantic import PrivateAttr
 
 
+EMBEDDING_MODEL_ID = os.environ.get('EMBEDDING_MODEL_ID', 'amazon.nova-2-multimodal-embeddings-v1:0')
+
+
 @register('bedrock-nova')
 class BedrockEmbeddingFunction(TextEmbeddingFunction):
-    model_id: str = 'amazon.nova-2-multimodal-embeddings-v1:0'
+    model_id: str = EMBEDDING_MODEL_ID
     region_name: str = 'us-east-1'
 
     _client: Any = PrivateAttr()
@@ -61,7 +64,7 @@ def generate_single_embedding(text: str, client=None) -> List[float]:
 
     try:
         response = client.invoke_model(
-            modelId='amazon.nova-2-multimodal-embeddings-v1:0',
+            modelId=EMBEDDING_MODEL_ID,
             body=json.dumps({
                 'taskType': 'SINGLE_EMBEDDING',
                 'singleEmbeddingParams': {

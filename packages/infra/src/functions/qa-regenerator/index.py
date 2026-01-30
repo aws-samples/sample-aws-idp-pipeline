@@ -12,7 +12,7 @@ from PIL import Image
 
 from shared.s3_analysis import get_segment_analysis, save_segment_analysis
 
-BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-3-7-sonnet-20250219-v1:0')
+BEDROCK_MODEL_ID = os.environ['BEDROCK_MODEL_ID']
 LANCEDB_FUNCTION_NAME = os.environ.get('LANCEDB_FUNCTION_NAME', 'idp-v2-lancedb-service')
 
 s3_client = None

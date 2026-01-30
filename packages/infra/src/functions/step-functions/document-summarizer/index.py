@@ -85,7 +85,7 @@ def handler(event, context):
     document_id = event.get('document_id')
     file_uri = event.get('file_uri')
     segment_count = event.get('segment_count', 0)
-    model_id = os.environ.get('SUMMARIZER_MODEL_ID', 'us.anthropic.claude-3-5-haiku-20241022-v1:0')
+    model_id = os.environ['SUMMARIZER_MODEL_ID']
 
     # Fallback: extract document_id from file_uri if not provided
     if not document_id and file_uri:

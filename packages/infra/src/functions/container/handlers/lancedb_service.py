@@ -75,9 +75,12 @@ def extract_keywords(text: str) -> str:
     return ' '.join(results)
 
 
+EMBEDDING_MODEL_ID = os.environ.get('EMBEDDING_MODEL_ID', 'amazon.nova-2-multimodal-embeddings-v1:0')
+
+
 @register('bedrock-nova')
 class BedrockEmbeddingFunction(TextEmbeddingFunction):
-    model_id: str = 'amazon.nova-2-multimodal-embeddings-v1:0'
+    model_id: str = EMBEDDING_MODEL_ID
     region_name: str = 'us-east-1'
     _client: object = PrivateAttr()
     _ndims: int = PrivateAttr()

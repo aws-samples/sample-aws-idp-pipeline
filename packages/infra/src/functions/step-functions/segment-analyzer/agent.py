@@ -16,7 +16,7 @@ class VisionReactAgent:
         self,
         model_id: str,
         region: str = 'us-east-1',
-        video_model_id: str = 'us.twelvelabs.pegasus-1-2-v1:0',
+        video_model_id: str = '',
         bucket_owner_account_id: str = ''
     ):
         self.model_id = model_id
