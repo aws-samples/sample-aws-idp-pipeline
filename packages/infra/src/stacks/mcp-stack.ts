@@ -106,10 +106,7 @@ export class McpStack extends Stack {
         'Markdown processing tools: save, load, and edit markdown files. Use these tools when working with markdown documents.',
       lambdaFunction: this.mdMcp.function,
       toolSchema: agentcore.ToolSchema.fromLocalAsset(
-        path.resolve(
-          process.cwd(),
-          '../../packages/lambda/md-mcp/schema.json',
-        ),
+        path.resolve(process.cwd(), '../../packages/lambda/md-mcp/schema.json'),
       ),
     });
 

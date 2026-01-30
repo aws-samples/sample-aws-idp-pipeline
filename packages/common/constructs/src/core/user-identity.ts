@@ -17,7 +17,6 @@ import {
 import { Construct } from 'constructs';
 import { RuntimeConfig } from './runtime-config.js';
 import { Distribution } from 'aws-cdk-lib/aws-cloudfront';
-import { suppressRules } from './checkov.js';
 import { ITableV2 } from 'aws-cdk-lib/aws-dynamodb';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
@@ -59,13 +58,6 @@ export class UserIdentity extends Construct {
       userPoolWebClientId: this.userPoolClient.userPoolClientId,
     };
 
-    suppressRules(
-      this.userPool,
-      ['CKV_AWS_111'],
-      'SMS Role requires wildcard resource',
-      (c) => c.node.path.includes('/smsRole/'),
-    );
-
     new CfnOutput(this, `${id}-UserPoolId`, {
       value: this.userPool.userPoolId,
     });
@@ -92,24 +84,20 @@ export class UserIdentity extends Construct {
       },
       mfa: Mfa.OFF,
       featurePlan: FeaturePlan.PLUS,
-      mfaSecondFactor: { sms: true, otp: true },
       signInCaseSensitive: false,
       signInAliases: { username: true, email: true },
       accountRecovery: AccountRecovery.EMAIL_ONLY,
       selfSignUpEnabled: false,
       standardAttributes: {
-        phoneNumber: { required: false },
         email: { required: true },
         givenName: { required: true },
         familyName: { required: true },
       },
       autoVerify: {
         email: true,
-        phone: true,
       },
       keepOriginal: {
         email: true,
-        phone: true,
       },
     });
 
