@@ -122,12 +122,8 @@ Resources:
                   echo "=== Pre-cleanup: S3 Express Directory Buckets ==="
                   aws s3api list-directory-buckets --query 'Buckets[].BucketName' --output text 2>/dev/null | tr '\t' '\n' | grep 'idp' | while read bucket; do
                     if [ -n "$bucket" ]; then
-                      echo "Deleting objects in directory bucket: $bucket"
-                      aws s3api list-objects-v2 --bucket "$bucket" --query 'Contents[].Key' --output text 2>/dev/null | tr '\t' '\n' | while read key; do
-                        if [ -n "$key" ] && [ "$key" != "None" ]; then
-                          aws s3api delete-object --bucket "$bucket" --key "$key" 2>/dev/null || true
-                        fi
-                      done
+                      echo "Emptying directory bucket: $bucket"
+                      aws s3 rm "s3://$bucket" --recursive 2>/dev/null || true
                       echo "Deleting directory bucket: $bucket"
                       aws s3api delete-bucket --bucket "$bucket" 2>/dev/null || true
                     fi

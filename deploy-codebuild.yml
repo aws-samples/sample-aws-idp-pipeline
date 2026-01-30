@@ -125,7 +125,7 @@ Resources:
                     aws cloudformation wait stack-delete-complete --stack-name CDKToolkit 2>/dev/null || true
                     npx cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_DEFAULT_REGION --require-approval never
                   fi
-                - cd /tmp/project/packages/infra && npx cdk deploy --all --require-approval=never --concurrency=1
+                - cd /tmp/project/packages/infra && npx cdk deploy --all --require-approval=never --concurrency=4
             post_build:
               commands:
                 - |
