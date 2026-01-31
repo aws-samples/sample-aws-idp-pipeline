@@ -39,6 +39,10 @@
 
 > **注意**: これはAWSサンプルプロジェクトです。実験、評価、開発目的で設計されています。
 
+<p align="center">
+  <img src="../assets/main-screen.png" alt="Main Screen" width="900">
+</p>
+
 ## 機能
 
 - **インテリジェント文書処理（IDP）**
@@ -47,9 +51,9 @@
   - AWS Transcribeによる音声/動画テキスト変換
   - ファイルタイプ自動検出と前処理パイプラインルーティング
 
-- **AI駆動分析**
+- **[AI駆動分析](../analysis/ANALYSIS_ja.md)**
   - Claude Sonnet 4.5 Vision ReAct Agentによるセグメント別深層分析
-  - Claude Haiku 3.5による文書要約生成
+  - Claude Haiku 4.5による文書要約生成
   - Nova Embedによる1024次元ベクトル埋め込み
 
 - **ハイブリッド検索**
@@ -108,7 +112,7 @@ S3 Upload (Presigned URL)
         ─→ Distributed Map (max 30)
             ├─ Segment Analyzer (Claude Sonnet 4.5 Vision)
             └─ Analysis Finalizer → SQS → LanceDB Writer
-        ─→ Document Summarizer (Claude Haiku 3.5)
+        ─→ Document Summarizer (Claude Haiku 4.5)
             → Vector Embedding (Nova 1024d) → LanceDB
 ```
 
@@ -209,6 +213,8 @@ pnpm nx serve idp_v2.idp_agent
 
 ## デプロイ
 
+> **Quick Deploy**: CloudShell + CodeBuildを使用して、単一スクリプトでパイプライン全体をデプロイできます。[Quick Deploy Guide](../deployment/DEPLOYMENT_ja.md)を参照してください。
+
 ### miseを使用したデプロイ（推奨）
 
 ```bash
@@ -261,7 +267,7 @@ pnpm nx lint @idp-v2/infra --configuration=fix  # 自動修正
 | モデル | 用途 | 説明 |
 |--------|------|------|
 | Claude Sonnet 4.5 | セグメント分析 / エージェント | Vision ReAct Agent、深層文書分析 |
-| Claude Haiku 3.5 | 文書要約 | 軽量モデル、高速要約生成 |
+| Claude Haiku 4.5 | 文書要約 | 軽量モデル、高速要約生成 |
 | Nova Embed Text v1 | ベクトル埋め込み | 1024次元テキスト埋め込み |
 | Cohere Rerank v3.5 | 検索再ランキング | ハイブリッド検索結果最適化 |
 
@@ -327,7 +333,7 @@ sample-aws-idp-pipeline/
 
 ### AI / ML
 - Bedrock Agent Core（Strands SDK、ReActパターン）
-- Bedrock Claude Sonnet 4.5 / Haiku 3.5
+- Bedrock Claude Sonnet 4.5 / Haiku 4.5
 - Bedrock Nova Embed（1024次元）
 - Bedrock Cohere Rerank v3.5
 - PaddleOCR（SageMaker）

@@ -39,6 +39,10 @@ An AI-powered IDP prototype that transforms unstructured data into actionable in
 
 > **Note**: This is an AWS sample project designed for experimentation, evaluation, and development purposes.
 
+<p align="center">
+  <img src="docs/assets/main-screen.png" alt="Main Screen" width="900">
+</p>
+
 ## Features
 
 - **Intelligent Document Processing (IDP)**
@@ -47,9 +51,9 @@ An AI-powered IDP prototype that transforms unstructured data into actionable in
   - Audio/video transcription via AWS Transcribe
   - Automatic file type detection and preprocessing pipeline routing
 
-- **AI-Powered Analysis**
+- **[AI-Powered Analysis](docs/analysis/ANALYSIS_en.md)**
   - Per-segment deep analysis with Claude Sonnet 4.5 Vision ReAct Agent
-  - Document summarization with Claude Haiku 3.5
+  - Document summarization with Claude Haiku 4.5
   - 1024-dimensional vector embeddings with Nova Embed
 
 - **Hybrid Search**
@@ -108,7 +112,7 @@ S3 Upload (Presigned URL)
         ─→ Distributed Map (max 30)
             ├─ Segment Analyzer (Claude Sonnet 4.5 Vision)
             └─ Analysis Finalizer → SQS → LanceDB Writer
-        ─→ Document Summarizer (Claude Haiku 3.5)
+        ─→ Document Summarizer (Claude Haiku 4.5)
             → Vector Embedding (Nova 1024d) → LanceDB
 ```
 
@@ -209,6 +213,8 @@ pnpm nx serve idp_v2.idp_agent
 
 ## Deployment
 
+> **Quick Deploy**: Deploy the entire pipeline with a single script using CloudShell + CodeBuild. See [Quick Deploy Guide](docs/deployment/DEPLOYMENT_en.md).
+
 ### Deploy with mise (Recommended)
 
 ```bash
@@ -261,7 +267,7 @@ pnpm nx lint @idp-v2/infra --configuration=fix  # Auto-fix
 | Model | Purpose | Description |
 |-------|---------|-------------|
 | Claude Sonnet 4.5 | Segment analysis / Agent | Vision ReAct Agent, deep document analysis |
-| Claude Haiku 3.5 | Document summarization | Lightweight model, fast summary generation |
+| Claude Haiku 4.5 | Document summarization | Lightweight model, fast summary generation |
 | Nova Embed Text v1 | Vector embeddings | 1024-dimensional text embeddings |
 | Cohere Rerank v3.5 | Search reranking | Hybrid search result optimization |
 
@@ -327,7 +333,7 @@ sample-aws-idp-pipeline/
 
 ### AI / ML
 - Bedrock Agent Core (Strands SDK, ReAct pattern)
-- Bedrock Claude Sonnet 4.5 / Haiku 3.5
+- Bedrock Claude Sonnet 4.5 / Haiku 4.5
 - Bedrock Nova Embed (1024 dimensions)
 - Bedrock Cohere Rerank v3.5
 - PaddleOCR (SageMaker)
