@@ -3,6 +3,7 @@ import * as cr from 'aws-cdk-lib/custom-resources';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
+import { Queue } from 'aws-cdk-lib/aws-sqs';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import * as fs from 'fs';
@@ -58,6 +59,17 @@ export class AgentStack extends Stack {
       agentStorageBucketName,
     );
 
+    // Get websocket message queue from SSM
+    const websocketMessageQueueArn = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.WEBSOCKET_MESSAGE_QUEUE_ARN,
+    );
+    const websocketMessageQueue = Queue.fromQueueArn(
+      this,
+      'WebsocketMessageQueue',
+      websocketMessageQueueArn,
+    );
+
     // Initialize default system prompt in S3 on first deployment
     const systemPromptPath = path.resolve(
       process.cwd(),
@@ -93,6 +105,7 @@ export class AgentStack extends Stack {
       gateway,
       bedrockModelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
       agentStorageBucket,
+      websocketMessageQueue,
     });
 
     const researchAgent = new IdpAgent(this, 'ResearchAgent', {

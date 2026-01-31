@@ -3,6 +3,7 @@ import { Platform } from 'aws-cdk-lib/aws-ecr-assets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { IBucket } from 'aws-cdk-lib/aws-s3';
 import { ITable } from 'aws-cdk-lib/aws-dynamodb';
+import { IQueue } from 'aws-cdk-lib/aws-sqs';
 import {
   AgentRuntimeArtifact,
   Gateway,
@@ -18,6 +19,7 @@ export interface IdpAgentProps {
   gateway?: Gateway;
   bedrockModelId?: string;
   agentStorageBucket?: IBucket;
+  websocketMessageQueue?: IQueue;
 }
 
 export class IdpAgent extends Construct {
@@ -34,6 +36,7 @@ export class IdpAgent extends Construct {
       gateway,
       bedrockModelId,
       agentStorageBucket,
+      websocketMessageQueue,
     } = props;
 
     const dockerImage = AgentRuntimeArtifact.fromAsset(agentPath, {
@@ -52,6 +55,9 @@ export class IdpAgent extends Construct {
         ...(agentStorageBucket && {
           AGENT_STORAGE_BUCKET_NAME: agentStorageBucket.bucketName,
         }),
+        ...(websocketMessageQueue && {
+          WEBSOCKET_MESSAGE_QUEUE_URL: websocketMessageQueue.queueUrl,
+        }),
       },
     });
 
@@ -62,9 +68,14 @@ export class IdpAgent extends Construct {
     // Grant S3 read/write access for session storage
     sessionStorageBucket.grantReadWrite(this.runtime.role);
 
-    // Grant S3 read access for agent storage (custom prompts)
+    // Grant S3 read/write access for agent storage (artifacts)
     if (agentStorageBucket) {
-      agentStorageBucket.grantRead(this.runtime.role);
+      agentStorageBucket.grantReadWrite(this.runtime.role);
+    }
+
+    // Grant SQS send message for websocket notifications
+    if (websocketMessageQueue) {
+      websocketMessageQueue.grantSendMessages(this.runtime.role);
     }
 
     // Grant DynamoDB read/write access for backend table
