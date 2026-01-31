@@ -26,6 +26,16 @@ while [[ "$#" -gt 0 ]]; do
         --repo-url) REPO_URL="$2"; shift ;;
         --version) VERSION="$2"; shift ;;
         --stack-name) STACK_NAME="$2"; shift ;;
+        --info)
+            FRONTEND_DOMAIN=$(aws cloudformation describe-stacks --stack-name IDP-V2-Application \
+                --query 'Stacks[0].Outputs[?contains(OutputKey,`DistributionDomainName`)].OutputValue' --output text 2>/dev/null)
+            if [[ -n "$FRONTEND_DOMAIN" && "$FRONTEND_DOMAIN" != "None" ]]; then
+                echo "Application URL: https://$FRONTEND_DOMAIN"
+            else
+                echo "Application stack not found or not yet deployed."
+            fi
+            exit 0
+            ;;
         --help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -34,6 +44,7 @@ while [[ "$#" -gt 0 ]]; do
             echo "  --repo-url URL        Repository URL (default: github.com/aws-samples/sample-aws-idp-pipeline)"
             echo "  --version VERSION     Branch or tag to deploy (default: main)"
             echo "  --stack-name NAME     CloudFormation stack name (default: sample-aws-idp-pipeline-codebuild)"
+            echo "  --info                Show deployed application URL"
             echo "  --help                Show this help message"
             exit 0
             ;;

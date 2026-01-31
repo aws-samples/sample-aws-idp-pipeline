@@ -120,7 +120,7 @@ Resources:
                   fi
                 - |
                   echo "=== Pre-cleanup: S3 Express Directory Buckets ==="
-                  aws s3api list-directory-buckets --query 'Buckets[].BucketName' --output text 2>/dev/null | tr '\t' '\n' | grep 'idp' | while read bucket; do
+                  aws s3api list-directory-buckets --query 'Buckets[].BucketName' --output text 2>/dev/null | tr '\t' '\n' | grep -E 'idp|lancedb' | while read bucket; do
                     if [ -n "$bucket" ]; then
                       echo "Emptying directory bucket: $bucket"
                       aws s3 rm "s3://$bucket" --recursive 2>/dev/null || true
@@ -142,6 +142,16 @@ Resources:
                       echo "Retrying deletion of $stack..."
                       aws cloudformation delete-stack --stack-name "$stack" 2>/dev/null || true
                       aws cloudformation wait stack-delete-complete --stack-name "$stack" 2>/dev/null || true
+                    fi
+                  done
+                - |
+                  echo "=== Post-cleanup: Cognito User Pool ==="
+                  for pool_id in $(aws cognito-idp list-user-pools --max-results 20 \
+                    --query 'UserPools[?starts_with(Name,`UserIdentity`)].Id' --output text 2>/dev/null); do
+                    if [ -n "$pool_id" ]; then
+                      echo "Deleting User Pool: $pool_id"
+                      aws cognito-idp update-user-pool --user-pool-id "$pool_id" --deletion-protection INACTIVE 2>/dev/null || true
+                      aws cognito-idp delete-user-pool --user-pool-id "$pool_id" 2>/dev/null || true
                     fi
                   done
                 - |
