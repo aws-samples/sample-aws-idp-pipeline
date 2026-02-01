@@ -137,7 +137,7 @@ export default function ProjectNavBar({
   ];
 
   return (
-    <nav className="flex items-center h-[69px] flex-shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-4 -mx-6 -mt-6 mb-3">
+    <nav className="flex items-center h-[68px] min-h-[68px] flex-shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-4 -mx-6 -mt-6 mb-3">
       {/* Breadcrumb */}
       <div className="flex items-center">
         {/* Home */}

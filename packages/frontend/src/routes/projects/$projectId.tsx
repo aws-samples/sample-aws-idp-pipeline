@@ -123,6 +123,31 @@ function ProjectDetailPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const progressFetchedRef = useRef(false);
 
+  // Persist panel sizes in localStorage
+  const panelStorageKey = 'idp-panel-sizes';
+  const savedPanelSizes = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(panelStorageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length === 3) {
+          return parsed as number[];
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return [28, 47, 25];
+  }, []);
+
+  const handlePanelResizeEnd = useCallback((details: { size: number[] }) => {
+    try {
+      localStorage.setItem(panelStorageKey, JSON.stringify(details.size));
+    } catch {
+      // ignore
+    }
+  }, []);
+
   // Ctrl+Shift+S keyboard shortcut for system prompt modal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -829,6 +854,10 @@ function ProjectDetailPage() {
       setSelectedWorkflow(data);
     } catch (error) {
       console.error('Failed to load workflow detail:', error);
+      showToast(
+        'error',
+        t('workflow.loadError', 'Failed to load workflow details'),
+      );
     }
     setLoadingWorkflow(false);
   };
@@ -1706,7 +1735,8 @@ function ProjectDetailPage() {
       <div className="flex-1 min-h-0">
         <ResizablePanelGroup
           orientation="horizontal"
-          defaultSize={[28, 47, 25]}
+          defaultSize={savedPanelSizes}
+          onResizeEnd={handlePanelResizeEnd}
           panels={[
             { id: 'documents', minSize: 15, maxSize: 35, collapsible: true },
             { id: 'chat', minSize: 25, maxSize: 70 },

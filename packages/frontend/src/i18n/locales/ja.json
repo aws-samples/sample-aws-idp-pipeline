@@ -36,7 +36,11 @@
     "lightMode": "ライトモード",
     "tools": "ツール",
     "export": "エクスポート",
-    "import": "インポート"
+    "import": "インポート",
+    "documentation": "ドキュメント"
+  },
+  "sidebar": {
+    "aiDisclaimer": "AIは間違いを犯す可能性があります。\n重要な情報は必ずご確認ください。"
   },
   "projects": {
     "title": "プロジェクト",
@@ -325,6 +329,18 @@
     "he": "ヘブライ語",
     "mn": "モンゴル語",
     "sw": "スワヒリ語"
+  },
+  "settings": {
+    "heroTitle": "設定と情報",
+    "storedInBrowser": "この設定はブラウザのローカルストレージに保存されます。",
+    "display": "ディスプレイ",
+    "language": "言語",
+    "selectLanguage": "お好みの言語を選択してください",
+    "theme": "テーマ",
+    "darkMode": "ダークモード",
+    "lightMode": "ライトモード",
+    "license": "ライセンス",
+    "licenseTitle": "Amazon Software License"
   },
   "systemPrompt": {
     "title": "System Prompt",

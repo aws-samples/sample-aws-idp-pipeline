@@ -7,28 +7,28 @@
     "us-east-1e",
     "us-east-1f"
   ],
-  "ssm:account=975050239358:parameterName=/idp-v2/vpc/id:region=us-east-1": "vpc-0ded4bf553cc141a1",
-  "vpc-provider:account=975050239358:filter.vpc-id=vpc-0ded4bf553cc141a1:region=us-east-1:returnAsymmetricSubnets=true": {
-    "vpcId": "vpc-0ded4bf553cc141a1",
+  "ssm:account=975050239358:parameterName=/idp-v2/vpc/id:region=us-east-1": "vpc-0ae595dc9c526e152",
+  "vpc-provider:account=975050239358:filter.vpc-id=vpc-0ae595dc9c526e152:region=us-east-1:returnAsymmetricSubnets=true": {
+    "vpcId": "vpc-0ae595dc9c526e152",
     "vpcCidrBlock": "10.0.0.0/16",
     "ownerAccountId": "975050239358",
     "availabilityZones": [],
     "subnetGroups": [
       {
-        "name": "Private",
-        "type": "Private",
+        "name": "Public",
+        "type": "Public",
         "subnets": [
           {
-            "subnetId": "subnet-0cae8d745694ece92",
-            "cidr": "10.0.2.0/24",
+            "subnetId": "subnet-01f7c22d0c4df3ffc",
+            "cidr": "10.0.0.0/24",
             "availabilityZone": "us-east-1a",
-            "routeTableId": "rtb-0b90c224b83fc17ce"
+            "routeTableId": "rtb-07fbe026fadaff00c"
           },
           {
-            "subnetId": "subnet-0282dade4b517635c",
-            "cidr": "10.0.3.0/24",
+            "subnetId": "subnet-029793eedf3f42d5f",
+            "cidr": "10.0.1.0/24",
             "availabilityZone": "us-east-1b",
-            "routeTableId": "rtb-03623c1f702150a20"
+            "routeTableId": "rtb-03684361fe883d803"
           }
         ]
       },
@@ -37,44 +37,37 @@
         "type": "Isolated",
         "subnets": [
           {
-            "subnetId": "subnet-041cabdb26013a486",
+            "subnetId": "subnet-0d8f20891ccfe4749",
             "cidr": "10.0.4.0/24",
             "availabilityZone": "us-east-1a",
-            "routeTableId": "rtb-0f2d2b201e95a5b5b"
+            "routeTableId": "rtb-04981fe6336cc3063"
           },
           {
-            "subnetId": "subnet-0b4882a047dc3bc9b",
+            "subnetId": "subnet-0be38f89205c05b37",
             "cidr": "10.0.5.0/24",
             "availabilityZone": "us-east-1b",
-            "routeTableId": "rtb-07ea9facc9238777f"
+            "routeTableId": "rtb-0bc84451c2dc6f45e"
           }
         ]
       },
       {
-        "name": "Public",
-        "type": "Public",
+        "name": "Private",
+        "type": "Private",
         "subnets": [
           {
-            "subnetId": "subnet-02b1caad25b3febdd",
-            "cidr": "10.0.0.0/24",
+            "subnetId": "subnet-0175bcc28cb27d98f",
+            "cidr": "10.0.2.0/24",
             "availabilityZone": "us-east-1a",
-            "routeTableId": "rtb-00a4d1f127e5b9a09"
+            "routeTableId": "rtb-0e44e4f692ba13a37"
           },
           {
-            "subnetId": "subnet-06d38d06dbc15a672",
-            "cidr": "10.0.1.0/24",
+            "subnetId": "subnet-05a15879ea25f9112",
+            "cidr": "10.0.3.0/24",
             "availabilityZone": "us-east-1b",
-            "routeTableId": "rtb-03fb4fbcf0e423810"
+            "routeTableId": "rtb-014d5cc90b6c278fd"
           }
         ]
       }
     ]
-  },
-  "availability-zones:account=975050239358:region=us-west-2": [
-    "us-west-2a",
-    "us-west-2b",
-    "us-west-2c",
-    "us-west-2d"
-  ],
-  "ami:account=975050239358:filters.image-type.0=machine:filters.name.0=Deep Learning OSS Nvidia Driver AMI GPU PyTorch 2.5.* (Ubuntu 22.04) *:filters.state.0=available:owners.0=amazon:region=us-east-1": "ami-07f71d5a2b40df1a9"
+  }
 }

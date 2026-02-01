@@ -10,6 +10,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
+import mammoth from 'mammoth';
 import { Artifact } from '../types/project';
 
 interface ArtifactViewerProps {
@@ -45,6 +46,13 @@ export default function ArtifactViewer({
     artifact.content_type.startsWith('text/') ||
     artifact.content_type === 'application/json';
   const isHtml = artifact.content_type === 'text/html';
+  const isPdf =
+    artifact.content_type === 'application/pdf' ||
+    artifact.filename.toLowerCase().endsWith('.pdf');
+  const isDocx =
+    artifact.content_type ===
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    artifact.filename.toLowerCase().endsWith('.docx');
 
   const loadContent = useCallback(async () => {
     setLoading(true);
@@ -56,8 +64,16 @@ export default function ArtifactViewer({
         artifact.s3_key,
       );
 
-      if (isImage) {
+      if (isImage || isPdf) {
         setImageUrl(presignedUrl);
+      } else if (isDocx) {
+        const response = await fetch(presignedUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to load: ${response.status}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        const result = await mammoth.convertToHtml({ arrayBuffer });
+        setContent(result.value);
       } else if (isText || isMarkdown || isHtml) {
         const response = await fetch(presignedUrl);
         if (!response.ok) {
@@ -76,7 +92,17 @@ export default function ArtifactViewer({
     } finally {
       setLoading(false);
     }
-  }, [artifact, getPresignedUrl, isImage, isText, isMarkdown, isHtml, t]);
+  }, [
+    artifact,
+    getPresignedUrl,
+    isImage,
+    isPdf,
+    isDocx,
+    isText,
+    isMarkdown,
+    isHtml,
+    t,
+  ]);
 
   useEffect(() => {
     loadContent();
@@ -147,6 +173,12 @@ export default function ArtifactViewer({
               {t('common.retry', 'Retry')}
             </button>
           </div>
+        ) : isPdf && imageUrl ? (
+          <iframe
+            src={imageUrl}
+            title={artifact.filename}
+            className="w-full h-full rounded-lg border-0"
+          />
         ) : isImage && imageUrl ? (
           <div className="flex items-center justify-center h-full bg-slate-100 dark:bg-slate-800 rounded-lg">
             <img
@@ -159,6 +191,11 @@ export default function ArtifactViewer({
               }}
             />
           </div>
+        ) : isDocx && content ? (
+          <div
+            className="prose prose-sm prose-slate dark:prose-invert max-w-none [&_strong]:!text-inherit"
+            dangerouslySetInnerHTML={{ __html: content }}
+          />
         ) : isMarkdown && content ? (
           <div className="prose prose-sm prose-slate dark:prose-invert max-w-none [&_strong]:!text-inherit">
             <ReactMarkdown

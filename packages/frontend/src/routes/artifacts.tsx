@@ -17,11 +17,11 @@ import {
   ChevronDown,
   X,
   ExternalLink,
-  Image as ImageIcon,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
+import mammoth from 'mammoth';
 import { useAwsClient } from '../hooks/useAwsClient';
 import { useToast } from '../components/Toast';
 import { Artifact, ArtifactsResponse } from '../types/project';
@@ -35,6 +35,12 @@ function getArtifactIcon(contentType: string) {
   if (contentType.startsWith('image/')) return Image;
   if (contentType.startsWith('video/')) return Film;
   if (contentType === 'application/pdf') return FileText;
+  if (
+    contentType ===
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    contentType === 'application/msword'
+  )
+    return FileText;
   if (
     contentType === 'application/vnd.ms-excel' ||
     contentType ===
@@ -55,6 +61,12 @@ function getIconClass(contentType: string): string {
   if (contentType.startsWith('image/')) return 'bg-purple-500';
   if (contentType.startsWith('video/')) return 'bg-pink-500';
   if (contentType === 'application/pdf') return 'bg-red-500';
+  if (
+    contentType ===
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    contentType === 'application/msword'
+  )
+    return 'bg-indigo-500';
   if (
     contentType === 'application/vnd.ms-excel' ||
     contentType ===
@@ -267,6 +279,13 @@ function ArtifactsPage() {
       const isText =
         artifact.content_type.startsWith('text/') ||
         artifact.content_type === 'application/json';
+      const isPdf =
+        artifact.content_type === 'application/pdf' ||
+        artifact.filename.toLowerCase().endsWith('.pdf');
+      const isDocx =
+        artifact.content_type ===
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        artifact.filename.toLowerCase().endsWith('.docx');
 
       try {
         const presignedUrl = await getPresignedDownloadUrl(
@@ -274,8 +293,16 @@ function ArtifactsPage() {
           artifact.s3_key,
         );
 
-        if (isImage) {
+        if (isImage || isPdf) {
           setViewerImageUrl(presignedUrl);
+        } else if (isDocx) {
+          const response = await fetch(presignedUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to load: ${response.status}`);
+          }
+          const arrayBuffer = await response.arrayBuffer();
+          const result = await mammoth.convertToHtml({ arrayBuffer });
+          setViewerContent(result.value);
         } else if (isText) {
           const response = await fetch(presignedUrl);
           if (!response.ok) {
@@ -544,15 +571,18 @@ function ArtifactsPage() {
           >
             {/* Header */}
             <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center ${getIconClass(viewingArtifact.content_type)}`}
-              >
-                {viewingArtifact.content_type.startsWith('image/') ? (
-                  <ImageIcon className="w-5 h-5 text-white" />
-                ) : (
-                  <FileText className="w-5 h-5 text-white" />
-                )}
-              </div>
+              {(() => {
+                const ViewerIcon = getArtifactIcon(
+                  viewingArtifact.content_type,
+                );
+                return (
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${getIconClass(viewingArtifact.content_type)}`}
+                  >
+                    <ViewerIcon className="w-5 h-5 text-white" />
+                  </div>
+                );
+              })()}
               <div className="flex-1 min-w-0">
                 <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200 truncate">
                   {viewingArtifact.filename}
@@ -610,6 +640,22 @@ function ArtifactsPage() {
                     {t('common.download', 'Download')}
                   </button>
                 </div>
+              ) : (viewingArtifact.content_type === 'application/pdf' ||
+                  viewingArtifact.filename.toLowerCase().endsWith('.pdf')) &&
+                viewerImageUrl ? (
+                <iframe
+                  src={viewerImageUrl}
+                  title={viewingArtifact.filename}
+                  className="w-full h-[70vh] rounded-lg border-0"
+                />
+              ) : (viewingArtifact.content_type ===
+                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+                  viewingArtifact.filename.toLowerCase().endsWith('.docx')) &&
+                viewerContent ? (
+                <div
+                  className="prose prose-sm prose-slate dark:prose-invert max-w-none [&_strong]:!text-inherit"
+                  dangerouslySetInnerHTML={{ __html: viewerContent }}
+                />
               ) : viewerImageUrl ? (
                 <div className="flex items-center justify-center min-h-64 bg-slate-100 dark:bg-slate-800 rounded-lg">
                   <img

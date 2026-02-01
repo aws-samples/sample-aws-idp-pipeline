@@ -36,7 +36,11 @@
     "lightMode": "Light mode",
     "tools": "Tools",
     "export": "Export",
-    "import": "Import"
+    "import": "Import",
+    "documentation": "Documentation"
+  },
+  "sidebar": {
+    "aiDisclaimer": "AI can make mistakes.\nPlease verify important information."
   },
   "projects": {
     "title": "Projects",
@@ -325,6 +329,18 @@
     "he": "Hebrew",
     "mn": "Mongolian",
     "sw": "Swahili"
+  },
+  "settings": {
+    "heroTitle": "Preferences & Info",
+    "storedInBrowser": "These settings are stored in your browser's local storage.",
+    "display": "Display",
+    "language": "Language",
+    "selectLanguage": "Select your preferred language",
+    "theme": "Theme",
+    "darkMode": "Dark Mode",
+    "lightMode": "Light Mode",
+    "license": "License",
+    "licenseTitle": "Amazon Software License"
   },
   "systemPrompt": {
     "title": "System Prompt",

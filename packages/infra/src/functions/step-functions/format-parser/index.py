@@ -11,7 +11,6 @@ import boto3
 import pypdf
 
 from shared.ddb_client import (
-    update_segment,
     update_workflow_status,
     WorkflowStatus,
     record_step_start,
@@ -20,7 +19,12 @@ from shared.ddb_client import (
     record_step_skipped,
     StepName,
 )
-from shared.s3_analysis import get_s3_client, parse_s3_uri
+from shared.s3_analysis import (
+    get_s3_client,
+    parse_s3_uri,
+    update_segment_analysis,
+    SegmentStatus,
+)
 
 BACKEND_TABLE_NAME = os.environ.get('BACKEND_TABLE_NAME', '')
 
@@ -48,10 +52,11 @@ def process_pdf(
             reader = pypdf.PdfReader(f)
             for page_num, page in enumerate(reader.pages):
                 text = (page.extract_text() or '').strip()
-                update_segment(
-                    workflow_id=workflow_id,
+                update_segment_analysis(
+                    file_uri=file_uri,
                     segment_index=page_num,
                     format_parser=text,
+                    status=SegmentStatus.PARSING,
                 )
                 page_count += 1
                 total_chars += len(text)

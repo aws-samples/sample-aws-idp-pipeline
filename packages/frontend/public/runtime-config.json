@@ -1,14 +1,14 @@
 {
-  "documentStorageBucketName": "document-storage-idpv2storagedocumentstorage865f0aa5",
-  "agentRuntimeArn": "arn:aws:bedrock-agentcore:us-east-1:975050239358:runtime/idp_agent-cxUmtK6cFz",
-  "websocketUrl": "wss://gurw50739f.execute-api.us-east-1.amazonaws.com/prod",
+  "documentStorageBucketName": "idp-v2-document-storage-975050239358",
+  "agentRuntimeArn": "arn:aws:bedrock-agentcore:us-east-1:975050239358:runtime/idp_agent-03lWWQC1QW",
+  "websocketUrl": "wss://mr6cxqidfd.execute-api.us-east-1.amazonaws.com/prod",
   "cognitoProps": {
     "region": "us-east-1",
-    "identityPoolId": "us-east-1:623ff7c4-cd54-4920-b680-572071037d49",
-    "userPoolId": "us-east-1_cyhGB8Kxa",
-    "userPoolWebClientId": "4d59lmri02vnjecj976u5d9q5"
+    "identityPoolId": "us-east-1:2c978243-44b7-46aa-893c-c2dc08630f5f",
+    "userPoolId": "us-east-1_5ONWYOkFW",
+    "userPoolWebClientId": "4gp0ttatl3plgcmj2gl0kerkru"
   },
   "apis": {
-    "Backend": "https://slhu1hr4jf.execute-api.us-east-1.amazonaws.com/"
+    "Backend": "https://o8syvab0ej.execute-api.us-east-1.amazonaws.com/"
   }
 }
