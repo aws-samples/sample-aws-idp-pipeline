@@ -1,4 +1,4 @@
-import { CfnOutput, CfnResource, RemovalPolicy, Stack } from 'aws-cdk-lib';
+import { Aws, CfnOutput, CfnResource, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import { Distribution, ViewerProtocolPolicy } from 'aws-cdk-lib/aws-cloudfront';
 import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import {
@@ -51,6 +51,7 @@ export class StaticWebsite extends Construct {
     });
 
     const accessLogsBucket = new Bucket(this, 'AccessLogsBucket', {
+      bucketName: `idp-v2-frontend-access-logs-${Aws.ACCOUNT_ID}`,
       versioned: false,
       enforceSSL: true,
       autoDeleteObjects: true,
@@ -74,6 +75,7 @@ export class StaticWebsite extends Construct {
 
     // S3 Bucket to hold website files
     this.websiteBucket = new Bucket(this, 'WebsiteBucket', {
+      bucketName: `idp-v2-frontend-${Aws.ACCOUNT_ID}`,
       versioned: true,
       enforceSSL: true,
       autoDeleteObjects: true,
@@ -91,6 +93,7 @@ export class StaticWebsite extends Construct {
 
     // Cloudfront Distribution
     const logBucket = new Bucket(this, 'DistributionLogBucket', {
+      bucketName: `idp-v2-frontend-cf-logs-${Aws.ACCOUNT_ID}`,
       enforceSSL: true,
       autoDeleteObjects: true,
       removalPolicy: RemovalPolicy.DESTROY,
