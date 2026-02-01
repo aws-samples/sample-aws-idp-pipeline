@@ -133,9 +133,9 @@ export class PaddleOcrEndpoint extends Construct {
           PADDLEOCR_HOME: '/tmp/.paddleocr',
           MODEL_CACHE_BUCKET: props.bucket.bucketName,
           MODEL_CACHE_PREFIX: 'paddleocr/models',
-          TS_DEFAULT_RESPONSE_TIMEOUT: '600',
+          TS_DEFAULT_RESPONSE_TIMEOUT: '3600',
           TS_MAX_RESPONSE_SIZE: '104857600',
-          SAGEMAKER_MODEL_SERVER_TIMEOUT: '600',
+          SAGEMAKER_MODEL_SERVER_TIMEOUT: '3600',
           SAGEMAKER_MODEL_SERVER_WORKERS: '1',
         },
       },
@@ -191,7 +191,7 @@ export class PaddleOcrEndpoint extends Construct {
           ...(notificationConfig && { notificationConfig }),
         },
         clientConfig: {
-          maxConcurrentInvocationsPerInstance: 4,
+          maxConcurrentInvocationsPerInstance: 1,
         },
       },
     });

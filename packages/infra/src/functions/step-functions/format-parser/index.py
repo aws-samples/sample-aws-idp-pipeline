@@ -12,7 +12,6 @@ import pypdf
 
 from shared.ddb_client import (
     save_segment,
-    batch_save_segments,
     update_workflow_status,
     WorkflowStatus,
     record_step_start,
@@ -26,29 +25,13 @@ from shared.s3_analysis import get_s3_client, parse_s3_uri
 BACKEND_TABLE_NAME = os.environ.get('BACKEND_TABLE_NAME', '')
 
 
-def extract_pdf_text(file_path: str) -> list[dict]:
-    """Extract text from PDF file, one entry per page."""
-    pages = []
-
-    with open(file_path, 'rb') as f:
-        reader = pypdf.PdfReader(f)
-        for page_num, page in enumerate(reader.pages):
-            text = page.extract_text() or ''
-            pages.append({
-                'page': page_num,
-                'text': text.strip()
-            })
-
-    return pages
-
-
 def process_pdf(
     file_uri: str,
     workflow_id: str,
     document_id: str,
     project_id: str
 ) -> dict:
-    """Download PDF and extract text from each page."""
+    """Download PDF and extract text page by page (streaming)."""
     s3_client = get_s3_client()
     bucket, key = parse_s3_uri(file_uri)
 
@@ -58,33 +41,28 @@ def process_pdf(
         s3_client.download_file(bucket, key, tmp_path)
 
     try:
-        # Extract text from PDF
-        pages = extract_pdf_text(tmp_path)
+        page_count = 0
+        total_chars = 0
 
-        # Save extracted text to segments
-        segments_to_save = []
-        for page_data in pages:
-            segment_data = {
-                'segment_index': page_data['page'],
-                'pdf_text': page_data['text'],
-            }
-            segments_to_save.append(segment_data)
-
-        # Batch save segments with pdf_text
-        if segments_to_save:
-            batch_save_segments(
-                workflow_id=workflow_id,
-                segments=segments_to_save
-            )
+        with open(tmp_path, 'rb') as f:
+            reader = pypdf.PdfReader(f)
+            for page_num, page in enumerate(reader.pages):
+                text = (page.extract_text() or '').strip()
+                save_segment(
+                    workflow_id=workflow_id,
+                    segment_index=page_num,
+                    segment_data={'pdf_text': text},
+                )
+                page_count += 1
+                total_chars += len(text)
 
         return {
             'status': 'completed',
-            'page_count': len(pages),
-            'total_chars': sum(len(p['text']) for p in pages)
+            'page_count': page_count,
+            'total_chars': total_chars,
         }
 
     finally:
-        # Cleanup temp file
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
