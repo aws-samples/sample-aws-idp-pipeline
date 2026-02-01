@@ -11,7 +11,7 @@ import boto3
 import pypdf
 
 from shared.ddb_client import (
-    save_segment,
+    update_segment,
     update_workflow_status,
     WorkflowStatus,
     record_step_start,
@@ -48,10 +48,10 @@ def process_pdf(
             reader = pypdf.PdfReader(f)
             for page_num, page in enumerate(reader.pages):
                 text = (page.extract_text() or '').strip()
-                save_segment(
+                update_segment(
                     workflow_id=workflow_id,
                     segment_index=page_num,
-                    segment_data={'pdf_text': text},
+                    format_parser=text,
                 )
                 page_count += 1
                 total_chars += len(text)
