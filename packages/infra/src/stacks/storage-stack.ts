@@ -39,6 +39,7 @@ export class StorageStack extends Stack {
     // Document Storage Bucket
     const documentStorage = new S3Bucket(this, 'DocumentStorage', {
       bucketPrefix: 'document-storage',
+      bucketName: 'document-storage',
       cors: [
         {
           allowedOrigins: ['*'],
@@ -67,6 +68,7 @@ export class StorageStack extends Stack {
     // Session Storage Bucket (for agent conversation history)
     const sessionStorage = new S3Bucket(this, 'SessionStorage', {
       bucketPrefix: 'session-storage',
+      bucketName: 'session-storage',
       cors: [
         {
           allowedOrigins: ['*'],
@@ -87,6 +89,7 @@ export class StorageStack extends Stack {
     // Structure: /{user_id}/{project_id}/agents/{agent_name}.md
     const agentStorage = new S3Bucket(this, 'AgentStorage', {
       bucketPrefix: 'agent-storage',
+      bucketName: 'agent-storage',
       cors: [
         {
           allowedOrigins: ['*'],
@@ -105,6 +108,7 @@ export class StorageStack extends Stack {
     // Model Artifacts Bucket (for ML models like PaddleOCR)
     const modelArtifacts = new S3Bucket(this, 'ModelArtifacts', {
       bucketPrefix: 'model-artifacts',
+      bucketName: 'model-artifacts',
     });
 
     new StringParameter(this, 'ModelArtifactsBucketNameParam', {
