@@ -1721,8 +1721,7 @@ function ProjectDetailPage() {
             panels.push({
               id: 'chat',
               minSize: 25,
-              maxSize:
-                docsPanelCollapsed || sidePanelCollapsed ? 100 : 70,
+              maxSize: docsPanelCollapsed || sidePanelCollapsed ? 100 : 70,
             });
             if (!sidePanelCollapsed) {
               panels.push({
