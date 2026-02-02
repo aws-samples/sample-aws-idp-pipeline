@@ -1,17 +1,12 @@
-import sys
-
-from agents.supervisor import get_supervisor_agent
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
+from agents.report import get_report_agent
 from config import get_config
 from models import InvokeRequest
 
 app = BedrockAgentCoreApp()
 
 config = get_config()
-if not config.session_storage_bucket_name:
-    print("ERROR: SESSION_STORAGE_BUCKET_NAME environment variable is required")
-    sys.exit(1)
 
 
 def filter_stream_event(event: dict) -> dict | None:
@@ -28,7 +23,7 @@ def filter_stream_event(event: dict) -> dict | None:
 async def invoke(request: dict):
     req = InvokeRequest(**request)
 
-    with get_supervisor_agent(
+    with get_report_agent(
         session_id=req.session_id,
         project_id=req.project_id,
         user_id=req.user_id,
