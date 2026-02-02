@@ -9,7 +9,7 @@ class Config(BaseSettings):
     )
 
     aws_region: str = "us-east-1"
-    session_storage_bucket_name: str = ""
+    agent_storage_bucket_name: str = ""
 
 
 @lru_cache
