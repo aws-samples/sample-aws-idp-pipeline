@@ -10,6 +10,7 @@ class Config(BaseSettings):
 
     aws_region: str = "us-east-1"
     agent_storage_bucket_name: str = ""
+    mcp_gateway_url: str = ""
 
 
 @lru_cache
