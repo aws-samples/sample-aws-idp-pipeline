@@ -51,7 +51,10 @@ async def invoke(request: dict):
                 # Detect handoff_to_user call
                 if tool_name == "handoff_to_user":
                     tool_input = tool_use.get("input", {})
-                    handoff_message = tool_input.get("message", "")
+                    if isinstance(tool_input, dict):
+                        handoff_message = tool_input.get("message", "")
+                    else:
+                        handoff_message = str(tool_input)
 
                 if tool_name in STAGE_TOOLS:
                     if current_stage.get("name") != tool_name:
