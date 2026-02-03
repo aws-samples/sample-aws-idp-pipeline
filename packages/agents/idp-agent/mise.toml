@@ -1,0 +1,6 @@
+[tools]
+python = "3.13"
+uv = "latest"
+
+[tasks.idp_agent]
+run = "uv run python main.py"

@@ -3,7 +3,7 @@ import sys
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
-from agent import get_agent
+from agents import get_agent
 from config import get_config
 from models import InvokeRequest
 
