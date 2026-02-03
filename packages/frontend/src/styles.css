@@ -221,9 +221,9 @@ a {
 
 .sidebar-disclaimer {
   padding: 0.5rem 1rem;
-  font-size: 0.7rem;
+  font-size: 0.625rem;
   line-height: 1.4;
-  color: var(--color-text-muted);
+  color: color-mix(in srgb, var(--color-text-muted) 60%, transparent);
   white-space: pre-line;
   position: relative;
   z-index: 1;

@@ -439,9 +439,6 @@ export default function SidePanel({
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-shrink-0">
               {t('documents.title', 'Documents')}
             </span>
-            <span className="text-xs text-slate-400 flex-shrink-0">
-              {documents.length}
-            </span>
             {onAddDocument && (
               <button
                 onClick={onAddDocument}
@@ -460,6 +457,9 @@ export default function SidePanel({
               </button>
             )}
             <div className="flex-1" />
+            <span className="text-xs text-slate-400 flex-shrink-0">
+              {documents.length}
+            </span>
             {onCollapse && (
               <button
                 onClick={onCollapse}
