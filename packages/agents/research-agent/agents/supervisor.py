@@ -2,10 +2,11 @@ from contextlib import contextmanager
 
 from strands import Agent
 from strands.models import BedrockModel
-from strands.session import S3SessionManager
 from strands_tools import current_time, http_request
 
 from agents.constants import SUPERVISOR_MODEL_ID
+from agents.plan import create_plan_tool
+from agents.research import create_research_tool
 from config import get_config
 
 
@@ -15,9 +16,9 @@ def get_supervisor_agent(
     project_id: str | None = None,
     user_id: str | None = None,
 ):
-    """Get a supervisor agent instance with S3-based session management.
+    """Get a supervisor agent instance.
 
-    The supervisor agent coordinates specialist agents and delegates tasks.
+    The supervisor agent coordinates research and planning tasks.
 
     Args:
         session_id: Unique identifier for the session
@@ -25,20 +26,36 @@ def get_supervisor_agent(
         user_id: User ID for session isolation (optional)
 
     Yields:
-        Supervisor agent instance with session management configured
+        Supervisor agent instance configured
     """
+    research_tool = create_research_tool(session_id, project_id, user_id)
+    plan_tool = create_plan_tool(session_id, project_id, user_id)
 
-    tools = [current_time, http_request]
+    tools = [current_time, http_request, research_tool, plan_tool]
 
-    system_prompt = """You are a supervisor agent that coordinates and delegates tasks to specialist agents.
+    system_prompt = """You are a supervisor agent that coordinates research and planning tasks.
 
-Your role is to:
-1. Understand the user's request and break it down into subtasks if needed
-2. Delegate tasks to the appropriate specialist agents
-3. Integrate results from specialist agents into a coherent response
-4. Provide clear and helpful responses to the user
+## Workflow (MUST follow in order)
 
-When delegating tasks, choose the most appropriate specialist agent based on the task requirements.
+1. Call research_agent to gather relevant information
+2. Call plan_agent to create a document outline
+3. STOP and present the plan to user for confirmation
+
+## IMPORTANT
+- You MUST stop after plan_agent completes
+- Do NOT proceed beyond planning
+- Do NOT write or execute the actual document
+- Just present the plan and wait for user confirmation
+
+## Available Tools
+
+### research_agent
+Search documents and gather information.
+- Pass a clear query describing what to find
+
+### plan_agent
+Create a document outline based on research.
+- Pass the research context and user's requirements
 """
 
     config = get_config()
