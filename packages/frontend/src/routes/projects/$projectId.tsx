@@ -20,7 +20,10 @@ import ProjectSettingsModal, {
 } from '../../components/ProjectSettingsModal';
 import ProjectNavBar from '../../components/ProjectNavBar';
 import DocumentsPanel from '../../components/DocumentsPanel';
-import ChatPanel, { AttachedFile } from '../../components/ChatPanel';
+import ChatPanel, {
+  AttachedFile,
+  type StreamingBlock,
+} from '../../components/ChatPanel';
 import SidePanel from '../../components/SidePanel';
 import WorkflowDetailModal from '../../components/WorkflowDetailModal';
 import {
@@ -98,8 +101,7 @@ function ProjectDetailPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const [streamingContent, setStreamingContent] = useState('');
-  const [currentToolUse, setCurrentToolUse] = useState<string | null>(null);
+  const [streamingBlocks, setStreamingBlocks] = useState<StreamingBlock[]>([]);
   const [selectedWorkflow, setSelectedWorkflow] =
     useState<WorkflowDetail | null>(null);
   const [loadingWorkflow, setLoadingWorkflow] = useState(false);
@@ -123,6 +125,8 @@ function ProjectDetailPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
+  const [initialSegmentIndex, setInitialSegmentIndex] = useState(0);
+  const [loadingSourceKey, setLoadingSourceKey] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const progressFetchedRef = useRef(false);
 
@@ -669,6 +673,9 @@ function ProjectDetailPage() {
                 // Check if this is an artifact result (JSON with artifact_id)
                 let artifact = undefined;
                 let toolResultType: 'image' | 'artifact' | 'text' = 'text';
+                let sources:
+                  | { document_id: string; segment_id: string }[]
+                  | undefined = undefined;
 
                 try {
                   const parsed = JSON.parse(textContent);
@@ -682,6 +689,9 @@ function ProjectDetailPage() {
                       created_at: parsed.created_at,
                     };
                     toolResultType = 'artifact';
+                  } else if (parsed.answer && Array.isArray(parsed.sources)) {
+                    sources = parsed.sources;
+                    sources = parsed.sources;
                   }
                 } catch {
                   // Not JSON, continue with normal processing
@@ -709,13 +719,19 @@ function ProjectDetailPage() {
                 return {
                   id: `history-${idx}`,
                   role: 'assistant' as const,
-                  content: toolResultType === 'artifact' ? '' : textContent,
+                  content:
+                    toolResultType === 'artifact'
+                      ? ''
+                      : sources
+                        ? ''
+                        : textContent,
                   attachments:
                     imageAttachments.length > 0 ? imageAttachments : undefined,
                   timestamp: new Date(),
                   isToolResult: true,
                   toolResultType,
                   artifact,
+                  sources,
                 };
               }
 
@@ -900,22 +916,25 @@ function ProjectDetailPage() {
     [getPresignedDownloadUrl, showToast, t],
   );
 
-  const loadWorkflowDetail = async (documentId: string, workflowId: string) => {
-    setLoadingWorkflow(true);
-    try {
-      const data = await fetchApi<WorkflowDetail>(
-        `documents/${documentId}/workflows/${workflowId}`,
-      );
-      setSelectedWorkflow(data);
-    } catch (error) {
-      console.error('Failed to load workflow detail:', error);
-      showToast(
-        'error',
-        t('workflow.loadError', 'Failed to load workflow details'),
-      );
-    }
-    setLoadingWorkflow(false);
-  };
+  const loadWorkflowDetail = useCallback(
+    async (documentId: string, workflowId: string) => {
+      setLoadingWorkflow(true);
+      try {
+        const data = await fetchApi<WorkflowDetail>(
+          `documents/${documentId}/workflows/${workflowId}`,
+        );
+        setSelectedWorkflow(data);
+      } catch (error) {
+        console.error('Failed to load workflow detail:', error);
+        showToast(
+          'error',
+          t('workflow.loadError', 'Failed to load workflow details'),
+        );
+      }
+      setLoadingWorkflow(false);
+    },
+    [fetchApi, showToast, t],
+  );
 
   const handleReanalyze = useCallback(
     async (userInstructions: string) => {
@@ -1067,6 +1086,19 @@ function ProjectDetailPage() {
       return result;
     },
     [fetchApi, selectedWorkflow],
+  );
+
+  const handleSourceClick = useCallback(
+    async (documentId: string, segmentId: string) => {
+      const workflow = workflows.find((w) => w.document_id === documentId);
+      if (!workflow) return;
+      const segIdx = parseInt(segmentId.split('_').pop() || '0', 10);
+      setInitialSegmentIndex(segIdx);
+      setLoadingSourceKey(`${documentId}:${segmentId}`);
+      await loadWorkflowDetail(documentId, workflow.workflow_id);
+      setLoadingSourceKey(null);
+    },
+    [workflows, loadWorkflowDetail],
   );
 
   useEffect(() => {
@@ -1376,14 +1408,48 @@ function ProjectDetailPage() {
     switch (event.type) {
       case 'text':
         if (event.content && typeof event.content === 'string') {
-          setStreamingContent((prev) => prev + event.content);
+          const text = event.content;
+          setStreamingBlocks((prev) => {
+            const last = prev[prev.length - 1];
+            if (last?.type === 'text') {
+              return [
+                ...prev.slice(0, -1),
+                { type: 'text', content: last.content + text },
+              ];
+            }
+            return [...prev, { type: 'text', content: text }];
+          });
         }
         break;
-      case 'tool_use':
-        setCurrentToolUse(event.name ?? null);
+      case 'tool_use': {
+        const toolName = event.name ?? '';
+        setStreamingBlocks((prev) => {
+          const alreadyExists = prev.some(
+            (b) => b.type === 'tool_use' && b.name === toolName,
+          );
+          if (alreadyExists) return prev;
+          return [...prev, { type: 'tool_use', name: toolName }];
+        });
         break;
+      }
       case 'tool_result': {
-        setCurrentToolUse(null);
+        setStreamingBlocks((prev) => {
+          // Remove the most recent tool_use block
+          let lastToolIdx = -1;
+          for (let i = prev.length - 1; i >= 0; i--) {
+            if (prev[i].type === 'tool_use') {
+              lastToolIdx = i;
+              break;
+            }
+          }
+          if (lastToolIdx >= 0) {
+            return [
+              ...prev.slice(0, lastToolIdx),
+              ...prev.slice(lastToolIdx + 1),
+            ];
+          }
+          return prev;
+        });
         if (!Array.isArray(event.content)) break;
         const contents = event.content as ToolResultContent[];
 
@@ -1394,6 +1460,8 @@ function ProjectDetailPage() {
 
         let artifact = undefined;
         let toolResultType: 'image' | 'artifact' | 'text' = 'text';
+        let sources: { document_id: string; segment_id: string }[] | undefined =
+          undefined;
 
         try {
           const parsed = JSON.parse(textContent);
@@ -1407,6 +1475,8 @@ function ProjectDetailPage() {
               created_at: parsed.created_at,
             };
             toolResultType = 'artifact';
+          } else if (parsed.answer && Array.isArray(parsed.sources)) {
+            sources = parsed.sources;
           }
         } catch {
           // Not JSON
@@ -1441,19 +1511,21 @@ function ProjectDetailPage() {
         const toolResultMessage: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: toolResultType === 'artifact' ? '' : textContent,
+          content:
+            toolResultType === 'artifact' ? '' : sources ? '' : textContent,
           attachments:
             imageAttachments.length > 0 ? imageAttachments : undefined,
           timestamp: new Date(),
           isToolResult: true,
           toolResultType,
           artifact,
+          sources,
         };
         setMessages((prev) => [...prev, toolResultMessage]);
         break;
       }
       case 'complete':
-        setCurrentToolUse(null);
+        setStreamingBlocks((prev) => prev.filter((b) => b.type !== 'tool_use'));
         break;
     }
   }, []);
@@ -1483,8 +1555,7 @@ function ProjectDetailPage() {
       setMessages((prev) => [...prev, userMessage]);
       setInputMessage('');
       setSending(true);
-      setStreamingContent('');
-      setCurrentToolUse(null);
+      setStreamingBlocks([]);
 
       try {
         // Convert files to ContentBlock[]
@@ -1583,8 +1654,7 @@ function ProjectDetailPage() {
         setMessages((prev) => [...prev, errorMessage]);
       }
       setSending(false);
-      setStreamingContent('');
-      setCurrentToolUse(null);
+      setStreamingBlocks([]);
       // Refresh sessions list after sending a message
       loadSessions();
     },
@@ -1772,8 +1842,7 @@ function ProjectDetailPage() {
                 messages={messages}
                 inputMessage={inputMessage}
                 sending={sending}
-                streamingContent={streamingContent}
-                currentToolUse={currentToolUse}
+                streamingBlocks={streamingBlocks}
                 loadingHistory={loadingHistory}
                 selectedAgent={selectedAgent}
                 artifacts={artifacts}
@@ -1783,6 +1852,8 @@ function ProjectDetailPage() {
                 onAgentClick={() => setShowAgentModal(true)}
                 onNewChat={handleNewSession}
                 onArtifactView={handleArtifactSelect}
+                onSourceClick={handleSourceClick}
+                loadingSourceKey={loadingSourceKey}
               />
             </div>
           </ResizablePanel>
@@ -1898,12 +1969,16 @@ function ProjectDetailPage() {
           workflow={selectedWorkflow}
           projectColor={project?.color ?? 0}
           loadingWorkflow={loadingWorkflow}
-          onClose={() => setSelectedWorkflow(null)}
+          onClose={() => {
+            setSelectedWorkflow(null);
+            setInitialSegmentIndex(0);
+          }}
           onReanalyze={handleReanalyze}
           reanalyzing={reanalyzing}
           onRegenerateQa={handleRegenerateQa}
           onAddQa={handleAddQa}
           onDeleteQa={handleDeleteQa}
+          initialSegmentIndex={initialSegmentIndex}
         />
       )}
 
