@@ -1,10 +1,14 @@
 """Custom tools for the report agent."""
 
 import boto3
+import requests
 from nanoid import generate
 from strands import tool
 
 from config import get_config
+
+
+UNSPLASH_API_URL = "https://api.unsplash.com"
 
 # Alphanumeric characters for nanoid
 NANOID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"
@@ -88,4 +92,80 @@ def create_s3_download_url(s3_key: str) -> dict:
     return {
         "download_url": download_url,
         "key": s3_key,
+    }
+
+
+@tool
+def search_unsplash_images(
+    query: str,
+    per_page: int = 5,
+    orientation: str | None = None,
+) -> dict:
+    """Search for images on Unsplash.
+
+    Args:
+        query: Search query for images (e.g., "cloud computing", "business meeting")
+        per_page: Number of results to return (1-30, default: 5)
+        orientation: Filter by orientation - "landscape", "portrait", or "squarish" (optional)
+
+    Returns:
+        Dictionary with 'images' list containing image info:
+        - url: Direct image URL (regular size, ~1080px)
+        - thumb_url: Thumbnail URL (~200px)
+        - download_url: Full resolution download URL
+        - photographer: Photographer name
+        - photographer_url: Photographer's Unsplash profile
+        - description: Image description (if available)
+        - attribution: Ready-to-use attribution text
+    """
+    config = get_config()
+
+    if not config.unsplash_access_key:
+        return {"error": "Unsplash API key not configured"}
+
+    headers = {
+        "Authorization": f"Client-ID {config.unsplash_access_key}",
+        "Accept-Version": "v1",
+    }
+
+    params = {
+        "query": query,
+        "per_page": min(max(per_page, 1), 30),
+    }
+
+    if orientation in ("landscape", "portrait", "squarish"):
+        params["orientation"] = orientation
+
+    response = requests.get(
+        f"{UNSPLASH_API_URL}/search/photos",
+        headers=headers,
+        params=params,
+        timeout=10,
+    )
+
+    if response.status_code != 200:
+        return {"error": f"Unsplash API error: {response.status_code}"}
+
+    data = response.json()
+    images = []
+
+    for photo in data.get("results", []):
+        user = photo.get("user", {})
+        photographer = user.get("name", "Unknown")
+        photographer_url = user.get("links", {}).get("html", "")
+
+        images.append({
+            "url": photo.get("urls", {}).get("regular", ""),
+            "thumb_url": photo.get("urls", {}).get("thumb", ""),
+            "download_url": photo.get("urls", {}).get("full", ""),
+            "photographer": photographer,
+            "photographer_url": photographer_url,
+            "description": photo.get("description") or photo.get("alt_description") or "",
+            "attribution": f"Photo by {photographer} on Unsplash ({photographer_url})",
+        })
+
+    return {
+        "images": images,
+        "total": data.get("total", 0),
+        "query": query,
     }

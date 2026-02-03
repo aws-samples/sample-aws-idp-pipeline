@@ -8,7 +8,7 @@ from strands_tools import current_time, file_read, file_write, http_request
 from strands_tools.code_interpreter import AgentCoreCodeInterpreter
 
 from agents.constants import REPORT_MODEL_ID
-from agents.tools import create_s3_download_url, create_s3_upload_url
+from agents.tools import create_s3_download_url, create_s3_upload_url, search_unsplash_images
 from config import get_config
 
 
@@ -48,7 +48,67 @@ def get_report_agent(
         create_s3_download_url,
     ]
 
+    # Add Unsplash tool if API key is configured
+    if config.unsplash_access_key:
+        tools.append(search_unsplash_images)
+
+    # Image handling guide (only if Unsplash is enabled)
+    image_guide = ""
+    if config.unsplash_access_key:
+        image_guide = """
+## ⚠️ CRITICAL: Image Handling (MANDATORY)
+
+**You MUST process ALL `[IMAGE: ...]` placeholders!**
+**Do NOT skip or ignore any image placeholder!**
+
+### BEFORE writing any code, you MUST:
+1. Find ALL `[IMAGE: description, position: xxx]` in the content
+2. Call `search_unsplash_images` for EACH one
+3. Save the image URLs
+4. Include ALL images in your code_interpreter script
+
+### Step 1: Search Images FIRST (call for EACH placeholder)
+```
+search_unsplash_images(query="description from placeholder", orientation="landscape")
+```
+
+### Step 2: Include in your ONE code_interpreter script
+```python
+import requests
+from io import BytesIO
+
+def download_image(url):
+    response = requests.get(url)
+    return BytesIO(response.content)
+
+# Download ALL images at the start
+image_urls = {
+    "slide_3": "https://...",  # from search result
+    "slide_5": "https://...",  # from search result
+}
+
+# When creating each slide with image:
+img_stream = download_image(image_urls["slide_3"])
+# position: right
+slide.shapes.add_picture(img_stream, Inches(5.2), Inches(1.2), width=Inches(4.5))
+# position: left
+slide.shapes.add_picture(img_stream, Inches(0.3), Inches(1.2), width=Inches(4.5))
+# position: center
+slide.shapes.add_picture(img_stream, Inches(2.5), Inches(1.5), width=Inches(5))
+```
+
+### Step 3: Add Attribution (Required for each image)
+```python
+attr_box = slide.shapes.add_textbox(Inches(0.3), Inches(5.3), Inches(9), Inches(0.3))
+p = attr_box.text_frame.paragraphs[0]
+p.text = "Photo by [Name] on Unsplash"
+p.font.size = Pt(8)
+p.font.color.rgb = RGBColor(128, 128, 128)
+```
+"""
+
     system_prompt = f"""You are a Report Agent specialized in creating PowerPoint presentations.
+{image_guide}
 
 ## CRITICAL: Generate ALL slides in a SINGLE code_interpreter call
 
