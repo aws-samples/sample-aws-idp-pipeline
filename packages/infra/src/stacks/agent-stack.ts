@@ -117,6 +117,7 @@ export class AgentStack extends Stack {
       sessionStorageBucket,
       backendTable,
       gateway,
+      agentStorageBucket,
     });
 
     this.agentCoreRuntime = idpAgent.runtime;

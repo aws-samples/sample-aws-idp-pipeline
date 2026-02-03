@@ -1,7 +1,8 @@
+import asyncio
 from contextlib import contextmanager
 
 from botocore.config import Config
-from strands import Agent
+from strands import Agent, tool
 from strands.models import BedrockModel
 from strands_tools import current_time, file_read, file_write, http_request
 from strands_tools.code_interpreter import AgentCoreCodeInterpreter
@@ -308,3 +309,39 @@ slide.shapes.add_picture('image.png', Inches(1), Inches(1), width=Inches(3))
     )
 
     yield agent
+
+
+def _run_pptx_sync(
+    session_id: str,
+    project_id: str | None,
+    user_id: str | None,
+    instructions: str,
+) -> str:
+    """Run pptx agent synchronously (for use with asyncio.to_thread)."""
+    with get_report_agent(session_id, project_id, user_id) as agent:
+        result = agent(instructions)
+        return str(result)
+
+
+def create_pptx_tool(session_id: str, project_id: str | None, user_id: str | None):
+    """Create a pptx agent tool bound to session context."""
+
+    @tool
+    async def pptx_agent(instructions: str) -> str:
+        """Create a PowerPoint presentation based on the given instructions.
+
+        Use this tool to:
+        - Generate PowerPoint presentations from confirmed plans
+        - Create slides with proper formatting and design
+
+        Args:
+            instructions: The confirmed plan and context for creating the presentation
+
+        Returns:
+            Result of presentation creation including download URL
+        """
+        return await asyncio.to_thread(
+            _run_pptx_sync, session_id, project_id, user_id, instructions
+        )
+
+    return pptx_agent
