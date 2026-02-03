@@ -9,7 +9,7 @@ app = BedrockAgentCoreApp()
 config = get_config()
 
 # Agent tools that represent workflow stages
-STAGE_TOOLS = {"research_agent", "plan_agent"}
+STAGE_TOOLS = {"research_agent", "plan_agent", "write_agent", "pptx_agent"}
 
 
 def extract_tool_result_text(tool_result: dict) -> str:
@@ -35,23 +35,26 @@ async def invoke(request: dict):
         stream = agent.stream_async(content)
 
         current_stage = {"name": None, "started": False}
-        text_buffer = ""
+        last_plan_result = None
+        handoff_message = None
 
         async for event in stream:
-            # Collect text data
+            # Yield text data immediately
             if "data" in event:
-                text_buffer += event["data"]
+                yield {"type": "text", "content": event["data"]}
 
             # Stage start: tool call begins
             if "current_tool_use" in event:
                 tool_use = event["current_tool_use"]
                 tool_name = tool_use.get("name", "")
+
+                # Detect handoff_to_user call
+                if tool_name == "handoff_to_user":
+                    tool_input = tool_use.get("input", {})
+                    handoff_message = tool_input.get("message", "")
+
                 if tool_name in STAGE_TOOLS:
                     if current_stage.get("name") != tool_name:
-                        # Flush text buffer before stage start
-                        if text_buffer:
-                            yield {"type": "text", "content": text_buffer}
-                            text_buffer = ""
                         current_stage["name"] = tool_name
                         current_stage["started"] = True
                         yield {"type": "stage_start", "stage": tool_name}
@@ -66,6 +69,11 @@ async def invoke(request: dict):
                         if current_stage.get("started") and stage_name in STAGE_TOOLS:
                             result_text = extract_tool_result_text(tool_result)
                             current_stage["started"] = False
+
+                            # Save plan result for confirmation
+                            if stage_name == "plan_agent":
+                                last_plan_result = result_text
+
                             yield {
                                 "type": "stage_complete",
                                 "stage": stage_name,
@@ -74,10 +82,15 @@ async def invoke(request: dict):
 
             # Final completion
             if event.get("complete"):
-                # Flush remaining text buffer
-                if text_buffer:
-                    yield {"type": "text", "content": text_buffer}
-                yield {"type": "complete"}
+                # If handoff_to_user was called, emit confirmation_required
+                if handoff_message:
+                    yield {
+                        "type": "confirmation_required",
+                        "message": handoff_message,
+                        "plan": last_plan_result or "",
+                    }
+                else:
+                    yield {"type": "complete"}
 
 
 if __name__ == "__main__":
