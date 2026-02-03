@@ -162,7 +162,7 @@ class ImageArtifactSaverHook(HookProvider):
 
             # Append artifact info to result content
             result["content"].append(
-                {"text": f"\n\n[[artifact:{artifact_id}|{filename}]]"}
+                {"text": f"\n\n[artifact:{artifact_id}]({filename})"}
             )
 
         except Exception:

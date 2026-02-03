@@ -2429,3 +2429,17 @@ a {
   background: var(--color-accent-light);
   color: var(--color-accent);
 }
+
+/* Tool use loading card shimmer animation */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+.shimmer-bar {
+  animation: shimmer 1.5s ease-in-out infinite;
+}

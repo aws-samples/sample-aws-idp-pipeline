@@ -30,6 +30,7 @@ interface WorkflowDetailModalProps {
     segmentIndex: number,
     qaIndex: number,
   ) => Promise<{ deleted: boolean; qa_index: number }>;
+  initialSegmentIndex?: number;
 }
 
 export default function WorkflowDetailModal({
@@ -42,9 +43,11 @@ export default function WorkflowDetailModal({
   onRegenerateQa,
   onAddQa,
   onDeleteQa,
+  initialSegmentIndex = 0,
 }: WorkflowDetailModalProps) {
   const { t } = useTranslation();
-  const [currentSegmentIndex, setCurrentSegmentIndex] = useState(0);
+  const [currentSegmentIndex, setCurrentSegmentIndex] =
+    useState(initialSegmentIndex);
   const [imageLoading, setImageLoading] = useState(false);
   const [analysisPopup, setAnalysisPopup] = useState<AnalysisPopup>({
     type: null,

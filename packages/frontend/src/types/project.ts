@@ -118,6 +118,7 @@ export interface ChatMessage {
   isToolResult?: boolean;
   toolResultType?: 'image' | 'artifact' | 'text';
   artifact?: ChatArtifact;
+  sources?: { document_id: string; segment_id: string }[];
 }
 
 export interface ChatSession {
