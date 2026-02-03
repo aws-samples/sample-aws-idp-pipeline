@@ -258,6 +258,7 @@
     "researchNotAvailable": "리서치 에이전트가 구성되지 않았습니다",
     "useAgent": "에이전트 사용",
     "manageAgents": "에이전트 관리",
+    "removeAgentConfirm": "에이전트를 변경하면 새 대화가 시작됩니다. 계속하시겠습니까?",
     "stage": {
       "research_agent": "리서치 중",
       "plan_agent": "계획 수립 중",

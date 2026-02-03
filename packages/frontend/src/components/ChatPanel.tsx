@@ -44,6 +44,7 @@ import {
 import { useAwsClient } from '../hooks/useAwsClient';
 import { useToast } from './Toast';
 import ImageModal from './ImageModal';
+import ConfirmModal from './ConfirmModal';
 
 export interface AttachedFile {
   id: string;
@@ -312,8 +313,17 @@ export default function ChatPanel({
     new Set(),
   );
   const [researchMode, setResearchMode] = useState(false);
+  // Reset research mode when loading a session history
+  const prevLoadingHistory = useRef(false);
+  useEffect(() => {
+    if (loadingHistory && !prevLoadingHistory.current) {
+      setResearchMode(false);
+    }
+    prevLoadingHistory.current = loadingHistory;
+  }, [loadingHistory]);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [showAgentSubmenu, setShowAgentSubmenu] = useState(false);
+  const [showRemoveAgentConfirm, setShowRemoveAgentConfirm] = useState(false);
   const plusMenuRef = useRef<HTMLDivElement>(null);
   // Mention state (artifacts + documents)
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
@@ -1185,7 +1195,13 @@ export default function ChatPanel({
               {selectedAgent && onAgentSelect && (
                 <button
                   type="button"
-                  onClick={() => onAgentSelect(null)}
+                  onClick={() => {
+                    if (messages.length > 0) {
+                      setShowRemoveAgentConfirm(true);
+                    } else {
+                      onAgentSelect(null);
+                    }
+                  }}
                   className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-800/40 transition-colors"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
@@ -1985,6 +2001,18 @@ export default function ChatPanel({
           onClose={() => setModalImage(null)}
         />
       )}
+      <ConfirmModal
+        isOpen={showRemoveAgentConfirm}
+        onClose={() => setShowRemoveAgentConfirm(false)}
+        onConfirm={() => {
+          setShowRemoveAgentConfirm(false);
+          onAgentSelect?.(null);
+        }}
+        title={t('chat.useAgent')}
+        message={t('chat.removeAgentConfirm')}
+        confirmText={t('common.confirm')}
+        variant="warning"
+      />
     </div>
   );
 }

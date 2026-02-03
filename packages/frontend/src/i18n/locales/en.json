@@ -258,6 +258,7 @@
     "researchNotAvailable": "Research agent is not configured",
     "useAgent": "Use agent",
     "manageAgents": "Manage agents",
+    "removeAgentConfirm": "Changing agent will start a new conversation. Continue?",
     "stage": {
       "research_agent": "Researching",
       "plan_agent": "Planning",

@@ -258,6 +258,7 @@
     "researchNotAvailable": "リサーチエージェントが設定されていません",
     "useAgent": "エージェントを使用",
     "manageAgents": "エージェント管理",
+    "removeAgentConfirm": "エージェントを変更すると新しい会話が始まります。続けますか？",
     "stage": {
       "research_agent": "リサーチ中",
       "plan_agent": "計画策定中",
