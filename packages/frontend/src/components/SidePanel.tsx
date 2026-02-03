@@ -1,12 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  MessageSquare,
   Layers,
   Loader2,
-  ChevronDown,
   MoreVertical,
-  Pencil,
   Trash2,
   FileText,
   Image,
@@ -14,18 +11,25 @@ import {
   FileSpreadsheet,
   Film,
   File,
+  Music,
   Copy,
   Download,
   PanelRightClose,
+  RefreshCw,
+  Eye,
+  Check,
+  CircleAlert,
+  ChevronDown,
+  FileX,
 } from 'lucide-react';
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from './ui/resizable';
 import ConfirmModal from './ConfirmModal';
-import InputModal from './InputModal';
-import { ChatSession, Artifact } from '../types/project';
+import {
+  Artifact,
+  Document,
+  Workflow,
+  WorkflowProgress,
+  StepStatus,
+} from '../types/project';
 
 function getArtifactIcon(contentType: string) {
   if (contentType.startsWith('image/')) return Image;
@@ -55,16 +59,264 @@ function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+const getFileIcon = (fileType: string) => {
+  if (fileType.includes('pdf')) {
+    return <FileText className="h-5 w-5 text-blue-400" />;
+  }
+  if (fileType.includes('image')) {
+    return <Image className="h-5 w-5 text-emerald-400" />;
+  }
+  if (fileType.includes('video')) {
+    return <Film className="h-5 w-5 text-violet-400" />;
+  }
+  if (fileType.includes('audio')) {
+    return <Music className="h-5 w-5 text-amber-400" />;
+  }
+  return <File className="h-5 w-5 text-slate-400" />;
+};
+
+const getStatusBadge = (status: string) => {
+  const statusColors: Record<string, string> = {
+    completed:
+      'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-500',
+    processing:
+      'bg-yellow-50 text-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-500',
+    in_progress:
+      'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-500',
+    failed: 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-500',
+    uploading:
+      'bg-cyan-50 text-cyan-600 dark:bg-cyan-900/20 dark:text-cyan-500',
+    uploaded:
+      'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-500',
+    pending: 'bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-500',
+  };
+  return (
+    statusColors[status] ||
+    'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-500'
+  );
+};
+
+function StepProgressBar({
+  steps,
+  segmentProgress,
+}: {
+  steps?: Record<string, StepStatus>;
+  segmentProgress: { completed: number; total: number } | null;
+}) {
+  const { t } = useTranslation();
+
+  const [expanded, setExpanded] = useState(false);
+
+  if (!steps) {
+    return (
+      <div className="mt-2 flex items-center gap-2">
+        <Loader2 className="h-3.5 w-3.5 text-blue-500 animate-spin flex-shrink-0" />
+        <span className="text-xs text-blue-600">
+          {t('workflow.inProgress')}
+        </span>
+      </div>
+    );
+  }
+
+  const STEP_ORDER = [
+    'segment_prep',
+    'bda_processor',
+    'format_parser',
+    'paddleocr_processor',
+    'transcribe',
+    'segment_builder',
+    'segment_analyzer',
+    'document_summarizer',
+  ];
+
+  const visibleSteps = STEP_ORDER.filter(
+    (key) => steps[key] && steps[key].status !== 'skipped',
+  ).map((key) => [key, steps[key]] as [string, StepStatus]);
+
+  const hasSteps = visibleSteps.length > 0;
+  const completedCount = visibleSteps.filter(
+    ([, s]) => s.status === 'completed',
+  ).length;
+  const totalCount = visibleSteps.length;
+  const overallPct = hasSteps
+    ? Math.round((completedCount / totalCount) * 100)
+    : 0;
+  const activeStep = visibleSteps.find(([, s]) => s.status === 'in_progress');
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-3 w-3 text-blue-500 animate-spin flex-shrink-0" />
+          <span className="text-[11px] text-blue-700 dark:text-blue-300 font-medium truncate">
+            {activeStep ? activeStep[1].label : t('workflow.inProgress')}
+          </span>
+          {hasSteps && (
+            <span className="text-[10px] text-slate-400 flex-shrink-0 ml-auto">
+              {completedCount}/{totalCount}
+            </span>
+          )}
+          {hasSteps && (
+            <ChevronDown
+              className={`h-3 w-3 text-slate-400 flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            />
+          )}
+        </div>
+        {hasSteps && (
+          <div className="mt-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-blue-500 transition-all duration-300"
+              style={{ width: `${overallPct}%` }}
+            />
+          </div>
+        )}
+      </button>
+
+      {expanded && (
+        <div className="mt-2 space-y-1.5">
+          {visibleSteps.map(([key, step]) => {
+            const isActive = step.status === 'in_progress';
+            const isDone = step.status === 'completed';
+            const isFailed = step.status === 'failed';
+
+            const hasNumericProgress =
+              isActive && segmentProgress && key === 'segment_analyzer';
+            const pct = hasNumericProgress
+              ? Math.round(
+                  (segmentProgress.completed / segmentProgress.total) * 100,
+                )
+              : 0;
+
+            return (
+              <div key={key} className="space-y-0.5">
+                <div className="flex items-center gap-1.5">
+                  {isDone && (
+                    <Check className="h-3 w-3 text-green-500 flex-shrink-0" />
+                  )}
+                  {isActive && (
+                    <Loader2 className="h-3 w-3 text-blue-500 animate-spin flex-shrink-0" />
+                  )}
+                  {isFailed && (
+                    <CircleAlert className="h-3 w-3 text-red-500 flex-shrink-0" />
+                  )}
+                  {step.status === 'pending' && (
+                    <div className="h-3 w-3 rounded-full border border-slate-300 dark:border-slate-500 flex-shrink-0" />
+                  )}
+
+                  <span
+                    className={`text-[11px] leading-tight truncate ${
+                      isDone
+                        ? 'text-green-600 dark:text-green-400'
+                        : isActive
+                          ? 'text-blue-700 dark:text-blue-300 font-medium'
+                          : isFailed
+                            ? 'text-red-600 dark:text-red-400'
+                            : 'text-slate-400 dark:text-slate-500'
+                    }`}
+                  >
+                    {step.label}
+                  </span>
+
+                  {hasNumericProgress && (
+                    <span className="text-[10px] text-blue-500 flex-shrink-0 ml-auto">
+                      {segmentProgress.completed}/{segmentProgress.total}
+                    </span>
+                  )}
+                </div>
+
+                {isActive && key === 'paddleocr_processor' && (
+                  <p className="pl-[18px] text-[10px] text-amber-600 dark:text-amber-400">
+                    {t('workflow.steps.paddleocrHint')}
+                  </p>
+                )}
+
+                {hasNumericProgress && (
+                  <div className="ml-[18px] h-1 rounded-full bg-blue-100 dark:bg-blue-900/40 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Vertical drag-to-resize hook
+function useVerticalResize(
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  initialRatio = 50,
+  minRatio = 10,
+  maxRatio = 90,
+  storageKey = 'sidepanel-split',
+) {
+  const [topRatio, setTopRatio] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = parseFloat(saved);
+        if (!isNaN(parsed) && parsed >= minRatio && parsed <= maxRatio) {
+          return parsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return initialRatio;
+  });
+
+  const dragging = useRef(false);
+
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragging.current = true;
+
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!dragging.current || !containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const y = ev.clientY - rect.top;
+        const ratio = Math.min(
+          maxRatio,
+          Math.max(minRatio, (y / rect.height) * 100),
+        );
+        setTopRatio(ratio);
+      };
+
+      const onMouseUp = () => {
+        dragging.current = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        // Save to localStorage on release
+        setTopRatio((r) => {
+          try {
+            localStorage.setItem(storageKey, String(r));
+          } catch {
+            // ignore
+          }
+          return r;
+        });
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    },
+    [containerRef, minRatio, maxRatio, storageKey],
+  );
+
+  return { topRatio, onMouseDown };
+}
+
 interface SidePanelProps {
-  sessions: ChatSession[];
-  currentSessionId: string;
-  onSessionSelect: (sessionId: string) => void;
-  onSessionRename?: (sessionId: string, newName: string) => Promise<void>;
-  onSessionDelete?: (sessionId: string) => Promise<void>;
-  hasMoreSessions?: boolean;
-  loadingMoreSessions?: boolean;
-  onLoadMoreSessions?: () => void;
-  // Artifacts
   artifacts?: Artifact[];
   currentArtifactId?: string;
   onArtifactSelect?: (artifactId: string) => void;
@@ -72,17 +324,17 @@ interface SidePanelProps {
   onArtifactDownload?: (artifact: Artifact) => void;
   onArtifactDelete?: (artifactId: string) => Promise<void>;
   onCollapse?: () => void;
+  documents?: Document[];
+  workflows?: Workflow[];
+  workflowProgressMap?: Record<string, WorkflowProgress>;
+  uploading?: boolean;
+  onAddDocument?: () => void;
+  onRefreshDocuments?: () => void;
+  onViewWorkflow?: (documentId: string, workflowId: string) => void;
+  onDeleteDocument?: (documentId: string) => void;
 }
 
 export default function SidePanel({
-  sessions,
-  currentSessionId,
-  onSessionSelect,
-  onSessionRename,
-  onSessionDelete,
-  hasMoreSessions = false,
-  loadingMoreSessions = false,
-  onLoadMoreSessions,
   artifacts = [],
   currentArtifactId,
   onArtifactSelect,
@@ -90,94 +342,47 @@ export default function SidePanel({
   onArtifactDownload,
   onArtifactDelete,
   onCollapse,
+  documents = [],
+  workflows = [],
+  workflowProgressMap = {},
+  uploading = false,
+  onAddDocument,
+  onRefreshDocuments,
+  onViewWorkflow,
+  onDeleteDocument,
 }: SidePanelProps) {
   const { t } = useTranslation();
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [openArtifactMenuId, setOpenArtifactMenuId] = useState<string | null>(
     null,
   );
-  const [sessionToRename, setSessionToRename] = useState<ChatSession | null>(
-    null,
-  );
-  const [sessionToDelete, setSessionToDelete] = useState<ChatSession | null>(
-    null,
-  );
   const [artifactToDelete, setArtifactToDelete] = useState<Artifact | null>(
-    null,
-  );
-  const [saving, setSaving] = useState(false);
-  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(
     null,
   );
   const [deletingArtifactId, setDeletingArtifactId] = useState<string | null>(
     null,
   );
 
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+  const { topRatio, onMouseDown } = useVerticalResize(splitContainerRef);
+
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
-      if (!target.closest('[data-session-menu]')) {
-        setOpenMenuId(null);
-      }
       if (!target.closest('[data-artifact-menu]')) {
         setOpenArtifactMenuId(null);
       }
     };
 
-    if (openMenuId || openArtifactMenuId) {
+    if (openArtifactMenuId) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [openMenuId, openArtifactMenuId]);
+  }, [openArtifactMenuId]);
 
-  const handleMenuToggle = (sessionId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setOpenMenuId(openMenuId === sessionId ? null : sessionId);
-  };
-
-  const handleRenameClick = (session: ChatSession) => {
-    setOpenMenuId(null);
-    setSessionToRename(session);
-  };
-
-  const handleDeleteClick = (session: ChatSession) => {
-    setOpenMenuId(null);
-    setSessionToDelete(session);
-  };
-
-  const handleConfirmRename = async (newName: string) => {
-    if (!sessionToRename || !onSessionRename) return;
-
-    setSaving(true);
-    try {
-      await onSessionRename(sessionToRename.session_id, newName);
-      setSessionToRename(null);
-    } catch (error) {
-      console.error('Failed to rename session:', error);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!sessionToDelete || !onSessionDelete) return;
-
-    setDeletingSessionId(sessionToDelete.session_id);
-    try {
-      await onSessionDelete(sessionToDelete.session_id);
-    } catch (error) {
-      console.error('Failed to delete session:', error);
-    } finally {
-      setDeletingSessionId(null);
-      setSessionToDelete(null);
-    }
-  };
-
-  const hasActions = onSessionRename || onSessionDelete;
   const hasArtifactActions =
     onArtifactCopy || onArtifactDownload || onArtifactDelete;
 
@@ -222,287 +427,306 @@ export default function SidePanel({
 
   return (
     <>
-      <ResizablePanelGroup
-        orientation="vertical"
-        defaultSize={[60, 40]}
-        panels={[
-          { id: 'history', minSize: 20, collapsible: true },
-          { id: 'artifacts', minSize: 20, collapsible: true },
-        ]}
-        className="h-full"
-      >
-        {/* Conversation History - Top */}
-        <ResizablePanel id="history">
-          <div className="h-full pb-1">
-            <div className="h-full flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-                <MessageSquare className="w-4 h-4 text-slate-500" />
-                <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-1">
-                  {t('chat.history')}
-                </h3>
-                {onCollapse && (
-                  <button
-                    onClick={onCollapse}
-                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors flex-shrink-0"
-                    title={t('nav.collapse')}
-                  >
-                    <PanelRightClose className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                {sessions.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full p-4">
-                    <MessageSquare className="w-8 h-8 mb-2 text-slate-300 dark:text-slate-500" />
-                    <p className="text-sm font-medium text-slate-500">
-                      {t('chat.noHistory')}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="p-2 space-y-0.5">
-                    {sessions.map((session) => (
-                      <div
-                        key={session.session_id}
-                        className={`group relative flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                          session.session_id === currentSessionId
-                            ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-500 dark:text-blue-400'
-                            : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
-                        }`}
-                        onClick={() => onSessionSelect(session.session_id)}
-                      >
-                        <MessageSquare className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
-                        <span className="text-sm truncate flex-1">
-                          {session.session_name ||
-                            `Session ${session.session_id.slice(0, 8)}`}
-                        </span>
-
-                        {hasActions && (
-                          <div className="relative" data-session-menu>
-                            <button
-                              onClick={(e) =>
-                                handleMenuToggle(session.session_id, e)
-                              }
-                              className={`p-1 rounded transition-opacity ${
-                                openMenuId === session.session_id
-                                  ? 'opacity-100'
-                                  : 'opacity-0 group-hover:opacity-100'
-                              } text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700`}
-                            >
-                              {deletingSessionId === session.session_id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <MoreVertical className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-
-                            {/* Dropdown Menu */}
-                            {openMenuId === session.session_id && (
-                              <div className="absolute right-0 top-full mt-1 z-50 min-w-[120px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1">
-                                {onSessionRename && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleRenameClick(session);
-                                    }}
-                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
-                                  >
-                                    <Pencil className="w-3.5 h-3.5" />
-                                    {t('common.rename', 'Rename')}
-                                  </button>
-                                )}
-                                {onSessionDelete && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeleteClick(session);
-                                    }}
-                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                    {t('common.delete')}
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    {hasMoreSessions && onLoadMoreSessions && (
-                      <button
-                        onClick={onLoadMoreSessions}
-                        disabled={loadingMoreSessions}
-                        className="w-full flex items-center justify-center gap-2 px-3 py-2 mt-2 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {loadingMoreSessions ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4" />
-                        )}
-                        <span>
-                          {loadingMoreSessions
-                            ? t('common.loading')
-                            : t('chat.loadMore', 'Load more')}
-                        </span>
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+      <div ref={splitContainerRef} className="h-full flex flex-col gap-2">
+        {/* Documents Panel (top) */}
+        <div
+          className="flex flex-col min-h-0 overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl"
+          style={{ height: `${topRatio}%` }}
+        >
+          {/* Documents Header */}
+          <div className="flex items-center gap-1.5 px-4 py-3.5 border-b border-slate-200 dark:border-slate-700 flex-shrink-0 min-w-0 overflow-hidden">
+            <FileText className="w-4 h-4 text-slate-500 flex-shrink-0" />
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-shrink-0">
+              {t('documents.title', 'Documents')}
+            </span>
+            {onAddDocument && (
+              <button
+                onClick={onAddDocument}
+                className="px-2.5 py-1 text-xs font-medium rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors truncate min-w-0"
+              >
+                {t('documents.addDocument', 'Add Document')}
+              </button>
+            )}
+            {onRefreshDocuments && (
+              <button
+                onClick={onRefreshDocuments}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors flex-shrink-0"
+                title={t('documents.refresh')}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <div className="flex-1" />
+            <span className="text-xs text-slate-400 flex-shrink-0">
+              {documents.length}
+            </span>
+            {onCollapse && (
+              <button
+                onClick={onCollapse}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors flex-shrink-0"
+                title={t('nav.collapse')}
+              >
+                <PanelRightClose className="h-4 w-4" />
+              </button>
+            )}
           </div>
-        </ResizablePanel>
 
-        <ResizableHandle id="history:artifacts" orientation="vertical" />
-
-        {/* Artifacts - Bottom */}
-        <ResizablePanel id="artifacts">
-          <div className="h-full pt-1">
-            <div className="h-full flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-                <Layers className="w-4 h-4 text-slate-500" />
-                <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  {t('chat.artifacts', 'Artifacts')}
-                </h3>
+          {/* Documents List */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {uploading && (
+              <div className="px-3 py-2 flex items-center gap-2">
+                <Loader2 className="h-3.5 w-3.5 text-blue-500 animate-spin" />
+                <span className="text-xs text-blue-600">
+                  {t('documents.uploading')}
+                </span>
               </div>
-              <div className="flex-1 overflow-y-auto">
-                {artifacts.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full p-4">
-                    <Layers className="w-8 h-8 mb-2 text-slate-300 dark:text-slate-500" />
-                    <p className="text-sm font-medium text-slate-500">
-                      {t('chat.noArtifacts', 'No artifacts yet')}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="p-2 space-y-0.5">
-                    {artifacts.map((artifact) => {
-                      const ArtifactIcon = getArtifactIcon(
-                        artifact.content_type,
-                      );
-                      return (
+            )}
+            {documents.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full px-4">
+                <FileX className="h-8 w-8 text-slate-300 dark:text-slate-500 mb-2" />
+                <p className="text-xs text-slate-500">
+                  {t('documents.noDocuments')}
+                </p>
+              </div>
+            ) : (
+              <div className="p-2 space-y-1">
+                {documents.map((doc) => {
+                  const workflow = workflows.find(
+                    (wf) => wf.document_id === doc.document_id,
+                  );
+                  const workflowProgress = workflowProgressMap[doc.document_id];
+                  const isFailed =
+                    doc.status === 'failed' ||
+                    workflowProgress?.status === 'failed';
+                  const isProcessing =
+                    !isFailed &&
+                    workflowProgress &&
+                    workflowProgress.status !== 'completed';
+
+                  return (
+                    <div
+                      key={doc.document_id}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(
+                          'application/x-document',
+                          JSON.stringify({
+                            document_id: doc.document_id,
+                            name: doc.name,
+                          }),
+                        );
+                        e.dataTransfer.effectAllowed = 'copy';
+                      }}
+                      className={`group bg-white dark:bg-slate-900 border rounded-lg p-2.5 transition-all ${
+                        isProcessing
+                          ? 'border-blue-300 dark:border-blue-700 bg-blue-50/30 dark:bg-blue-900/10'
+                          : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
                         <div
-                          key={artifact.artifact_id}
-                          className={`group relative flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                            artifact.artifact_id === currentArtifactId
-                              ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-500 dark:text-blue-400'
-                              : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                          className={`flex-shrink-0 p-1.5 rounded-lg doc-icon-bg ${
+                            isProcessing ? 'processing' : ''
                           }`}
-                          onClick={() =>
-                            onArtifactSelect?.(artifact.artifact_id)
-                          }
                         >
-                          <ArtifactIcon className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
-                          <span className="text-sm truncate flex-1">
-                            {artifact.filename}
-                          </span>
-                          <span className="text-xs text-slate-400 dark:text-slate-500">
-                            {formatFileSize(artifact.file_size)}
-                          </span>
+                          {getFileIcon(doc.file_type)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate"
+                            title={doc.name}
+                          >
+                            {doc.name}
+                          </p>
+                          <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                            <span
+                              className={`text-[10px] px-1 py-0.5 rounded font-medium truncate ${getStatusBadge(doc.status)}`}
+                            >
+                              {t(`documents.${doc.status}`, doc.status)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 whitespace-nowrap flex-shrink-0">
+                              {(doc.file_size / 1024).toFixed(1)} KB
+                            </span>
+                          </div>
+                        </div>
 
-                          {hasArtifactActions && (
-                            <div className="relative" data-artifact-menu>
-                              <button
-                                onClick={(e) =>
-                                  handleArtifactMenuToggle(
-                                    artifact.artifact_id,
-                                    e,
-                                  )
-                                }
-                                className={`p-1 rounded transition-opacity ${
-                                  openArtifactMenuId === artifact.artifact_id
-                                    ? 'opacity-100'
-                                    : 'opacity-0 group-hover:opacity-100'
-                                } text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700`}
-                              >
-                                {deletingArtifactId === artifact.artifact_id ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                ) : (
-                                  <MoreVertical className="w-3.5 h-3.5" />
-                                )}
-                              </button>
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                          {workflow && onViewWorkflow && (
+                            <button
+                              onClick={() =>
+                                onViewWorkflow(
+                                  workflow.document_id,
+                                  workflow.workflow_id,
+                                )
+                              }
+                              className="p-1 text-blue-900 bg-blue-400 hover:bg-blue-100 hover:text-blue-700 hover:scale-105 hover:shadow-md dark:text-blue-300 dark:bg-blue-800 dark:hover:bg-blue-500 dark:hover:text-white rounded-lg transition-all"
+                              title={t('documents.view')}
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          {!isProcessing && onDeleteDocument && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteDocument(doc.document_id);
+                              }}
+                              className="p-1 text-red-900 bg-red-400 hover:bg-red-100 hover:text-red-600 hover:scale-105 hover:shadow-md dark:text-red-400 dark:bg-red-800 dark:hover:bg-red-500 dark:hover:text-white rounded-lg transition-all"
+                              title={t('common.delete')}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
 
-                              {/* Dropdown Menu */}
-                              {openArtifactMenuId === artifact.artifact_id && (
-                                <div className="absolute right-0 top-full mt-1 z-50 min-w-[150px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1">
-                                  {onArtifactCopy && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleArtifactCopyClick(artifact);
-                                      }}
-                                      className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
-                                    >
-                                      <Copy className="w-3.5 h-3.5" />
-                                      {t('common.copy', 'Copy')}
-                                    </button>
-                                  )}
-                                  {onArtifactDownload && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleArtifactDownloadClick(artifact);
-                                      }}
-                                      className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
-                                    >
-                                      <Download className="w-3.5 h-3.5" />
-                                      {t('common.download', 'Download')}
-                                    </button>
-                                  )}
-                                  {onArtifactDelete && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleArtifactDeleteClick(artifact);
-                                      }}
-                                      className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                      {t('common.delete')}
-                                    </button>
-                                  )}
-                                </div>
+                      {isProcessing && workflowProgress && (
+                        <StepProgressBar
+                          steps={workflowProgress.steps}
+                          segmentProgress={workflowProgress.segmentProgress}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Resize Handle - same style as horizontal splitter */}
+        <div
+          className="flex-shrink-0 flex items-center justify-center cursor-row-resize select-none"
+          onMouseDown={onMouseDown}
+        >
+          <div className="min-h-1.5 mx-4 w-full rounded-full bg-slate-300 dark:bg-slate-600 hover:bg-slate-400 dark:hover:bg-slate-500 active:bg-slate-400 dark:active:bg-slate-500 transition-colors duration-200" />
+        </div>
+
+        {/* Artifacts Panel (bottom) */}
+        <div
+          className="flex flex-col min-h-0 overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl"
+          style={{ flex: 1 }}
+        >
+          {/* Artifacts Header */}
+          <div className="flex items-center gap-2 px-4 py-3.5 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+            <Layers className="w-4 h-4 text-slate-500 flex-shrink-0" />
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-1">
+              {t('chat.artifacts', 'Artifacts')}
+            </span>
+            <span className="text-xs text-slate-400">{artifacts.length}</span>
+          </div>
+
+          {/* Artifacts List */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {artifacts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full px-4">
+                <Layers className="w-8 h-8 mb-2 text-slate-300 dark:text-slate-500" />
+                <p className="text-xs text-slate-500">
+                  {t('chat.noArtifacts', 'No artifacts yet')}
+                </p>
+              </div>
+            ) : (
+              <div className="p-2 space-y-0.5">
+                {artifacts.map((artifact) => {
+                  const ArtifactIcon = getArtifactIcon(artifact.content_type);
+                  return (
+                    <div
+                      key={artifact.artifact_id}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(
+                          'application/x-artifact',
+                          JSON.stringify({
+                            artifact_id: artifact.artifact_id,
+                            filename: artifact.filename,
+                          }),
+                        );
+                        e.dataTransfer.effectAllowed = 'copy';
+                      }}
+                      className={`group relative flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                        artifact.artifact_id === currentArtifactId
+                          ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-500 dark:text-blue-400'
+                          : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                      }`}
+                      onClick={() => onArtifactSelect?.(artifact.artifact_id)}
+                    >
+                      <ArtifactIcon className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
+                      <span className="text-sm truncate flex-1">
+                        {artifact.filename}
+                      </span>
+                      <span className="text-xs text-slate-400 dark:text-slate-500">
+                        {formatFileSize(artifact.file_size)}
+                      </span>
+
+                      {hasArtifactActions && (
+                        <div className="relative" data-artifact-menu>
+                          <button
+                            onClick={(e) =>
+                              handleArtifactMenuToggle(artifact.artifact_id, e)
+                            }
+                            className={`p-1 rounded transition-opacity ${
+                              openArtifactMenuId === artifact.artifact_id
+                                ? 'opacity-100'
+                                : 'opacity-0 group-hover:opacity-100'
+                            } text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700`}
+                          >
+                            {deletingArtifactId === artifact.artifact_id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+
+                          {openArtifactMenuId === artifact.artifact_id && (
+                            <div className="absolute right-0 top-full mt-1 z-50 min-w-[150px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1">
+                              {onArtifactCopy && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleArtifactCopyClick(artifact);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                  {t('common.copy', 'Copy')}
+                                </button>
+                              )}
+                              {onArtifactDownload && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleArtifactDownloadClick(artifact);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  {t('common.download', 'Download')}
+                                </button>
+                              )}
+                              {onArtifactDelete && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleArtifactDeleteClick(artifact);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  {t('common.delete')}
+                                </button>
                               )}
                             </div>
                           )}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            )}
           </div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-
-      {/* Rename Modal */}
-      <InputModal
-        isOpen={!!sessionToRename}
-        onClose={() => setSessionToRename(null)}
-        onConfirm={handleConfirmRename}
-        title={t('chat.renameSession', 'Rename Session')}
-        placeholder={t('chat.sessionNamePlaceholder', 'Enter session name')}
-        initialValue={
-          sessionToRename?.session_name ||
-          `Session ${sessionToRename?.session_id.slice(0, 8) || ''}`
-        }
-        confirmText={t('common.save')}
-        loading={saving}
-      />
-
-      {/* Delete Session Confirmation Modal */}
-      <ConfirmModal
-        isOpen={!!sessionToDelete}
-        onClose={() => setSessionToDelete(null)}
-        onConfirm={handleConfirmDelete}
-        title={t('chat.deleteSession', 'Delete Session')}
-        message={t(
-          'chat.deleteSessionConfirm',
-          'Are you sure you want to delete this session? This action cannot be undone.',
-        )}
-        confirmText={t('common.delete')}
-        variant="danger"
-      />
+        </div>
+      </div>
 
       {/* Delete Artifact Confirmation Modal */}
       <ConfirmModal

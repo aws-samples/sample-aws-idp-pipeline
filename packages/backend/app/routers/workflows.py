@@ -9,7 +9,7 @@ from app.config import get_config
 from app.ddb import get_document_item
 from app.ddb.workflows import get_workflow_item, query_workflows, update_workflow_status
 from app.markdown import transform_markdown_images
-from app.s3 import generate_presigned_url, get_s3_client, list_segment_keys, parse_s3_uri
+from app.s3 import generate_presigned_url, get_s3_client, get_segment_key_by_index, list_segment_keys, parse_s3_uri
 
 
 def _get_display_file_name(project_id: str, document_id: str, fallback_name: str) -> str:
@@ -120,73 +120,11 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
-    file_uri = wf.data.file_uri
-
-    # List segment files directly from S3
-    segment_keys = list_segment_keys(file_uri)
-    segments = []
-
-    for s3_key in segment_keys:
-        s3_data = _get_segment_from_s3(file_uri, s3_key)
-
-        if not s3_data:
-            continue
-
-        image_uri = s3_data.get("image_uri", "")
-        bda_indexer = transform_markdown_images(s3_data.get("bda_indexer", ""), image_uri)
-        paddleocr_blocks = s3_data.get("paddleocr_blocks")
-        format_parser = transform_markdown_images(s3_data.get("format_parser", ""), image_uri)
-
-        # Transform ai_analysis content
-        raw_ai_analysis = s3_data.get("ai_analysis", [])
-        ai_analysis = [
-            {
-                "analysis_query": ia.get("analysis_query", ""),
-                "content": transform_markdown_images(ia.get("content", ""), image_uri),
-            }
-            for ia in raw_ai_analysis
-        ]
-
-        segment_type = s3_data.get("segment_type", "PAGE")
-        segment_file_uri = s3_data.get("file_uri")
-
-        # Generate video_url for VIDEO/CHAPTER segments
-        video_url = None
-        if segment_type in ("VIDEO", "CHAPTER") and segment_file_uri:
-            video_url = generate_presigned_url(segment_file_uri)
-
-        # Get transcribe segments
-        raw_transcribe = s3_data.get("transcribe_segments", [])
-        transcribe_segments = (
-            [
-                TranscribeSegment(
-                    start_time=ts.get("start_time", 0),
-                    end_time=ts.get("end_time", 0),
-                    transcript=ts.get("transcript", ""),
-                )
-                for ts in raw_transcribe
-            ]
-            if raw_transcribe
-            else None
-        )
-
-        segments.append(
-            SegmentData(
-                segment_index=s3_data.get("segment_index", 0),
-                segment_type=segment_type,
-                image_uri=image_uri,
-                image_url=generate_presigned_url(image_uri),
-                file_uri=segment_file_uri,
-                video_url=video_url,
-                start_timecode_smpte=s3_data.get("start_timecode_smpte"),
-                end_timecode_smpte=s3_data.get("end_timecode_smpte"),
-                bda_indexer=bda_indexer,
-                paddleocr_blocks=paddleocr_blocks,
-                format_parser=format_parser,
-                ai_analysis=ai_analysis,
-                transcribe_segments=transcribe_segments,
-            )
-        )
+    # Count segments from S3 if total_segments not in metadata
+    total_segments = wf.data.total_segments
+    if not total_segments:
+        segment_keys = list_segment_keys(wf.data.file_uri)
+        total_segments = len(segment_keys)
 
     return WorkflowDetailResponse(
         workflow_id=workflow_id,
@@ -196,11 +134,85 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
         file_uri=wf.data.file_uri,
         file_type=wf.data.file_type,
         language=wf.data.language,
-        total_segments=wf.data.total_segments or len(segments),
+        total_segments=total_segments,
         created_at=wf.created_at,
         updated_at=wf.updated_at,
-        segments=segments,
+        segments=[],
     )
+
+
+def _build_segment_data(file_uri: str, s3_key: str) -> SegmentData | None:
+    """Load a single segment from S3 and transform it into SegmentData."""
+    s3_data = _get_segment_from_s3(file_uri, s3_key)
+    if not s3_data:
+        return None
+
+    image_uri = s3_data.get("image_uri", "")
+    bda_indexer = transform_markdown_images(s3_data.get("bda_indexer", ""), image_uri)
+    paddleocr_blocks = s3_data.get("paddleocr_blocks")
+    format_parser = transform_markdown_images(s3_data.get("format_parser", ""), image_uri)
+
+    raw_ai_analysis = s3_data.get("ai_analysis", [])
+    ai_analysis = [
+        {
+            "analysis_query": ia.get("analysis_query", ""),
+            "content": transform_markdown_images(ia.get("content", ""), image_uri),
+        }
+        for ia in raw_ai_analysis
+    ]
+
+    segment_type = s3_data.get("segment_type", "PAGE")
+    segment_file_uri = s3_data.get("file_uri")
+
+    video_url = None
+    if segment_type in ("VIDEO", "CHAPTER") and segment_file_uri:
+        video_url = generate_presigned_url(segment_file_uri)
+
+    raw_transcribe = s3_data.get("transcribe_segments", [])
+    transcribe_segments = (
+        [
+            TranscribeSegment(
+                start_time=ts.get("start_time", 0),
+                end_time=ts.get("end_time", 0),
+                transcript=ts.get("transcript", ""),
+            )
+            for ts in raw_transcribe
+        ]
+        if raw_transcribe
+        else None
+    )
+
+    return SegmentData(
+        segment_index=s3_data.get("segment_index", 0),
+        segment_type=segment_type,
+        image_uri=image_uri,
+        image_url=generate_presigned_url(image_uri),
+        file_uri=segment_file_uri,
+        video_url=video_url,
+        start_timecode_smpte=s3_data.get("start_timecode_smpte"),
+        end_timecode_smpte=s3_data.get("end_timecode_smpte"),
+        bda_indexer=bda_indexer,
+        paddleocr_blocks=paddleocr_blocks,
+        format_parser=format_parser,
+        ai_analysis=ai_analysis,
+        transcribe_segments=transcribe_segments,
+    )
+
+
+@router.get("/{workflow_id}/segments/{segment_index}")
+def get_segment(document_id: str, workflow_id: str, segment_index: int) -> SegmentData:
+    """Get a single segment by index."""
+    wf = get_workflow_item(document_id, workflow_id)
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    bucket, s3_key = get_segment_key_by_index(wf.data.file_uri, segment_index)
+    segment = _build_segment_data(wf.data.file_uri, s3_key)
+
+    if not segment:
+        raise HTTPException(status_code=404, detail=f"Segment {segment_index} not found")
+
+    return segment
 
 
 class ReanalysisRequest(BaseModel):

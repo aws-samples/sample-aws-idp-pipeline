@@ -94,6 +94,12 @@ def get_analysis_prefix_from_file_uri(file_uri: str) -> tuple[str, str]:
     return bucket, analysis_prefix
 
 
+def get_segment_key_by_index(file_uri: str, segment_index: int) -> tuple[str, str]:
+    """Return (bucket, key) for a single segment JSON by index."""
+    bucket, prefix = get_analysis_prefix_from_file_uri(file_uri)
+    return bucket, f"{prefix}{segment_index:04d}.json"
+
+
 def list_segment_keys(file_uri: str) -> list[str]:
     """List all segment JSON file keys from S3.
 

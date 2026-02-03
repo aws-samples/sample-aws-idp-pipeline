@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import Config from '../../config';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
+import SidebarSessionList from './SidebarSessionList';
 
 // Navigation icons
 const ProjectsIcon = () => (
@@ -327,10 +328,15 @@ const AppLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
           ))}
         </nav>
 
-        {/* AI Disclaimer */}
-        {!sidebarCollapsed && (
-          <div className="sidebar-disclaimer">{t('sidebar.aiDisclaimer')}</div>
-        )}
+        {/* Chat History + Disclaimer area */}
+        <div className="sidebar-sessions-area">
+          <SidebarSessionList sidebarCollapsed={sidebarCollapsed} />
+          {!sidebarCollapsed && (
+            <div className="sidebar-disclaimer">
+              {t('sidebar.aiDisclaimer')}
+            </div>
+          )}
+        </div>
 
         {/* Bottom Section */}
         <div className="sidebar-footer" ref={menuRef}>

@@ -22,7 +22,9 @@
     "yesterday": "어제",
     "daysAgo": "{{count}}일 전",
     "showMore": "더 보기",
-    "showLess": "접기"
+    "showLess": "접기",
+    "expand": "펼치기",
+    "collapse": "접기"
   },
   "nav": {
     "projects": "프로젝트",
@@ -250,7 +252,24 @@
     "selectArtifact": "아티팩트 선택",
     "documents": "문서",
     "noDocuments": "문서를 찾을 수 없습니다",
-    "tabToSwitch": "Tab 키로 전환"
+    "tabToSwitch": "Tab 키로 전환",
+    "addFileOrPhoto": "파일 또는 사진 추가",
+    "research": "리서치",
+    "researchNotAvailable": "리서치 에이전트가 구성되지 않았습니다",
+    "useAgent": "에이전트 사용",
+    "manageAgents": "에이전트 관리",
+    "stage": {
+      "research_agent": "리서치 중",
+      "plan_agent": "계획 수립 중",
+      "write_agent": "작성 중",
+      "pptx_agent": "프레젠테이션 생성 중"
+    },
+    "stageResult": {
+      "research_agent": "리서치 결과",
+      "plan_agent": "계획",
+      "write_agent": "작성 결과",
+      "pptx_agent": "프레젠테이션"
+    }
   },
   "viewer": {
     "zoomIn": "확대",

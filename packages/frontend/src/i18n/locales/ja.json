@@ -22,7 +22,9 @@
     "yesterday": "昨日",
     "daysAgo": "{{count}}日前",
     "showMore": "もっと見る",
-    "showLess": "折りたたむ"
+    "showLess": "折りたたむ",
+    "expand": "展開",
+    "collapse": "折りたたむ"
   },
   "nav": {
     "projects": "プロジェクト",
@@ -250,7 +252,24 @@
     "selectArtifact": "アーティファクトを選択",
     "documents": "ドキュメント",
     "noDocuments": "ドキュメントが見つかりません",
-    "tabToSwitch": "Tabキーで切り替え"
+    "tabToSwitch": "Tabキーで切り替え",
+    "addFileOrPhoto": "ファイルまたは写真を追加",
+    "research": "リサーチ",
+    "researchNotAvailable": "リサーチエージェントが設定されていません",
+    "useAgent": "エージェントを使用",
+    "manageAgents": "エージェント管理",
+    "stage": {
+      "research_agent": "リサーチ中",
+      "plan_agent": "計画策定中",
+      "write_agent": "作成中",
+      "pptx_agent": "プレゼンテーション作成中"
+    },
+    "stageResult": {
+      "research_agent": "リサーチ結果",
+      "plan_agent": "計画",
+      "write_agent": "作成結果",
+      "pptx_agent": "プレゼンテーション"
+    }
   },
   "viewer": {
     "zoomIn": "拡大",

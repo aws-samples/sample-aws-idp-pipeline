@@ -1,4 +1,10 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import {
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  useCallback,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowUp,
@@ -10,6 +16,7 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   MessageSquarePlus,
   Download,
   Eye,
@@ -18,6 +25,9 @@ import {
   Loader2,
   FileSpreadsheet,
   FileCode,
+  Paperclip,
+  Check,
+  Settings2,
   type LucideIcon,
 } from 'lucide-react';
 import DOMPurify from 'isomorphic-dompurify';
@@ -44,7 +54,9 @@ export interface AttachedFile {
 
 export type StreamingBlock =
   | { type: 'text'; content: string }
-  | { type: 'tool_use'; name: string };
+  | { type: 'tool_use'; name: string }
+  | { type: 'stage_start'; stage: string }
+  | { type: 'stage_complete'; stage: string; result: string };
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -52,16 +64,20 @@ interface ChatPanelProps {
   sending: boolean;
   streamingBlocks: StreamingBlock[];
   loadingHistory?: boolean;
+  agents?: Agent[];
   selectedAgent: Agent | null;
   artifacts?: Artifact[];
   documents?: Document[];
   onInputChange: (value: string) => void;
   onSendMessage: (files: AttachedFile[], message?: string) => void;
+  onResearch?: (files: AttachedFile[], message?: string) => void;
+  onAgentSelect?: (agentName: string | null) => void;
   onAgentClick: () => void;
   onNewChat: () => void;
   onArtifactView?: (artifactId: string) => void;
   onSourceClick?: (documentId: string, segmentId: string) => void;
   loadingSourceKey?: string | null;
+  scrollPositionRef?: React.MutableRefObject<number>;
 }
 
 const formatToolDisplayName = (rawName: string): string => {
@@ -226,6 +242,9 @@ const prepareMarkdown = (content: string): string => {
     .replace(/<\/p>\s*<p>/gi, '\n\n')
     .replace(/<(?!\/?(?:strong|em))[^>]*>/g, '');
 
+  // Convert bullet characters to markdown list items
+  result = result.replace(/^[ \t]*[•●◦‣⁃]/gm, '-');
+
   // Unescape markdown characters (backslash-escaped)
   result = result
     .replace(/\\\*/g, '___ESCAPED_ASTERISK___')
@@ -253,30 +272,35 @@ export default function ChatPanel({
   sending,
   streamingBlocks,
   loadingHistory = false,
+  agents = [],
   selectedAgent,
   artifacts = [],
   documents = [],
   onInputChange,
   onSendMessage,
+  onResearch,
+  onAgentSelect,
   onAgentClick,
   onNewChat,
   onArtifactView,
   onSourceClick,
   loadingSourceKey,
+  scrollPositionRef,
 }: ChatPanelProps) {
   const { t } = useTranslation();
   const { getPresignedDownloadUrl } = useAwsClient();
   const { showToast } = useToast();
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLDivElement>(null);
+  const messageCountRef = useRef(messages.length);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  // Expansion levels: 0=collapsed, 1=medium, 2=large, 3=full
-  const [toolResultExpandLevel, setToolResultExpandLevel] = useState<
-    Map<string, number>
-  >(new Map());
+  const [collapsedToolResults, setCollapsedToolResults] = useState<Set<string>>(
+    new Set(),
+  );
   const [modalImage, setModalImage] = useState<{
     src: string;
     alt: string;
@@ -287,6 +311,10 @@ export default function ChatPanel({
   const [expandedSources, setExpandedSources] = useState<Set<string>>(
     new Set(),
   );
+  const [researchMode, setResearchMode] = useState(false);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [showAgentSubmenu, setShowAgentSubmenu] = useState(false);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
   // Mention state (artifacts + documents)
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [mentionSearchQuery, setMentionSearchQuery] = useState('');
@@ -371,19 +399,11 @@ export default function ChatPanel({
     [getPresignedDownloadUrl, showToast, t],
   );
 
-  const expandToolResult = useCallback((messageId: string) => {
-    setToolResultExpandLevel((prev) => {
-      const next = new Map(prev);
-      const current = next.get(messageId) || 0;
-      next.set(messageId, Math.min(current + 1, 6));
-      return next;
-    });
-  }, []);
-
-  const collapseToolResult = useCallback((messageId: string) => {
-    setToolResultExpandLevel((prev) => {
-      const next = new Map(prev);
-      next.delete(messageId);
+  const toggleToolResultCollapse = useCallback((messageId: string) => {
+    setCollapsedToolResults((prev) => {
+      const next = new Set(prev);
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
       return next;
     });
   }, []);
@@ -603,6 +623,13 @@ export default function ChatPanel({
       ) {
         setShowMentionDropdown(false);
       }
+      if (
+        plusMenuRef.current &&
+        !plusMenuRef.current.contains(e.target as Node)
+      ) {
+        setShowPlusMenu(false);
+        setShowAgentSubmenu(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -620,9 +647,37 @@ export default function ChatPanel({
     }
   }, [selectedMentionIndex, showMentionDropdown]);
 
+  // Restore scroll position on remount (panel collapse/expand)
+  useLayoutEffect(() => {
+    if (scrollPositionRef && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollPositionRef.current;
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save scroll position continuously for parent to survive remounts
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingBlocks]);
+    const el = scrollContainerRef.current;
+    if (!el || !scrollPositionRef) return;
+    const handleScroll = () => {
+      scrollPositionRef.current = el.scrollTop;
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [scrollPositionRef]);
+
+  // Smooth-scroll to bottom only when new messages arrive (not on remount)
+  useEffect(() => {
+    if (messages.length > messageCountRef.current) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+    messageCountRef.current = messages.length;
+  }, [messages]);
+
+  useEffect(() => {
+    if (streamingBlocks.length > 0) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [streamingBlocks]);
 
   // Sync input content when inputMessage changes externally (e.g., cleared after send)
   useEffect(() => {
@@ -668,9 +723,37 @@ export default function ChatPanel({
     });
   };
 
+  // Insert a chip element at the end of the input and focus
+  const insertChipAtEnd = useCallback(
+    (chip: HTMLElement) => {
+      if (!inputRef.current) return;
+      inputRef.current.appendChild(chip);
+      // Add a trailing space so the cursor has somewhere to go
+      const space = document.createTextNode('\u00A0');
+      inputRef.current.appendChild(space);
+      // Move cursor to end
+      const sel = window.getSelection();
+      if (sel) {
+        const range = document.createRange();
+        range.setStartAfter(space);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+      inputRef.current.focus();
+      onInputChange(getInputContent());
+    },
+    [onInputChange, getInputContent],
+  );
+
   // Drag & Drop
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect =
+      e.dataTransfer.types.includes('application/x-artifact') ||
+      e.dataTransfer.types.includes('application/x-document')
+        ? 'copy'
+        : 'copy';
     setIsDragging(true);
   };
   const onDragLeave = (e: React.DragEvent) => {
@@ -680,6 +763,37 @@ export default function ChatPanel({
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
+
+    // Handle artifact drop
+    const artifactData = e.dataTransfer.getData('application/x-artifact');
+    if (artifactData) {
+      try {
+        const { artifact_id, filename } = JSON.parse(artifactData);
+        const chip = createArtifactChip({ artifact_id, filename } as Artifact);
+        insertChipAtEnd(chip);
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
+    // Handle document drop
+    const documentData = e.dataTransfer.getData('application/x-document');
+    if (documentData) {
+      try {
+        const { document_id, name } = JSON.parse(documentData);
+        const chip = createDocumentChip({
+          document_id,
+          name,
+        } as Document);
+        insertChipAtEnd(chip);
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
+    // Handle file drop
     if (e.dataTransfer.files) handleFiles(e.dataTransfer.files);
   };
 
@@ -701,8 +815,12 @@ export default function ChatPanel({
     // Get content with artifact references
     const messageContent = getInputContent();
 
-    // Pass formatted message content directly to avoid async state update issues
-    onSendMessage(attachedFiles, messageContent);
+    // Use research handler when research mode is active
+    if (researchMode && onResearch) {
+      onResearch(attachedFiles, messageContent);
+    } else {
+      onSendMessage(attachedFiles, messageContent);
+    }
     setAttachedFiles([]);
 
     // Clear the input and keep focus
@@ -714,6 +832,8 @@ export default function ChatPanel({
   }, [
     hasContent,
     sending,
+    researchMode,
+    onResearch,
     onSendMessage,
     attachedFiles,
     onInputChange,
@@ -874,13 +994,205 @@ export default function ChatPanel({
           {/* Action Bar */}
           <div className="flex gap-2 w-full items-center">
             <div className="flex-1 flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center justify-center h-8 w-8 rounded-lg transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95"
-              >
-                <Plus className="w-5 h-5" />
-              </button>
+              <div className="relative" ref={plusMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowPlusMenu((v) => !v)}
+                  className="inline-flex items-center justify-center h-8 w-8 rounded-lg transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+                {showPlusMenu && (
+                  <div className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-50 py-1">
+                    {/* Add file or photo */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPlusMenu(false);
+                        setShowAgentSubmenu(false);
+                        fileInputRef.current?.click();
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                    >
+                      <Paperclip className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                      <span>{t('chat.addFileOrPhoto')}</span>
+                    </button>
+
+                    {/* Research toggle */}
+                    {onResearch && (
+                      <>
+                        <div className="my-1 border-t border-slate-200 dark:border-slate-700" />
+                        <button
+                          type="button"
+                          disabled={
+                            !!selectedAgent ||
+                            (researchMode && messages.length > 0)
+                          }
+                          onClick={() => {
+                            setResearchMode((v) => !v);
+                            setShowPlusMenu(false);
+                            setShowAgentSubmenu(false);
+                          }}
+                          className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                            selectedAgent ||
+                            (researchMode && messages.length > 0)
+                              ? 'opacity-40 cursor-not-allowed'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                          }`}
+                        >
+                          <Search
+                            className={`w-4 h-4 ${researchMode ? 'text-blue-500' : 'text-slate-500 dark:text-slate-400'}`}
+                          />
+                          <span
+                            className={
+                              researchMode
+                                ? 'text-blue-600 dark:text-blue-400'
+                                : 'text-slate-700 dark:text-slate-300'
+                            }
+                          >
+                            {t('chat.research')}
+                          </span>
+                          {researchMode && (
+                            <Check className="w-4 h-4 text-blue-500 ml-auto" />
+                          )}
+                        </button>
+                      </>
+                    )}
+
+                    {/* Agent submenu */}
+                    {onAgentSelect && (
+                      <div className="relative">
+                        <button
+                          type="button"
+                          disabled={researchMode}
+                          onClick={() => setShowAgentSubmenu((v) => !v)}
+                          className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                            researchMode
+                              ? 'opacity-40 cursor-not-allowed'
+                              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                          }`}
+                        >
+                          <Sparkles className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                          <span className="flex-1 text-left">
+                            {t('chat.useAgent')}
+                          </span>
+                          <ChevronRight className="w-4 h-4 text-slate-400" />
+                        </button>
+
+                        {/* Agent submenu panel */}
+                        {showAgentSubmenu && (
+                          <div className="absolute left-full bottom-0 ml-1 w-52 max-h-72 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-[60] py-1">
+                            {/* Default agent */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onAgentSelect(null);
+                                setShowPlusMenu(false);
+                                setShowAgentSubmenu(false);
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                            >
+                              <Sparkles
+                                className={`w-4 h-4 ${!selectedAgent ? 'text-blue-500' : 'text-slate-400 dark:text-slate-500'}`}
+                              />
+                              <span
+                                className={
+                                  !selectedAgent
+                                    ? 'text-blue-600 dark:text-blue-400'
+                                    : 'text-slate-700 dark:text-slate-300'
+                                }
+                              >
+                                {t('agent.default')}
+                              </span>
+                              {!selectedAgent && (
+                                <Check className="w-4 h-4 text-blue-500 ml-auto" />
+                              )}
+                            </button>
+
+                            {/* Custom agents */}
+                            {agents.map((agent) => {
+                              const isSelected =
+                                selectedAgent?.agent_id === agent.agent_id;
+                              return (
+                                <button
+                                  key={agent.agent_id}
+                                  type="button"
+                                  onClick={() => {
+                                    onAgentSelect(agent.name);
+                                    setShowPlusMenu(false);
+                                    setShowAgentSubmenu(false);
+                                  }}
+                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                                >
+                                  <Sparkles
+                                    className={`w-4 h-4 ${isSelected ? 'text-blue-500' : 'text-slate-400 dark:text-slate-500'}`}
+                                  />
+                                  <span
+                                    className={`flex-1 text-left truncate ${
+                                      isSelected
+                                        ? 'text-blue-600 dark:text-blue-400'
+                                        : 'text-slate-700 dark:text-slate-300'
+                                    }`}
+                                  >
+                                    {agent.name}
+                                  </span>
+                                  {isSelected && (
+                                    <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                                  )}
+                                </button>
+                              );
+                            })}
+
+                            {/* Manage agents */}
+                            <div className="my-1 border-t border-slate-200 dark:border-slate-700" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowPlusMenu(false);
+                                setShowAgentSubmenu(false);
+                                onAgentClick();
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                            >
+                              <Settings2 className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                              <span>{t('chat.manageAgents')}</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              {researchMode && onResearch && (
+                <button
+                  type="button"
+                  onClick={() => setResearchMode(false)}
+                  disabled={messages.length > 0}
+                  className={`inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 transition-colors ${
+                    messages.length > 0
+                      ? 'cursor-default'
+                      : 'hover:bg-violet-200 dark:hover:bg-violet-800/40'
+                  }`}
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  {t('chat.research')}
+                  {messages.length === 0 && (
+                    <X className="w-3.5 h-3.5 ml-0.5 opacity-60 hover:opacity-100" />
+                  )}
+                </button>
+              )}
+              {selectedAgent && onAgentSelect && (
+                <button
+                  type="button"
+                  onClick={() => onAgentSelect(null)}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-800/40 transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {selectedAgent.name}
+                  <X className="w-3.5 h-3.5 ml-0.5 opacity-60 hover:opacity-100" />
+                </button>
+              )}
             </div>
             <button
               onClick={handleSend}
@@ -888,7 +1200,9 @@ export default function ChatPanel({
               type="button"
               className={`inline-flex items-center justify-center h-8 w-8 rounded-xl transition-all active:scale-95 ${
                 hasContent && !sending
-                  ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-md'
+                  ? researchMode
+                    ? 'bg-violet-500 hover:bg-violet-600 text-white shadow-md'
+                    : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md'
                   : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
             >
@@ -1072,19 +1386,14 @@ export default function ChatPanel({
 
   return (
     <div className="w-full h-full flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-      {/* Agent Header */}
+      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-        <button
-          onClick={onAgentClick}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-          style={{ color: 'var(--color-text-secondary)' }}
-        >
+        <div className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
           <Sparkles className="w-4 h-4" />
-          <span>
-            {selectedAgent?.name || t('agent.default', 'Default Agent')}
+          <span className="font-medium">
+            {selectedAgent?.name || t('agent.default')}
           </span>
-          <ChevronDown className="w-4 h-4 opacity-70" />
-        </button>
+        </div>
         <button
           onClick={onNewChat}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
@@ -1096,7 +1405,7 @@ export default function ChatPanel({
       </div>
 
       {/* Messages Container */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
         {loadingHistory ? (
           /* Loading History */
           <div className="flex flex-col items-center justify-center h-full p-6">
@@ -1127,7 +1436,7 @@ export default function ChatPanel({
           </div>
         ) : !hasMessages ? (
           /* Welcome Screen */
-          <div className="flex flex-col items-center h-full p-6">
+          <div className="flex flex-col items-center h-full p-6 max-w-4xl mx-auto w-full">
             <div className="flex-[3]" />
             <div className="mb-6">
               <Box className="w-10 h-10 text-blue-500" strokeWidth={1.5} />
@@ -1148,7 +1457,7 @@ export default function ChatPanel({
           </div>
         ) : (
           /* Messages */
-          <div className="p-6 space-y-6">
+          <div className="p-6 space-y-6 max-w-4xl mx-auto w-full">
             {messages.map((message) =>
               message.role === 'user' ? (
                 /* User message - bubble style */
@@ -1426,82 +1735,74 @@ export default function ChatPanel({
                           </div>
                         );
                       })()}
-                    {/* Text content - multi-level collapsible */}
+                    {/* Text content - collapsible */}
                     {message.content &&
                       (() => {
-                        const contentLength = message.content.length;
-                        const expandLevel =
-                          toolResultExpandLevel.get(message.id) || 0;
-
-                        // Level configs: [charLimit, maxHeightClass]
-                        const levels = [
-                          { chars: 150, height: 'max-h-20' },
-                          { chars: 400, height: 'max-h-36' },
-                          { chars: 800, height: 'max-h-56' },
-                          { chars: 1500, height: 'max-h-72' },
-                          { chars: 3000, height: 'max-h-96' },
-                          { chars: 6000, height: 'max-h-[32rem]' },
-                          { chars: Infinity, height: '' },
-                        ];
-
-                        const currentLevel = levels[expandLevel];
-                        const isFullyExpanded =
-                          expandLevel >= levels.length - 1;
-                        const canExpand =
-                          !isFullyExpanded &&
-                          contentLength > currentLevel.chars;
-                        const canCollapse = expandLevel > 0;
-
-                        const displayContent =
-                          contentLength > currentLevel.chars
-                            ? message.content.slice(0, currentLevel.chars) +
-                              '...'
-                            : message.content;
-
+                        const isCollapsed = collapsedToolResults.has(
+                          message.id,
+                        );
                         return (
                           <div className="space-y-2">
-                            <div
-                              className={`prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-violet-100 [&_strong]:!text-inherit ${
-                                currentLevel.height
-                                  ? `${currentLevel.height} overflow-hidden`
-                                  : ''
-                              }`}
-                            >
-                              <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                rehypePlugins={[rehypeRaw]}
-                              >
-                                {prepareMarkdown(displayContent)}
-                              </ReactMarkdown>
-                            </div>
-                            {(canExpand || canCollapse) && (
-                              <div className="flex items-center gap-3">
-                                {canExpand && (
-                                  <button
-                                    onClick={() => expandToolResult(message.id)}
-                                    className="flex items-center gap-1 text-xs font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
-                                  >
-                                    <ChevronDown className="w-3.5 h-3.5" />
-                                    {t('common.showMore', 'Show more')}
-                                  </button>
-                                )}
-                                {canCollapse && (
-                                  <button
-                                    onClick={() =>
-                                      collapseToolResult(message.id)
-                                    }
-                                    className="flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
-                                  >
-                                    <ChevronUp className="w-3.5 h-3.5" />
-                                    {t('common.showLess', 'Show less')}
-                                  </button>
-                                )}
+                            {!isCollapsed && (
+                              <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-violet-100 [&_strong]:!text-inherit">
+                                <ReactMarkdown
+                                  remarkPlugins={[remarkGfm]}
+                                  rehypePlugins={[rehypeRaw]}
+                                >
+                                  {prepareMarkdown(message.content)}
+                                </ReactMarkdown>
                               </div>
                             )}
+                            <button
+                              onClick={() =>
+                                toggleToolResultCollapse(message.id)
+                              }
+                              className="flex items-center gap-1 text-xs font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+                            >
+                              {isCollapsed ? (
+                                <>
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                  {t('common.expand', 'Expand')}
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                  {t('common.collapse', 'Collapse')}
+                                </>
+                              )}
+                            </button>
                           </div>
                         );
                       })()}
                   </div>
+                </div>
+              ) : message.isStageResult ? (
+                /* Stage result - emerald card with markdown */
+                <div
+                  key={message.id}
+                  className="rounded-xl border border-emerald-200 dark:border-emerald-500/40 bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-900/15 dark:to-teal-900/15 shadow-sm overflow-hidden"
+                >
+                  <div className="flex items-center gap-2.5 px-3 py-2.5 border-b border-emerald-100 dark:border-emerald-500/20">
+                    <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm flex-shrink-0">
+                      <Check className="w-3.5 h-3.5 text-white" />
+                    </div>
+                    <span className="text-sm font-medium text-slate-700 dark:text-emerald-200">
+                      {t(
+                        `chat.stageResult.${message.stageName}`,
+                        message.stageName ?? '',
+                      )}
+                    </span>
+                  </div>
+                  {message.content && (
+                    <div className="px-4 py-3 prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-emerald-100 [&_strong]:!text-inherit">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeRaw]}
+                      >
+                        {prepareMarkdown(message.content)}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </div>
               ) : (
                 /* AI message - no bubble, markdown */
@@ -1557,20 +1858,74 @@ export default function ChatPanel({
             {sending && (
               <div className="space-y-3">
                 {streamingBlocks.length > 0 ? (
-                  streamingBlocks.map((block, idx) =>
-                    block.type === 'text' ? (
-                      <div
-                        key={idx}
-                        className="prose prose-sm dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 [&_strong]:!text-inherit"
-                      >
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeRaw]}
+                  streamingBlocks.map((block, idx) => {
+                    if (block.type === 'text') {
+                      return (
+                        <div
+                          key={idx}
+                          className="prose prose-sm dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 [&_strong]:!text-inherit"
                         >
-                          {prepareMarkdown(block.content)}
-                        </ReactMarkdown>
-                      </div>
-                    ) : (
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            rehypePlugins={[rehypeRaw]}
+                          >
+                            {prepareMarkdown(block.content)}
+                          </ReactMarkdown>
+                        </div>
+                      );
+                    }
+                    if (block.type === 'stage_start') {
+                      return (
+                        <div
+                          key={idx}
+                          className="rounded-xl border border-amber-200 dark:border-amber-500/40 bg-gradient-to-r from-amber-50/80 to-orange-50/80 dark:from-amber-900/20 dark:to-orange-900/20 shadow-sm overflow-hidden"
+                        >
+                          <div className="flex items-center gap-2.5 px-3 py-2.5">
+                            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 shadow-sm flex-shrink-0">
+                              <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
+                            </div>
+                            <span className="text-sm font-medium text-slate-700 dark:text-amber-200">
+                              {t(`chat.stage.${block.stage}`, block.stage)}
+                            </span>
+                            <div className="flex-1" />
+                            <Loader2 className="w-4 h-4 animate-spin text-amber-500 dark:text-amber-400" />
+                          </div>
+                          <div className="h-0.5 bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                            <div className="shimmer-bar h-full w-1/3 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-400 rounded-full" />
+                          </div>
+                        </div>
+                      );
+                    }
+                    if (block.type === 'stage_complete') {
+                      return (
+                        <div
+                          key={idx}
+                          className="rounded-xl border border-emerald-200 dark:border-emerald-500/40 bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-900/15 dark:to-teal-900/15 shadow-sm overflow-hidden"
+                        >
+                          <div className="flex items-center gap-2.5 px-3 py-2.5 border-b border-emerald-100 dark:border-emerald-500/20">
+                            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm flex-shrink-0">
+                              <Check className="w-3.5 h-3.5 text-white" />
+                            </div>
+                            <span className="text-sm font-medium text-slate-700 dark:text-emerald-200">
+                              {t(
+                                `chat.stageResult.${block.stage}`,
+                                block.stage,
+                              )}
+                            </span>
+                          </div>
+                          <div className="px-4 py-3 prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-emerald-100 [&_strong]:!text-inherit">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              rehypePlugins={[rehypeRaw]}
+                            >
+                              {prepareMarkdown(block.result)}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
+                      );
+                    }
+                    // tool_use
+                    return (
                       <div
                         key={idx}
                         className="rounded-xl border border-blue-200 dark:border-blue-500/40 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 dark:from-blue-900/20 dark:to-indigo-900/20 shadow-sm overflow-hidden"
@@ -1593,8 +1948,8 @@ export default function ChatPanel({
                           <div className="shimmer-bar h-full w-1/3 bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-400 rounded-full" />
                         </div>
                       </div>
-                    ),
-                  )
+                    );
+                  })
                 ) : (
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
@@ -1618,7 +1973,7 @@ export default function ChatPanel({
       {/* Bottom Input */}
       {hasMessages && (
         <div className="p-4 border-t border-slate-200 dark:border-slate-700">
-          {inputBox}
+          <div className="max-w-4xl mx-auto">{inputBox}</div>
         </div>
       )}
 

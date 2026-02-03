@@ -19,7 +19,6 @@ import ProjectSettingsModal, {
   Project,
 } from '../../components/ProjectSettingsModal';
 import ProjectNavBar from '../../components/ProjectNavBar';
-import DocumentsPanel from '../../components/DocumentsPanel';
 import ChatPanel, {
   AttachedFile,
   type StreamingBlock,
@@ -34,6 +33,7 @@ import {
 import {
   Document,
   DocumentUploadResponse,
+  SegmentData,
   Workflow,
   WorkflowDetail,
   ChatMessage,
@@ -49,6 +49,7 @@ import AgentSelectModal from '../../components/AgentSelectModal';
 import DocumentUploadModal from '../../components/DocumentUploadModal';
 import ArtifactViewer from '../../components/ArtifactViewer';
 import SystemPromptModal from '../../components/SystemPromptModal';
+import { useSetSidebarSessions } from '../../contexts/SidebarSessionContext';
 
 interface DocumentWorkflows {
   document_id: string;
@@ -71,7 +72,12 @@ export const Route = createFileRoute('/projects/$projectId')({
 function ProjectDetailPage() {
   const { t } = useTranslation();
   const { projectId } = Route.useParams();
-  const { fetchApi, invokeAgent, getPresignedDownloadUrl } = useAwsClient();
+  const {
+    fetchApi,
+    invokeAgent,
+    getPresignedDownloadUrl,
+    researchAgentRuntimeArn,
+  } = useAwsClient();
   const { showToast } = useToast();
   const { sendMessage, status: wsStatus } = useWebSocket();
 
@@ -90,9 +96,8 @@ function ProjectDetailPage() {
     null,
   );
   const [loadingMoreSessions, setLoadingMoreSessions] = useState(false);
-  const [docsPanelCollapsed, setDocsPanelCollapsed] = useState(false);
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
-  const docsPanelSizeBeforeCollapse = useRef<number[]>([28, 47, 25]);
+  const sidePanelSizeBeforeCollapse = useRef<number[]>([70, 30]);
   const [project, setProject] = useState<Project | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
@@ -102,6 +107,7 @@ function ProjectDetailPage() {
   const [inputMessage, setInputMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [streamingBlocks, setStreamingBlocks] = useState<StreamingBlock[]>([]);
+  const pendingMessagesRef = useRef<ChatMessage[]>([]);
   const [selectedWorkflow, setSelectedWorkflow] =
     useState<WorkflowDetail | null>(null);
   const [loadingWorkflow, setLoadingWorkflow] = useState(false);
@@ -109,8 +115,6 @@ function ProjectDetailPage() {
   const [workflowProgressMap, setWorkflowProgressMap] = useState<
     Record<string, WorkflowProgress>
   >({});
-  const [showUploadArea, setShowUploadArea] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -127,47 +131,44 @@ function ProjectDetailPage() {
   const [reanalyzing, setReanalyzing] = useState(false);
   const [initialSegmentIndex, setInitialSegmentIndex] = useState(0);
   const [loadingSourceKey, setLoadingSourceKey] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const progressFetchedRef = useRef(false);
+  const sidePanelAutoExpandedRef = useRef(false);
+  const chatScrollPositionRef = useRef(0);
 
   // Persist panel sizes in localStorage
-  const panelStorageKey = 'idp-panel-sizes';
+  const panelStorageKey = 'idp-panel-sizes-v2';
   const savedPanelSizes = useMemo(() => {
     try {
       const raw = localStorage.getItem(panelStorageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length === 3) {
+        if (Array.isArray(parsed) && parsed.length === 2) {
           return parsed as number[];
         }
       }
     } catch {
       // ignore
     }
-    return [28, 47, 25];
+    return [70, 30];
   }, []);
 
   // Keep ref in sync with initial saved sizes
   useEffect(() => {
-    docsPanelSizeBeforeCollapse.current = savedPanelSizes;
+    sidePanelSizeBeforeCollapse.current = savedPanelSizes;
   }, [savedPanelSizes]);
 
   const handlePanelResizeEnd = useCallback(
     (details: { size: number[] }) => {
       try {
         localStorage.setItem(panelStorageKey, JSON.stringify(details.size));
-        if (
-          !docsPanelCollapsed &&
-          !sidePanelCollapsed &&
-          details.size.length === 3
-        ) {
-          docsPanelSizeBeforeCollapse.current = details.size;
+        if (!sidePanelCollapsed && details.size.length === 2) {
+          sidePanelSizeBeforeCollapse.current = details.size;
         }
       } catch {
         // ignore
       }
     },
-    [docsPanelCollapsed, sidePanelCollapsed],
+    [sidePanelCollapsed],
   );
 
   // Ctrl+Shift+S keyboard shortcut for system prompt modal
@@ -854,10 +855,14 @@ function ProjectDetailPage() {
     (artifactId: string) => {
       const artifact = artifacts.find((a) => a.artifact_id === artifactId);
       if (artifact) {
+        if (sidePanelCollapsed) {
+          setSidePanelCollapsed(false);
+          sidePanelAutoExpandedRef.current = true;
+        }
         setSelectedArtifact(artifact);
       }
     },
-    [artifacts],
+    [artifacts, sidePanelCollapsed],
   );
 
   const handleArtifactDownload = useCallback(
@@ -936,6 +941,20 @@ function ProjectDetailPage() {
     [fetchApi, showToast, t],
   );
 
+  const loadSegment = useCallback(
+    async (
+      documentId: string,
+      workflowId: string,
+      segmentIndex: number,
+    ): Promise<SegmentData> => {
+      const data = await fetchApi<SegmentData>(
+        `documents/${documentId}/workflows/${workflowId}/segments/${segmentIndex}`,
+      );
+      return data;
+    },
+    [fetchApi],
+  );
+
   const handleReanalyze = useCallback(
     async (userInstructions: string) => {
       if (!selectedWorkflow) return;
@@ -993,21 +1012,6 @@ function ProjectDetailPage() {
         },
       );
 
-      // Update the local workflow data
-      setSelectedWorkflow((prev) => {
-        if (!prev) return prev;
-        const segments = [...prev.segments];
-        const seg = { ...segments[segmentIndex] };
-        const analysis = [...seg.ai_analysis];
-        analysis[qaIndex] = {
-          analysis_query: result.analysis_query,
-          content: result.content,
-        };
-        seg.ai_analysis = analysis;
-        segments[segmentIndex] = seg;
-        return { ...prev, segments };
-      });
-
       return result;
     },
     [fetchApi, selectedWorkflow],
@@ -1037,21 +1041,6 @@ function ProjectDetailPage() {
         },
       );
 
-      // Update the local workflow data
-      setSelectedWorkflow((prev) => {
-        if (!prev) return prev;
-        const segments = [...prev.segments];
-        const seg = { ...segments[segmentIndex] };
-        const analysis = [...seg.ai_analysis];
-        analysis.push({
-          analysis_query: result.analysis_query,
-          content: result.content,
-        });
-        seg.ai_analysis = analysis;
-        segments[segmentIndex] = seg;
-        return { ...prev, segments };
-      });
-
       return result;
     },
     [fetchApi, selectedWorkflow],
@@ -1071,17 +1060,6 @@ function ProjectDetailPage() {
           method: 'DELETE',
         },
       );
-
-      // Update the local workflow data
-      setSelectedWorkflow((prev) => {
-        if (!prev) return prev;
-        const segments = [...prev.segments];
-        const seg = { ...segments[segmentIndex] };
-        const analysis = seg.ai_analysis.filter((_, idx) => idx !== qaIndex);
-        seg.ai_analysis = analysis;
-        segments[segmentIndex] = seg;
-        return { ...prev, segments };
-      });
 
       return result;
     },
@@ -1239,45 +1217,6 @@ function ProjectDetailPage() {
     return () => clearTimeout(timeout);
   }, [workflowProgressMap, loadDocuments, loadWorkflows]);
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Only set dragging to false if we're leaving the drop zone entirely
-    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
-    setIsDragging(false);
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-
-    const files = e.dataTransfer.files;
-    if (!files || files.length === 0) return;
-
-    await processFiles(Array.from(files));
-  };
-
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    await processFiles(Array.from(files));
-  };
-
   const processFiles = async (files: File[], useBda = false) => {
     if (files.length === 0) return;
 
@@ -1285,7 +1224,6 @@ function ProjectDetailPage() {
     const uploadedDocuments: { documentId: string; fileName: string }[] = [];
 
     setUploading(true);
-    setShowUploadArea(false);
     setShowUploadModal(false);
     try {
       for (const file of Array.from(files)) {
@@ -1373,9 +1311,6 @@ function ProjectDetailPage() {
       console.error('Failed to upload document:', error);
     }
     setUploading(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
   };
 
   const handleDeleteDocument = (documentId: string) => {
@@ -1521,11 +1456,44 @@ function ProjectDetailPage() {
           artifact,
           sources,
         };
-        setMessages((prev) => [...prev, toolResultMessage]);
+        pendingMessagesRef.current.push(toolResultMessage);
+        break;
+      }
+      case 'stage_start': {
+        const stage = event.stage ?? '';
+        setStreamingBlocks((prev) => [...prev, { type: 'stage_start', stage }]);
+        break;
+      }
+      case 'stage_complete': {
+        const stage = event.stage ?? '';
+        const result = event.result ?? '';
+        pendingMessagesRef.current.push({
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: result,
+          timestamp: new Date(),
+          isStageResult: true,
+          stageName: stage,
+        });
+        setStreamingBlocks((prev) => {
+          const idx = prev.findIndex(
+            (b) => b.type === 'stage_start' && b.stage === stage,
+          );
+          if (idx >= 0) {
+            return [
+              ...prev.slice(0, idx),
+              { type: 'stage_complete' as const, stage, result },
+              ...prev.slice(idx + 1),
+            ];
+          }
+          return [...prev, { type: 'stage_complete' as const, stage, result }];
+        });
         break;
       }
       case 'complete':
-        setStreamingBlocks((prev) => prev.filter((b) => b.type !== 'tool_use'));
+        setStreamingBlocks((prev) =>
+          prev.filter((b) => b.type !== 'tool_use' && b.type !== 'stage_start'),
+        );
         break;
     }
   }, []);
@@ -1556,6 +1524,7 @@ function ProjectDetailPage() {
       setInputMessage('');
       setSending(true);
       setStreamingBlocks([]);
+      pendingMessagesRef.current = [];
 
       try {
         // Convert files to ContentBlock[]
@@ -1635,6 +1604,9 @@ function ProjectDetailPage() {
           selectedAgent?.agent_id,
         );
 
+        const pending = pendingMessagesRef.current;
+        pendingMessagesRef.current = [];
+
         const assistantMessage: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
@@ -1642,7 +1614,7 @@ function ProjectDetailPage() {
           timestamp: new Date(),
         };
 
-        setMessages((prev) => [...prev, assistantMessage]);
+        setMessages((prev) => [...prev, ...pending, assistantMessage]);
       } catch (error) {
         console.error('Failed to send message:', error);
         const errorMessage: ChatMessage = {
@@ -1668,6 +1640,175 @@ function ProjectDetailPage() {
       loadSessions,
       selectedAgent,
     ],
+  );
+
+  const handleResearchMessage = useCallback(
+    async (files: AttachedFile[], message?: string) => {
+      if (!researchAgentRuntimeArn) {
+        showToast('error', t('chat.researchNotAvailable'));
+        return;
+      }
+
+      const messageContent = message ?? inputMessage;
+      if ((!messageContent.trim() && files.length === 0) || sending) return;
+
+      const attachments: ChatAttachment[] = files.map((f) => ({
+        id: f.id,
+        type: f.type === 'image' ? 'image' : 'document',
+        name: f.file.name,
+        preview: f.preview,
+      }));
+
+      const userMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: messageContent.trim(),
+        attachments: attachments.length > 0 ? attachments : undefined,
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, userMessage]);
+      setInputMessage('');
+      setSending(true);
+      setStreamingBlocks([]);
+      pendingMessagesRef.current = [];
+
+      try {
+        const contentBlocks: ContentBlock[] = [];
+
+        const usedDocNames = new Set<string>();
+        const getUniqueDocName = (originalName: string): string => {
+          let name = originalName;
+          let counter = 1;
+          while (usedDocNames.has(name)) {
+            const dotIndex = originalName.lastIndexOf('.');
+            if (dotIndex > 0) {
+              name = `${originalName.slice(0, dotIndex)}_${counter}${originalName.slice(dotIndex)}`;
+            } else {
+              name = `${originalName}_${counter}`;
+            }
+            counter++;
+          }
+          usedDocNames.add(name);
+          return name;
+        };
+
+        for (const attachedFile of files) {
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const result = reader.result as string;
+              const base64Data = result.split(',')[1];
+              resolve(base64Data);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(attachedFile.file);
+          });
+
+          if (attachedFile.type === 'image') {
+            let format =
+              attachedFile.file.type.split('/')[1] ||
+              attachedFile.file.name.split('.').pop()?.toLowerCase() ||
+              'png';
+            if (format === 'jpeg') format = 'jpg';
+            contentBlocks.push({
+              image: {
+                format,
+                source: { base64 },
+              },
+            });
+          } else {
+            const format =
+              attachedFile.file.name.split('.').pop()?.toLowerCase() || 'txt';
+            const uniqueName = getUniqueDocName(attachedFile.file.name);
+            contentBlocks.push({
+              document: {
+                format,
+                name: uniqueName,
+                source: { base64 },
+              },
+            });
+          }
+        }
+
+        if (userMessage.content) {
+          contentBlocks.push({ text: userMessage.content });
+        }
+
+        const response = await invokeAgent(
+          contentBlocks,
+          currentSessionId,
+          projectId,
+          handleStreamEvent,
+          selectedAgent?.agent_id,
+          researchAgentRuntimeArn,
+        );
+
+        const pending = pendingMessagesRef.current;
+        pendingMessagesRef.current = [];
+
+        const assistantMessage: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: response,
+          timestamp: new Date(),
+        };
+
+        setMessages((prev) => [...prev, ...pending, assistantMessage]);
+      } catch (error) {
+        console.error('Failed to send research message:', error);
+        const errorMessage: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `Failed to get response: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      }
+      setSending(false);
+      setStreamingBlocks([]);
+      loadSessions();
+    },
+    [
+      inputMessage,
+      sending,
+      invokeAgent,
+      currentSessionId,
+      projectId,
+      handleStreamEvent,
+      loadSessions,
+      selectedAgent,
+      researchAgentRuntimeArn,
+      showToast,
+      t,
+    ],
+  );
+
+  useSetSidebarSessions(
+    useMemo(
+      () => ({
+        sessions,
+        currentSessionId,
+        onSessionSelect: handleSessionSelect,
+        onSessionRename: handleSessionRename,
+        onSessionDelete: handleSessionDelete,
+        onNewSession: handleNewSession,
+        hasMoreSessions: !!sessionsNextCursor,
+        loadingMoreSessions,
+        onLoadMoreSessions: loadMoreSessions,
+      }),
+      [
+        sessions,
+        currentSessionId,
+        handleSessionSelect,
+        handleSessionRename,
+        handleSessionDelete,
+        handleNewSession,
+        sessionsNextCursor,
+        loadingMoreSessions,
+        loadMoreSessions,
+      ],
+    ),
   );
 
   if (loading) {
@@ -1700,17 +1841,130 @@ function ProjectDetailPage() {
         onSettingsClick={() => setShowProjectSettings(true)}
       />
 
-      {/* Main Content - 3 Column Resizable Layout */}
+      {/* Main Content - 2 Column Resizable Layout */}
       <div className="flex-1 min-h-0 flex">
-        {/* Collapsed Documents Bar */}
-        {docsPanelCollapsed && (
+        <ResizablePanelGroup
+          key={sidePanelCollapsed ? 'sl' : 'se'}
+          orientation="horizontal"
+          defaultSize={(() => {
+            const sizes = sidePanelSizeBeforeCollapse.current;
+            if (sidePanelCollapsed) {
+              return [sizes[0] + sizes[1]];
+            }
+            return sizes;
+          })()}
+          onResizeEnd={handlePanelResizeEnd}
+          onCollapse={(details: { panelId: string }) => {
+            if (details.panelId === 'side') {
+              setSidePanelCollapsed(true);
+            }
+          }}
+          panels={(() => {
+            const panels: {
+              id: string;
+              minSize: number;
+              maxSize: number;
+              collapsible?: boolean;
+            }[] = [];
+            panels.push({
+              id: 'chat',
+              minSize: 40,
+              maxSize: 100,
+            });
+            if (!sidePanelCollapsed) {
+              panels.push({
+                id: 'side',
+                minSize: 15,
+                maxSize: 45,
+                collapsible: true,
+              });
+            }
+            return panels;
+          })()}
+          className="h-full flex-1 min-w-0"
+        >
+          {/* Left - Chat Panel */}
+          <ResizablePanel id="chat">
+            <div className="h-full px-1">
+              <ChatPanel
+                messages={messages}
+                inputMessage={inputMessage}
+                sending={sending}
+                streamingBlocks={streamingBlocks}
+                loadingHistory={loadingHistory}
+                agents={agents}
+                selectedAgent={selectedAgent}
+                artifacts={artifacts}
+                documents={documents}
+                onInputChange={setInputMessage}
+                onSendMessage={handleSendMessage}
+                onResearch={
+                  researchAgentRuntimeArn ? handleResearchMessage : undefined
+                }
+                onAgentSelect={handleAgentSelect}
+                onAgentClick={() => setShowAgentModal(true)}
+                onNewChat={handleNewSession}
+                onArtifactView={handleArtifactSelect}
+                onSourceClick={handleSourceClick}
+                loadingSourceKey={loadingSourceKey}
+                scrollPositionRef={chatScrollPositionRef}
+              />
+            </div>
+          </ResizablePanel>
+
+          {!sidePanelCollapsed && (
+            <>
+              <ResizableHandle id="chat:side" />
+
+              {/* Right - Documents & Artifacts */}
+              <ResizablePanel id="side">
+                <div className="h-full pl-1 relative">
+                  <SidePanel
+                    artifacts={artifacts}
+                    currentArtifactId={selectedArtifact?.artifact_id}
+                    onArtifactSelect={handleArtifactSelect}
+                    onArtifactDownload={handleArtifactDownload}
+                    onArtifactDelete={handleArtifactDelete}
+                    onCollapse={() => setSidePanelCollapsed(true)}
+                    documents={documents}
+                    workflows={workflows}
+                    workflowProgressMap={workflowProgressMap}
+                    uploading={uploading}
+                    onAddDocument={() => setShowUploadModal(true)}
+                    onRefreshDocuments={loadDocuments}
+                    onViewWorkflow={loadWorkflowDetail}
+                    onDeleteDocument={handleDeleteDocument}
+                  />
+                  {/* Artifact Viewer - overlays SidePanel */}
+                  {selectedArtifact && (
+                    <ArtifactViewer
+                      artifact={selectedArtifact}
+                      onClose={() => {
+                        setSelectedArtifact(null);
+                        if (sidePanelAutoExpandedRef.current) {
+                          setSidePanelCollapsed(true);
+                          sidePanelAutoExpandedRef.current = false;
+                        }
+                      }}
+                      onDownload={handleArtifactDownload}
+                      getPresignedUrl={getPresignedDownloadUrl}
+                    />
+                  )}
+                </div>
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
+
+        {/* Collapsed Side Bar */}
+        {sidePanelCollapsed && (
           <div
-            className="docs-collapsed-bar"
+            className="side-collapsed-bar"
             onClick={() => {
-              setDocsPanelCollapsed(false);
+              setSidePanelCollapsed(false);
               localStorage.setItem(
                 panelStorageKey,
-                JSON.stringify(docsPanelSizeBeforeCollapse.current),
+                JSON.stringify(sidePanelSizeBeforeCollapse.current),
               );
             }}
             title={t('nav.expand')}
@@ -1730,203 +1984,10 @@ function ProjectDetailPage() {
               </svg>
               <span>{documents.length}</span>
             </div>
-            <span className="docs-collapsed-label">{t('documents.title')}</span>
-            <div className="docs-collapsed-expand">
-              <svg
-                className="w-3.5 h-3.5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M13 17l5-5-5-5" />
-                <path d="M6 17l5-5-5-5" />
-              </svg>
-            </div>
-          </div>
-        )}
-
-        <ResizablePanelGroup
-          key={`${docsPanelCollapsed ? 'dl' : 'de'}-${sidePanelCollapsed ? 'sl' : 'se'}`}
-          orientation="horizontal"
-          defaultSize={(() => {
-            const sizes = docsPanelSizeBeforeCollapse.current;
-            if (docsPanelCollapsed && sidePanelCollapsed) {
-              return [sizes[0] + sizes[1] + sizes[2]];
-            }
-            if (docsPanelCollapsed) {
-              return [sizes[0] + sizes[1], sizes[2]];
-            }
-            if (sidePanelCollapsed) {
-              return [sizes[0], sizes[1] + sizes[2]];
-            }
-            return sizes;
-          })()}
-          onResizeEnd={handlePanelResizeEnd}
-          onCollapse={(details: { panelId: string }) => {
-            if (details.panelId === 'documents') {
-              setDocsPanelCollapsed(true);
-            }
-            if (details.panelId === 'side') {
-              setSidePanelCollapsed(true);
-            }
-          }}
-          panels={(() => {
-            const panels: {
-              id: string;
-              minSize: number;
-              maxSize: number;
-              collapsible?: boolean;
-            }[] = [];
-            if (!docsPanelCollapsed) {
-              panels.push({
-                id: 'documents',
-                minSize: 15,
-                maxSize: 35,
-                collapsible: true,
-              });
-            }
-            panels.push({
-              id: 'chat',
-              minSize: 25,
-              maxSize: docsPanelCollapsed || sidePanelCollapsed ? 100 : 70,
-            });
-            if (!sidePanelCollapsed) {
-              panels.push({
-                id: 'side',
-                minSize: 15,
-                maxSize: 35,
-                collapsible: true,
-              });
-            }
-            return panels;
-          })()}
-          className="h-full flex-1 min-w-0"
-        >
-          {!docsPanelCollapsed && (
-            <>
-              <ResizablePanel id="documents">
-                <div className="h-full pr-1">
-                  <DocumentsPanel
-                    documents={documents}
-                    workflows={workflows}
-                    workflowProgressMap={workflowProgressMap}
-                    uploading={uploading}
-                    showUploadArea={showUploadArea}
-                    isDragging={isDragging}
-                    onToggleUploadArea={() => setShowUploadModal(true)}
-                    onRefresh={loadDocuments}
-                    onFileUpload={handleFileUpload}
-                    onDrop={handleDrop}
-                    onDragOver={handleDragOver}
-                    onDragEnter={handleDragEnter}
-                    onDragLeave={handleDragLeave}
-                    onCloseUploadArea={() => setShowUploadArea(false)}
-                    onViewWorkflow={loadWorkflowDetail}
-                    onDeleteDocument={handleDeleteDocument}
-                    onCollapse={() => setDocsPanelCollapsed(true)}
-                  />
-                </div>
-              </ResizablePanel>
-
-              <ResizableHandle id="documents:chat" />
-            </>
-          )}
-
-          {/* Center - Chat Panel */}
-          <ResizablePanel id="chat">
-            <div className="h-full px-1">
-              <ChatPanel
-                messages={messages}
-                inputMessage={inputMessage}
-                sending={sending}
-                streamingBlocks={streamingBlocks}
-                loadingHistory={loadingHistory}
-                selectedAgent={selectedAgent}
-                artifacts={artifacts}
-                documents={documents}
-                onInputChange={setInputMessage}
-                onSendMessage={handleSendMessage}
-                onAgentClick={() => setShowAgentModal(true)}
-                onNewChat={handleNewSession}
-                onArtifactView={handleArtifactSelect}
-                onSourceClick={handleSourceClick}
-                loadingSourceKey={loadingSourceKey}
-              />
-            </div>
-          </ResizablePanel>
-
-          {!sidePanelCollapsed && (
-            <>
-              <ResizableHandle id="chat:side" />
-
-              {/* Right - History & Artifacts */}
-              <ResizablePanel id="side">
-                <div className="h-full pl-1 relative">
-                  <SidePanel
-                    sessions={sessions}
-                    currentSessionId={currentSessionId}
-                    onSessionSelect={handleSessionSelect}
-                    onSessionRename={handleSessionRename}
-                    onSessionDelete={handleSessionDelete}
-                    hasMoreSessions={!!sessionsNextCursor}
-                    loadingMoreSessions={loadingMoreSessions}
-                    onLoadMoreSessions={loadMoreSessions}
-                    artifacts={artifacts}
-                    currentArtifactId={selectedArtifact?.artifact_id}
-                    onArtifactSelect={handleArtifactSelect}
-                    onArtifactDownload={handleArtifactDownload}
-                    onArtifactDelete={handleArtifactDelete}
-                    onCollapse={() => setSidePanelCollapsed(true)}
-                  />
-                  {/* Artifact Viewer - overlays SidePanel */}
-                  {selectedArtifact && (
-                    <ArtifactViewer
-                      artifact={selectedArtifact}
-                      onClose={() => setSelectedArtifact(null)}
-                      onDownload={handleArtifactDownload}
-                      getPresignedUrl={getPresignedDownloadUrl}
-                    />
-                  )}
-                </div>
-              </ResizablePanel>
-            </>
-          )}
-        </ResizablePanelGroup>
-
-        {/* Collapsed Side Bar */}
-        {sidePanelCollapsed && (
-          <div
-            className="side-collapsed-bar"
-            onClick={() => {
-              setSidePanelCollapsed(false);
-              localStorage.setItem(
-                panelStorageKey,
-                JSON.stringify(docsPanelSizeBeforeCollapse.current),
-              );
-            }}
-            title={t('nav.expand')}
-          >
-            <div className="docs-collapsed-badge">
-              <svg
-                className="w-4 h-4"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              <span>{sessions.length}</span>
-            </div>
             <span className="docs-collapsed-label">
-              {t('sidePanel.history')}
+              {t('documents.title', 'Documents')}
             </span>
-            <div className="docs-collapsed-badge">
+            <div className="docs-collapsed-badge mt-2">
               <svg
                 className="w-4 h-4"
                 viewBox="0 0 24 24"
@@ -1943,7 +2004,7 @@ function ProjectDetailPage() {
               <span>{artifacts.length}</span>
             </div>
             <span className="docs-collapsed-label">
-              {t('sidePanel.artifacts')}
+              {t('chat.artifacts', 'Artifacts')}
             </span>
             <div className="docs-collapsed-expand">
               <svg
@@ -1979,6 +2040,13 @@ function ProjectDetailPage() {
           onAddQa={handleAddQa}
           onDeleteQa={handleDeleteQa}
           initialSegmentIndex={initialSegmentIndex}
+          onLoadSegment={(segmentIndex) =>
+            loadSegment(
+              selectedWorkflow.document_id,
+              selectedWorkflow.workflow_id,
+              segmentIndex,
+            )
+          }
         />
       )}
 

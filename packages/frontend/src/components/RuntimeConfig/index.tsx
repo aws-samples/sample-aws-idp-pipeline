@@ -1,4 +1,3 @@
-import { Spinner } from '../spinner';
 import React, {
   createContext,
   PropsWithChildren,
@@ -18,6 +17,7 @@ export interface IRuntimeConfig {
   apis?: Record<string, unknown>;
   documentStorageBucketName?: string;
   agentRuntimeArn?: string;
+  researchAgentRuntimeArn?: string;
   websocketUrl?: string;
 }
 
@@ -65,7 +65,26 @@ const RuntimeConfigProvider: React.FC<PropsWithChildren> = ({ children }) => {
       {children}
     </RuntimeConfigContext.Provider>
   ) : (
-    <Spinner />
+    <div className="flex-1 flex flex-col items-center justify-center h-screen gap-6">
+      <div className="flex items-center gap-2">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="w-3 h-3 rounded-full bg-slate-400"
+            style={{
+              animation: 'pulse-dot 1.4s ease-in-out infinite',
+              animationDelay: `${i * 0.2}s`,
+            }}
+          />
+        ))}
+      </div>
+      <style>{`
+        @keyframes pulse-dot {
+          0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
+          40% { opacity: 1; transform: scale(1.2); }
+        }
+      `}</style>
+    </div>
   );
 };
 
