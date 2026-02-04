@@ -1,0 +1,1 @@
+"""PPTX MCP Lambda package."""

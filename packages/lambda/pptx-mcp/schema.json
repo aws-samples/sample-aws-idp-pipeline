@@ -1,20 +1,13 @@
 [
   {
     "name": "extract_text",
-    "description": "Extract text content from a PDF artifact. Use this tool when you need to read text from a PDF document.",
+    "description": "Extract text content from a PPTX artifact. Use this tool when you need to read text from a PowerPoint presentation.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "artifact_id": {
           "type": "string",
-          "description": "The unique identifier of the PDF artifact to extract text from"
-        },
-        "pages": {
-          "type": "array",
-          "items": {
-            "type": "integer"
-          },
-          "description": "Optional list of page numbers (1-indexed) to extract. If not provided, extracts from all pages."
+          "description": "The unique identifier of the PPTX artifact to extract text from"
         }
       },
       "required": ["artifact_id"]
@@ -24,44 +17,41 @@
       "properties": {
         "text": {
           "type": "string",
-          "description": "The complete extracted text from all selected pages"
+          "description": "The complete extracted text from all slides"
         },
-        "pages": {
+        "slides": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "page_number": {
+              "slide_number": {
                 "type": "integer",
-                "description": "The page number (1-indexed)"
+                "description": "The slide number (1-indexed)"
               },
               "text": {
                 "type": "string",
-                "description": "The extracted text from this page"
+                "description": "The extracted text from this slide"
+              },
+              "notes": {
+                "type": "string",
+                "description": "The speaker notes for this slide"
               }
             }
           },
-          "description": "Text extracted from each page separately"
+          "description": "Text extracted from each slide separately with notes"
         }
       }
     }
   },
   {
     "name": "extract_tables",
-    "description": "Extract tables from a PDF artifact. Use this tool when you need to extract tabular data from a PDF document.",
+    "description": "Extract tables from a PPTX artifact. Use this tool when you need to extract tabular data from a PowerPoint presentation.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "artifact_id": {
           "type": "string",
-          "description": "The unique identifier of the PDF artifact to extract tables from"
-        },
-        "pages": {
-          "type": "array",
-          "items": {
-            "type": "integer"
-          },
-          "description": "Optional list of page numbers (1-indexed) to extract tables from. If not provided, extracts from all pages."
+          "description": "The unique identifier of the PPTX artifact to extract tables from"
         },
         "format": {
           "type": "string",
@@ -80,13 +70,13 @@
           "items": {
             "type": "object",
             "properties": {
-              "page_number": {
+              "slide_number": {
                 "type": "integer",
-                "description": "The page number (1-indexed) where the table was found"
+                "description": "The slide number (1-indexed) where the table was found"
               },
               "table_index": {
                 "type": "integer",
-                "description": "The index of the table on the page (0-indexed)"
+                "description": "The index of the table on the slide (0-indexed)"
               },
               "data": {
                 "type": "string",

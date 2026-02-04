@@ -9,6 +9,7 @@ import {
   MdMcp,
   PdfMcp,
   DocxMcp,
+  PptxMcp,
   SSM_KEYS,
 } from ':idp-v2/common-constructs';
 import * as agentcore from '@aws-cdk/aws-bedrock-agentcore-alpha';
@@ -19,6 +20,7 @@ export class McpStack extends Stack {
   public readonly mdMcp: MdMcp;
   public readonly pdfMcp: PdfMcp;
   public readonly docxMcp: DocxMcp;
+  public readonly pptxMcp: PptxMcp;
   public readonly gateway: agentcore.Gateway;
 
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -70,6 +72,10 @@ export class McpStack extends Stack {
       storageBucket: agentStorageBucket,
       websocketMessageQueue,
     });
+    this.pptxMcp = new PptxMcp(this, 'PptxMcp', {
+      backendTable,
+      storageBucket: agentStorageBucket,
+    });
 
     this.gateway = new agentcore.Gateway(this, 'McpGateway', {
       gatewayName: 'idp-mcp-gateway',
@@ -103,7 +109,7 @@ export class McpStack extends Stack {
     const mdTarget = this.gateway.addLambdaTarget('MdMcpTarget', {
       gatewayTargetName: 'markdown',
       description:
-        'Markdown processing tools: save, load, and edit markdown files. Use these tools when working with markdown documents.',
+        'Markdown processing tools: load markdown files. Use these tools when working with markdown documents.',
       lambdaFunction: this.mdMcp.function,
       toolSchema: agentcore.ToolSchema.fromLocalAsset(
         path.resolve(process.cwd(), '../../packages/lambda/md-mcp/schema.json'),
@@ -117,7 +123,7 @@ export class McpStack extends Stack {
     const pdfTarget = this.gateway.addLambdaTarget('PdfMcpTarget', {
       gatewayTargetName: 'pdf',
       description:
-        'PDF processing tools: extract text, extract tables, and create PDFs. Use these tools when working with PDF documents.',
+        'PDF processing tools: extract text and extract tables from PDF documents. Use these tools when working with PDF documents.',
       lambdaFunction: this.pdfMcp.function,
       toolSchema: agentcore.ToolSchema.fromLocalAsset(
         path.resolve(
@@ -134,7 +140,7 @@ export class McpStack extends Stack {
     const docxTarget = this.gateway.addLambdaTarget('DocxMcpTarget', {
       gatewayTargetName: 'docx',
       description:
-        'DOCX processing tools: extract text, extract tables, and create Word documents. Use these tools when working with DOCX documents.',
+        'DOCX processing tools: extract text and extract tables from Word documents. Use these tools when working with DOCX documents.',
       lambdaFunction: this.docxMcp.function,
       toolSchema: agentcore.ToolSchema.fromLocalAsset(
         path.resolve(
@@ -147,5 +153,22 @@ export class McpStack extends Stack {
     // Workaround: CDK timing issue - explicitly grant and add dependency
     this.docxMcp.function.grantInvoke(this.gateway.role);
     docxTarget.node.addDependency(this.gateway.role);
+
+    const pptxTarget = this.gateway.addLambdaTarget('PptxMcpTarget', {
+      gatewayTargetName: 'pptx',
+      description:
+        'PPTX processing tools: extract text and extract tables from PowerPoint presentations. Use these tools when working with PPTX documents.',
+      lambdaFunction: this.pptxMcp.function,
+      toolSchema: agentcore.ToolSchema.fromLocalAsset(
+        path.resolve(
+          process.cwd(),
+          '../../packages/lambda/pptx-mcp/schema.json',
+        ),
+      ),
+    });
+
+    // Workaround: CDK timing issue - explicitly grant and add dependency
+    this.pptxMcp.function.grantInvoke(this.gateway.role);
+    pptxTarget.node.addDependency(this.gateway.role);
   }
 }
