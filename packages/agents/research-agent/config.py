@@ -20,6 +20,7 @@ class Config(BaseSettings):
     session_storage_bucket_name: str = ""
     mcp_gateway_url: str = ""
     unsplash_access_key: str = ""
+    code_interpreter_identifier: str = ""
 
 
 def _get_ssm_parameter(name: str, region: str) -> str | None:
