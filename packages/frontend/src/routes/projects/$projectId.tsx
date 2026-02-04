@@ -50,6 +50,7 @@ import DocumentUploadModal from '../../components/DocumentUploadModal';
 import ArtifactViewer from '../../components/ArtifactViewer';
 import SystemPromptModal from '../../components/SystemPromptModal';
 import { useSetSidebarSessions } from '../../contexts/SidebarSessionContext';
+import { useNovaSonic } from '../../hooks/useNovaSonic';
 
 interface DocumentWorkflows {
   document_id: string;
@@ -77,6 +78,7 @@ function ProjectDetailPage() {
     invokeAgent,
     getPresignedDownloadUrl,
     researchAgentRuntimeArn,
+    bidiAgentRuntimeArn,
   } = useAwsClient();
   const { showToast } = useToast();
   const { sendMessage, status: wsStatus } = useWebSocket();
@@ -147,6 +149,33 @@ function ProjectDetailPage() {
   const progressFetchedRef = useRef(false);
   const sidePanelAutoExpandedRef = useRef(false);
   const chatScrollPositionRef = useRef(0);
+
+  // Nova Sonic voice chat
+  const novaSonic = useNovaSonic();
+
+  // Handle Nova Sonic transcripts as chat messages
+  useEffect(() => {
+    const unsubscribe = novaSonic.onTranscript((text, role, isFinal) => {
+      if (!isFinal) return;
+      const msg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: role === 'user' ? 'user' : 'assistant',
+        content: text,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, msg]);
+    });
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [novaSonic.onTranscript]);
+
+  // Disconnect Nova Sonic on page leave
+  useEffect(() => {
+    return () => {
+      novaSonic.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Persist panel sizes in localStorage
   const panelStorageKey = 'idp-panel-sizes-v2';
@@ -1922,6 +1951,16 @@ function ProjectDetailPage() {
                 onSourceClick={handleSourceClick}
                 loadingSourceKey={loadingSourceKey}
                 scrollPositionRef={chatScrollPositionRef}
+                novaSonicAvailable={!!bidiAgentRuntimeArn}
+                novaSonicState={novaSonic.state}
+                novaSonicAudioLevel={{
+                  input: novaSonic.inputAudioLevel,
+                  output: novaSonic.outputAudioLevel,
+                }}
+                onNovaSonicConnect={novaSonic.connect}
+                onNovaSonicDisconnect={novaSonic.disconnect}
+                onNovaSonicText={novaSonic.sendText}
+                onNovaSonicToggleMic={novaSonic.toggleMic}
               />
             </div>
           </ResizablePanel>

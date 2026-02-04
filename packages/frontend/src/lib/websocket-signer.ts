@@ -12,6 +12,7 @@ interface SignedUrlParams {
   websocketUrl: string;
   credentials: Credentials;
   region: string;
+  service?: string;
 }
 
 /**
@@ -21,6 +22,7 @@ export async function createSignedWebSocketUrl({
   websocketUrl,
   credentials,
   region,
+  service = 'execute-api',
 }: SignedUrlParams): Promise<string> {
   const urlObject = new URL(websocketUrl);
 
@@ -37,7 +39,7 @@ export async function createSignedWebSocketUrl({
   const signatureV4 = new SignatureV4({
     credentials,
     region,
-    service: 'execute-api',
+    service,
     sha256: Sha256,
   });
 

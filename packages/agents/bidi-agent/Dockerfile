@@ -17,6 +17,4 @@ RUN pip install --no-cache-dir .
 
 EXPOSE 8080
 
-# Auto-instrument with AWS Distro for OpenTelemetry
-# https://aws-otel.github.io/docs/getting-started/python-sdk/auto-instr
-CMD ["opentelemetry-instrument", "python", "-m", "main"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

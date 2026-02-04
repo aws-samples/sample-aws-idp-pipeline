@@ -182,6 +182,7 @@ export function useAwsClient() {
     documentStorageBucketName,
     agentRuntimeArn,
     researchAgentRuntimeArn,
+    bidiAgentRuntimeArn,
   } = useRuntimeConfig();
   const { user } = useAuth();
   const credentialsRef = useRef<Credentials | null>(null);
@@ -378,5 +379,7 @@ export function useAwsClient() {
     invokeAgent,
     getPresignedDownloadUrl,
     researchAgentRuntimeArn,
+    bidiAgentRuntimeArn,
+    getCredentials,
   };
 }

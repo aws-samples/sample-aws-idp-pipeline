@@ -7,4 +7,6 @@ requires-python = ">=3.13.0"
 dependencies = [
     "asyncio>=4.0.0",
     "strands-agents[bidi-all]>=1.22.0",
+    "fastapi[standard]>=0.123.0",
+    "uvicorn>=0.34.0",
 ]

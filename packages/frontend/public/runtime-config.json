@@ -2,6 +2,7 @@
   "documentStorageBucketName": "idp-v2-document-storage-975050239358",
   "agentRuntimeArn": "arn:aws:bedrock-agentcore:us-east-1:975050239358:runtime/idp_agent-03lWWQC1QW",
   "researchAgentRuntimeArn": "arn:aws:bedrock-agentcore:us-east-1:975050239358:runtime/research_agent-9Vjh4E6l5z",
+  "bidiAgentRuntimeArn": "arn:aws:bedrock-agentcore:us-east-1:975050239358:runtime/bidi_agent-Cw3hjq3g8b",
   "websocketUrl": "wss://mr6cxqidfd.execute-api.us-east-1.amazonaws.com/prod",
   "cognitoProps": {
     "region": "us-east-1",

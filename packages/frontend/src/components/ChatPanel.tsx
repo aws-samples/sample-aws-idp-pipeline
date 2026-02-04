@@ -26,6 +26,9 @@ import {
   FileCode,
   Check,
   Settings2,
+  Mic,
+  MicOff,
+  PhoneOff,
   type LucideIcon,
 } from 'lucide-react';
 import DOMPurify from 'isomorphic-dompurify';
@@ -44,6 +47,8 @@ import { useToast } from './Toast';
 import ImageModal from './ImageModal';
 import ConfirmModal from './ConfirmModal';
 import BouncingCirclesLoader from './ui/bouncing-circles-loader';
+import AudioWaveform from './AudioWaveform';
+import type { NovaSonicState } from '../hooks/useNovaSonic';
 
 export interface AttachedFile {
   id: string;
@@ -78,6 +83,14 @@ interface ChatPanelProps {
   onSourceClick?: (documentId: string, segmentId: string) => void;
   loadingSourceKey?: string | null;
   scrollPositionRef?: React.MutableRefObject<number>;
+  // Nova Sonic
+  novaSonicAvailable?: boolean;
+  novaSonicState?: NovaSonicState;
+  novaSonicAudioLevel?: { input: number; output: number };
+  onNovaSonicConnect?: () => void;
+  onNovaSonicDisconnect?: () => void;
+  onNovaSonicText?: (text: string) => void;
+  onNovaSonicToggleMic?: () => void;
 }
 
 const formatToolDisplayName = (rawName: string): string => {
@@ -286,6 +299,13 @@ export default function ChatPanel({
   onSourceClick,
   loadingSourceKey,
   scrollPositionRef,
+  novaSonicAvailable,
+  novaSonicState,
+  novaSonicAudioLevel,
+  onNovaSonicConnect,
+  onNovaSonicDisconnect,
+  onNovaSonicText,
+  onNovaSonicToggleMic,
 }: ChatPanelProps) {
   const { t } = useTranslation();
   const { getPresignedDownloadUrl } = useAwsClient();
@@ -312,11 +332,13 @@ export default function ChatPanel({
     new Set(),
   );
   const [researchMode, setResearchMode] = useState(false);
-  // Reset research mode when loading a session history
+  const [novaSonicMode, setNovaSonicMode] = useState(false);
+  // Reset modes when loading a session history
   const prevLoadingHistory = useRef(false);
   useEffect(() => {
     if (loadingHistory && !prevLoadingHistory.current) {
       setResearchMode(false);
+      setNovaSonicMode(false);
     }
     prevLoadingHistory.current = loadingHistory;
   }, [loadingHistory]);
@@ -827,8 +849,10 @@ export default function ChatPanel({
     // Get content with artifact references
     const messageContent = getInputContent();
 
-    // Use research handler when research mode is active
-    if (researchMode && onResearch) {
+    // Use appropriate handler based on active mode
+    if (novaSonicMode && onNovaSonicText) {
+      onNovaSonicText(messageContent);
+    } else if (researchMode && onResearch) {
       onResearch(attachedFiles, messageContent);
     } else {
       onSendMessage(attachedFiles, messageContent);
@@ -845,7 +869,9 @@ export default function ChatPanel({
     hasContent,
     sending,
     researchMode,
+    novaSonicMode,
     onResearch,
+    onNovaSonicText,
     onSendMessage,
     attachedFiles,
     onInputChange,
@@ -1016,7 +1042,7 @@ export default function ChatPanel({
               </button>
 
               {/* Tools popover */}
-              {(onResearch || onAgentSelect) && (
+              {(onResearch || onAgentSelect || novaSonicAvailable) && (
                 <div className="relative" ref={toolsMenuRef}>
                   <button
                     type="button"
@@ -1037,13 +1063,19 @@ export default function ChatPanel({
                       {onResearch && (
                         <button
                           type="button"
-                          disabled={!!selectedAgent || messages.length > 0}
+                          disabled={
+                            !!selectedAgent ||
+                            novaSonicMode ||
+                            messages.length > 0
+                          }
                           onClick={() => {
                             setResearchMode((v) => !v);
                             setShowToolsMenu(false);
                           }}
                           className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                            selectedAgent || messages.length > 0
+                            selectedAgent ||
+                            novaSonicMode ||
+                            messages.length > 0
                               ? 'opacity-40 cursor-not-allowed'
                               : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
                           }`}
@@ -1066,6 +1098,49 @@ export default function ChatPanel({
                         </button>
                       )}
 
+                      {/* Nova Sonic toggle */}
+                      {novaSonicAvailable && (
+                        <button
+                          type="button"
+                          disabled={
+                            !!selectedAgent ||
+                            researchMode ||
+                            messages.length > 0
+                          }
+                          onClick={() => {
+                            const next = !novaSonicMode;
+                            setNovaSonicMode(next);
+                            setShowToolsMenu(false);
+                            if (next && onNovaSonicConnect) {
+                              onNovaSonicConnect();
+                            } else if (!next && onNovaSonicDisconnect) {
+                              onNovaSonicDisconnect();
+                            }
+                          }}
+                          className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                            selectedAgent || researchMode || messages.length > 0
+                              ? 'opacity-40 cursor-not-allowed'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                          }`}
+                        >
+                          <Mic
+                            className={`w-4 h-4 ${novaSonicMode ? 'text-purple-500' : 'text-slate-500 dark:text-slate-400'}`}
+                          />
+                          <span
+                            className={
+                              novaSonicMode
+                                ? 'text-purple-600 dark:text-purple-400'
+                                : 'text-slate-700 dark:text-slate-300'
+                            }
+                          >
+                            Nova Sonic
+                          </span>
+                          {novaSonicMode && (
+                            <Check className="w-4 h-4 text-purple-500 ml-auto" />
+                          )}
+                        </button>
+                      )}
+
                       {/* Agent submenu */}
                       {onAgentSelect && (
                         <>
@@ -1073,10 +1148,10 @@ export default function ChatPanel({
                           <div className="relative">
                             <button
                               type="button"
-                              disabled={researchMode}
+                              disabled={researchMode || novaSonicMode}
                               onClick={() => setShowAgentSubmenu((v) => !v)}
                               className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                                researchMode
+                                researchMode || novaSonicMode
                                   ? 'opacity-40 cursor-not-allowed'
                                   : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'
                               }`}
@@ -1193,8 +1268,73 @@ export default function ChatPanel({
                 </div>
               )}
 
+              {/* Nova Sonic mic toggle + waveform */}
+              {novaSonicMode && novaSonicState && (
+                <div className="flex items-center gap-2">
+                  <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
+                  {/* Connection status */}
+                  <span
+                    className={`inline-block w-2 h-2 rounded-full ${
+                      novaSonicState.status === 'connected'
+                        ? 'bg-green-500'
+                        : novaSonicState.status === 'connecting'
+                          ? 'bg-yellow-500 animate-pulse'
+                          : novaSonicState.status === 'error'
+                            ? 'bg-red-500'
+                            : 'bg-slate-400'
+                    }`}
+                  />
+                  {/* Mic toggle */}
+                  <button
+                    type="button"
+                    disabled={novaSonicState.status !== 'connected'}
+                    onClick={onNovaSonicToggleMic}
+                    className={`inline-flex items-center justify-center h-8 w-8 rounded-lg transition-colors active:scale-95 ${
+                      novaSonicState.isListening
+                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
+                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {novaSonicState.isListening ? (
+                      <Mic className="w-4 h-4" />
+                    ) : (
+                      <MicOff className="w-4 h-4" />
+                    )}
+                  </button>
+                  {/* Input waveform */}
+                  {novaSonicState.isListening &&
+                    novaSonicAudioLevel !== undefined && (
+                      <AudioWaveform
+                        level={novaSonicAudioLevel.input}
+                        color="#8b5cf6"
+                        barCount={4}
+                      />
+                    )}
+                  {/* Output waveform */}
+                  {novaSonicState.isSpeaking &&
+                    novaSonicAudioLevel !== undefined && (
+                      <AudioWaveform
+                        level={novaSonicAudioLevel.output}
+                        color="#6366f1"
+                        barCount={4}
+                      />
+                    )}
+                  {/* Disconnect button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNovaSonicMode(false);
+                      onNovaSonicDisconnect?.();
+                    }}
+                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  >
+                    <PhoneOff className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
               {/* Selected tool chips */}
-              {(researchMode || selectedAgent) && (
+              {(researchMode || selectedAgent) && !novaSonicMode && (
                 <>
                   <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
                   {researchMode && onResearch && (
@@ -1244,9 +1384,11 @@ export default function ChatPanel({
               type="button"
               className={`inline-flex items-center justify-center h-8 w-8 rounded-xl transition-all active:scale-95 ${
                 hasContent && !sending
-                  ? researchMode
-                    ? 'bg-violet-500 hover:bg-violet-600 text-white shadow-md'
-                    : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md'
+                  ? novaSonicMode
+                    ? 'bg-purple-500 hover:bg-purple-600 text-white shadow-md'
+                    : researchMode
+                      ? 'bg-violet-500 hover:bg-violet-600 text-white shadow-md'
+                      : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md'
                   : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
             >

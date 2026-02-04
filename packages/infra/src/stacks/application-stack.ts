@@ -113,7 +113,10 @@ export class ApplicationStack extends Stack {
     // Grant Bedrock Agentcore invoke permission
     userIdentity.identityPool.authenticatedRole.addToPrincipalPolicy(
       new PolicyStatement({
-        actions: ['bedrock-agentcore:InvokeAgentRuntime'],
+        actions: [
+          'bedrock-agentcore:InvokeAgentRuntime',
+          'bedrock-agentcore:InvokeAgentRuntimeWithWebSocketStream',
+        ],
         resources: [
           `arn:aws:bedrock-agentcore:${this.region}:${this.account}:runtime/*`,
         ],
