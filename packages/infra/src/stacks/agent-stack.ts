@@ -74,30 +74,6 @@ export class AgentStack extends Stack {
       websocketMessageQueueArn,
     );
 
-    // Enable CloudWatch Logs as X-Ray trace segment destination for OTLP support
-    new cr.AwsCustomResource(this, 'EnableXRayOTLP', {
-      onCreate: {
-        service: 'XRay',
-        action: 'updateTraceSegmentDestination',
-        parameters: {
-          Destination: 'CloudWatchLogs',
-        },
-        physicalResourceId: cr.PhysicalResourceId.of('xray-otlp-destination'),
-      },
-      policy: cr.AwsCustomResourcePolicy.fromStatements([
-        new iam.PolicyStatement({
-          actions: ['xray:UpdateTraceSegmentDestination'],
-          resources: ['*'],
-        }),
-        new iam.PolicyStatement({
-          actions: ['logs:PutRetentionPolicy'],
-          resources: [
-            `arn:aws:logs:${this.region}:${this.account}:log-group:aws/spans:*`,
-          ],
-        }),
-      ]),
-    });
-
     // Initialize default system prompt in S3 on first deployment
     const systemPromptPath = path.resolve(
       process.cwd(),
