@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from botocore.config import Config
 from strands import Agent, tool
 from strands.models import BedrockModel
-from strands_tools import current_time, file_read, file_write, http_request
+from strands_tools import current_time, http_request
 from strands_tools.code_interpreter import AgentCoreCodeInterpreter
 
 from agents.constants import REPORT_MODEL_ID
@@ -36,14 +36,13 @@ def get_report_agent(
     interpreter = AgentCoreCodeInterpreter(
         region=config.aws_region,
         session_name=session_id,
+        identifier=config.code_interpreter_identifier or None,
     )
 
     tools = [
         current_time,
         http_request,
         interpreter.code_interpreter,
-        file_read,
-        file_write,
         create_s3_upload_url,
         create_s3_download_url,
     ]

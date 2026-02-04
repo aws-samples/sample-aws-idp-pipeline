@@ -20,6 +20,7 @@ export interface IdpAgentProps {
   bedrockModelId?: string;
   agentStorageBucket?: IBucket;
   websocketMessageQueue?: IQueue;
+  codeInterpreterIdentifier?: string;
 }
 
 export class IdpAgent extends Construct {
@@ -37,6 +38,7 @@ export class IdpAgent extends Construct {
       bedrockModelId,
       agentStorageBucket,
       websocketMessageQueue,
+      codeInterpreterIdentifier,
     } = props;
 
     const dockerImage = AgentRuntimeArtifact.fromAsset(agentPath, {
@@ -57,6 +59,9 @@ export class IdpAgent extends Construct {
         }),
         ...(websocketMessageQueue && {
           WEBSOCKET_MESSAGE_QUEUE_URL: websocketMessageQueue.queueUrl,
+        }),
+        ...(codeInterpreterIdentifier && {
+          CODE_INTERPRETER_IDENTIFIER: codeInterpreterIdentifier,
         }),
       },
     });

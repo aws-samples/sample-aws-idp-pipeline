@@ -8,7 +8,11 @@ import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Gateway, Runtime } from '@aws-cdk/aws-bedrock-agentcore-alpha';
+import {
+  CodeInterpreterCustom,
+  Gateway,
+  Runtime,
+} from '@aws-cdk/aws-bedrock-agentcore-alpha';
 import { IdpAgent, SSM_KEYS } from ':idp-v2/common-constructs';
 
 export interface AgentStackProps extends StackProps {
@@ -108,6 +112,13 @@ export class AgentStack extends Stack {
       websocketMessageQueue,
     });
 
+    // Create Code Interpreter for Research Agent
+    const codeInterpreter = new CodeInterpreterCustom(this, 'CodeInterpreter', {
+      codeInterpreterCustomName: 'research_agent_interpreter',
+      description: 'Code interpreter for research agent',
+    });
+    agentStorageBucket.grantReadWrite(codeInterpreter.executionRole);
+
     const researchAgent = new IdpAgent(this, 'ResearchAgent', {
       agentPath: path.resolve(
         process.cwd(),
@@ -118,7 +129,10 @@ export class AgentStack extends Stack {
       backendTable,
       gateway,
       agentStorageBucket,
+      codeInterpreterIdentifier: codeInterpreter.codeInterpreterId,
     });
+
+    codeInterpreter.grantUse(researchAgent.runtime.role);
 
     this.agentCoreRuntime = idpAgent.runtime;
 
