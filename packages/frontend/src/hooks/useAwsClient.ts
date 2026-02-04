@@ -53,10 +53,18 @@ interface Credentials {
 }
 
 export interface StreamEvent {
-  type: 'text' | 'tool_use' | 'tool_result' | 'complete';
+  type:
+    | 'text'
+    | 'tool_use'
+    | 'tool_result'
+    | 'complete'
+    | 'stage_start'
+    | 'stage_complete';
   content?: string | ToolResultContent[];
   name?: string;
   tool_use_id?: string;
+  stage?: string;
+  result?: string;
 }
 
 export interface ToolResultContent {
@@ -168,8 +176,13 @@ function extractRegionFromArn(arn: string): string {
 }
 
 export function useAwsClient() {
-  const { apis, cognitoProps, documentStorageBucketName, agentRuntimeArn } =
-    useRuntimeConfig();
+  const {
+    apis,
+    cognitoProps,
+    documentStorageBucketName,
+    agentRuntimeArn,
+    researchAgentRuntimeArn,
+  } = useRuntimeConfig();
   const { user } = useAuth();
   const credentialsRef = useRef<Credentials | null>(null);
   const pendingRef = useRef<Promise<Credentials> | null>(null);
@@ -288,15 +301,17 @@ export function useAwsClient() {
       projectId: string,
       onEvent?: (event: StreamEvent) => void,
       agentId?: string,
+      runtimeArn?: string,
     ): Promise<string> => {
-      if (!agentRuntimeArn) throw new Error('Agent runtime ARN not available');
+      const targetArn = runtimeArn || agentRuntimeArn;
+      if (!targetArn) throw new Error('Agent runtime ARN not available');
       if (!user?.id_token) throw new Error('User token not available');
 
-      const region = extractRegionFromArn(agentRuntimeArn);
+      const region = extractRegionFromArn(targetArn);
       const client = await createAwsClient('bedrock-agentcore', region);
 
       const response = await client.fetch(
-        `https://bedrock-agentcore.${region}.amazonaws.com/runtimes/${encodeURIComponent(agentRuntimeArn)}/invocations`,
+        `https://bedrock-agentcore.${region}.amazonaws.com/runtimes/${encodeURIComponent(targetArn)}/invocations`,
         {
           method: 'POST',
           headers: {
@@ -357,5 +372,11 @@ export function useAwsClient() {
     [cognitoProps, getCredentials],
   );
 
-  return { fetchApi, uploadToS3, invokeAgent, getPresignedDownloadUrl };
+  return {
+    fetchApi,
+    uploadToS3,
+    invokeAgent,
+    getPresignedDownloadUrl,
+    researchAgentRuntimeArn,
+  };
 }

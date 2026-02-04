@@ -33,6 +33,10 @@ const CognitoAuth: React.FC<PropsWithChildren> = ({ children }) => {
     redirect_uri: window.location.origin,
     response_type: 'code',
     scope: 'email openid profile',
+    onSigninCallback: () => {
+      // Remove OIDC callback params from URL and clean up stale state in localStorage
+      window.history.replaceState({}, document.title, window.location.pathname);
+    },
   };
 
   return (

@@ -15,7 +15,7 @@ const ResizablePanelGroup = ({
   <Splitter.Root
     orientation={orientation}
     className={cn(
-      'flex h-full w-full gap-2',
+      'flex h-full w-full',
       orientation === 'vertical' ? 'flex-col' : '',
       className,
     )}
@@ -42,14 +42,7 @@ const ResizableHandle = ({
   <Splitter.ResizeTrigger
     id={id}
     aria-label="Resize"
-    className={cn(
-      'rounded-full transition-colors duration-200 outline-none',
-      'bg-slate-300 dark:bg-slate-600',
-      'hover:bg-slate-400 dark:hover:bg-slate-500',
-      'active:bg-slate-400 dark:active:bg-slate-500',
-      orientation === 'horizontal' ? 'min-w-1.5 my-4' : 'min-h-1.5 mx-4',
-      className,
-    )}
+    className={cn('splitter-handle', orientation, className)}
   />
 );
 

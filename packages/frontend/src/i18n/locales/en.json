@@ -22,7 +22,9 @@
     "yesterday": "Yesterday",
     "daysAgo": "{{count}} days ago",
     "showMore": "Show more",
-    "showLess": "Show less"
+    "showLess": "Show less",
+    "expand": "Expand",
+    "collapse": "Collapse"
   },
   "nav": {
     "projects": "Projects",
@@ -97,7 +99,13 @@
     "deleteConfirm": "Are you sure you want to delete this document?",
     "view": "View",
     "useBda": "Use BDA Analysis",
-    "useBdaDescription": "Enable Bedrock Document Analysis for advanced document understanding. Recommended for complex documents with tables, charts, or multi-column layouts."
+    "useBdaDescription": "Enable Bedrock Document Analysis for advanced document understanding. Recommended for complex documents with tables, charts, or multi-column layouts.",
+    "searchPlaceholder": "Search documents...",
+    "filterAll": "All",
+    "filterCompleted": "Completed",
+    "filterProcessing": "Processing",
+    "filterFailed": "Failed",
+    "noMatchingDocuments": "No matching documents"
   },
   "workflow": {
     "title": "Workflow",
@@ -250,7 +258,25 @@
     "selectArtifact": "Select artifact",
     "documents": "Documents",
     "noDocuments": "No documents found",
-    "tabToSwitch": "Press Tab to switch"
+    "tabToSwitch": "Press Tab to switch",
+    "addFileOrPhoto": "Add file or photo",
+    "research": "Research",
+    "researchNotAvailable": "Research agent is not configured",
+    "useAgent": "Use agent",
+    "manageAgents": "Manage agents",
+    "removeAgentConfirm": "Changing agent will start a new conversation. Continue?",
+    "stage": {
+      "research_agent": "Researching",
+      "plan_agent": "Planning",
+      "write_agent": "Writing",
+      "pptx_agent": "Creating Presentation"
+    },
+    "stageResult": {
+      "research_agent": "Research Results",
+      "plan_agent": "Plan",
+      "write_agent": "Writing Results",
+      "pptx_agent": "Presentation"
+    }
   },
   "viewer": {
     "zoomIn": "Zoom In",
@@ -286,6 +312,7 @@
     "searchPlaceholder": "Search artifacts...",
     "noArtifacts": "No artifacts yet",
     "noArtifactsDescription": "Artifacts generated during chat conversations will appear here.",
+    "noMatchingArtifacts": "No matching artifacts",
     "items": "items",
     "goToProject": "Go to Project",
     "unsupportedType": "Preview not available for this file type",

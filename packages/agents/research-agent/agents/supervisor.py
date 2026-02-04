@@ -57,7 +57,15 @@ def get_supervisor_agent(
     write_tool = create_write_tool(session_id, project_id, user_id)
     pptx_tool = create_pptx_tool(session_id, project_id, user_id)
 
-    tools = [current_time, http_request, handoff_to_user, research_tool, plan_tool, write_tool, pptx_tool]
+    tools = [
+        current_time,
+        http_request,
+        handoff_to_user,
+        research_tool,
+        plan_tool,
+        write_tool,
+        pptx_tool,
+    ]
 
     system_prompt = """You are IDP Research Agent, an intelligent document processing assistant that helps users create professional presentations.
 
@@ -113,7 +121,9 @@ Create PowerPoint presentation from written content.
         region_name=config.aws_region,
     )
 
-    session_manager = get_session_manager(session_id, user_id=user_id, project_id=project_id)
+    session_manager = get_session_manager(
+        session_id, user_id=user_id, project_id=project_id
+    )
 
     agent = Agent(
         model=bedrock_model,

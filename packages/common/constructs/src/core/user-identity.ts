@@ -21,6 +21,7 @@ import { ITableV2 } from 'aws-cdk-lib/aws-dynamodb';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { fileURLToPath } from 'url';
+import * as fs from 'fs';
 import * as path from 'path';
 
 const WEB_CLIENT_ID = 'WebClient';
@@ -161,10 +162,153 @@ export class UserIdentity extends Construct {
     userPoolClient: UserPoolClient,
     userPoolDomain: CfnUserPoolDomain,
   ) => {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const assetsDir = path.join(__dirname, 'assets');
+
+    const logoBytes = fs
+      .readFileSync(path.join(assetsDir, 'logo.png'))
+      .toString('base64');
+    const bgBytes = fs
+      .readFileSync(path.join(assetsDir, 'background.jpg'))
+      .toString('base64');
+
     new CfnManagedLoginBranding(this, 'ManagedLoginBranding', {
       userPoolId: userPool.userPoolId,
       clientId: userPoolClient.userPoolClientId,
-      useCognitoProvidedValues: true,
+      useCognitoProvidedValues: false,
+      assets: [
+        {
+          category: 'FORM_LOGO',
+          colorMode: 'LIGHT',
+          extension: 'PNG',
+          bytes: logoBytes,
+        },
+        {
+          category: 'FORM_LOGO',
+          colorMode: 'DARK',
+          extension: 'PNG',
+          bytes: logoBytes,
+        },
+        {
+          category: 'PAGE_BACKGROUND',
+          colorMode: 'LIGHT',
+          extension: 'JPEG',
+          bytes: bgBytes,
+        },
+        {
+          category: 'PAGE_BACKGROUND',
+          colorMode: 'DARK',
+          extension: 'JPEG',
+          bytes: bgBytes,
+        },
+      ],
+      settings: {
+        components: {
+          form: {
+            borderRadius: 12,
+            logo: {
+              location: 'CENTER',
+              position: 'TOP',
+              enabled: true,
+              formInclusion: 'IN',
+            },
+            lightMode: {
+              backgroundColor: 'f8fafcff',
+              borderColor: 'e2e8f0ff',
+            },
+            darkMode: {
+              backgroundColor: 'f1f5f9ff',
+              borderColor: 'cbd5e1ff',
+            },
+          },
+          pageBackground: {
+            image: { enabled: true },
+            lightMode: { color: '0f172aff' },
+            darkMode: { color: '0f172aff' },
+          },
+          primaryButton: {
+            lightMode: {
+              defaults: { backgroundColor: 'f59e0bff', textColor: '0f172aff' },
+              hover: { backgroundColor: 'd97706ff', textColor: '0f172aff' },
+              active: { backgroundColor: 'b45309ff', textColor: '0f172aff' },
+            },
+            darkMode: {
+              defaults: { backgroundColor: 'f59e0bff', textColor: '0f172aff' },
+              hover: { backgroundColor: 'd97706ff', textColor: '0f172aff' },
+              active: { backgroundColor: 'b45309ff', textColor: '0f172aff' },
+            },
+          },
+          pageText: {
+            lightMode: {
+              headingColor: '0f172aff',
+              bodyColor: '475569ff',
+              descriptionColor: '64748bff',
+            },
+            darkMode: {
+              headingColor: '0f172aff',
+              bodyColor: '475569ff',
+              descriptionColor: '64748bff',
+            },
+          },
+        },
+        componentClasses: {
+          input: {
+            borderRadius: 8,
+            lightMode: {
+              defaults: {
+                backgroundColor: 'ffffffff',
+                borderColor: 'cbd5e1ff',
+              },
+              placeholderColor: '94a3b8ff',
+            },
+            darkMode: {
+              defaults: {
+                backgroundColor: 'ffffffff',
+                borderColor: 'cbd5e1ff',
+              },
+              placeholderColor: '94a3b8ff',
+            },
+          },
+          inputLabel: {
+            lightMode: { textColor: '334155ff' },
+            darkMode: { textColor: '334155ff' },
+          },
+          link: {
+            lightMode: {
+              defaults: { textColor: '2563ebff' },
+              hover: { textColor: '1d4ed8ff' },
+            },
+            darkMode: {
+              defaults: { textColor: '2563ebff' },
+              hover: { textColor: '1d4ed8ff' },
+            },
+          },
+          focusState: {
+            lightMode: { borderColor: 'f59e0bff' },
+            darkMode: { borderColor: 'f59e0bff' },
+          },
+        },
+        categories: {
+          form: {
+            displayGraphics: true,
+            instructions: { enabled: false },
+            languageSelector: { enabled: false },
+            location: { horizontal: 'CENTER', vertical: 'CENTER' },
+          },
+          global: {
+            colorSchemeMode: 'DARK',
+            pageHeader: { enabled: false },
+            pageFooter: { enabled: false },
+            spacingDensity: 'REGULAR',
+          },
+          auth: {
+            authMethodOrder: [
+              [{ display: 'INPUT', type: 'USERNAME_PASSWORD' }],
+            ],
+          },
+        },
+      },
     }).node.addDependency(userPoolClient, userPool, userPoolDomain);
   };
 

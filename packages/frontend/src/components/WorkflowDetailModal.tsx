@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { RefreshCw, Sparkles, Loader2, Plus, Trash2 } from 'lucide-react';
-import { WorkflowDetail, AnalysisPopup } from '../types/project';
+import { WorkflowDetail, SegmentData, AnalysisPopup } from '../types/project';
 import ConfirmModal from './ConfirmModal';
 import { LANGUAGES, CARD_COLORS } from './ProjectSettingsModal';
 import OcrDocumentView from './OcrDocumentView';
@@ -31,6 +31,7 @@ interface WorkflowDetailModalProps {
     qaIndex: number,
   ) => Promise<{ deleted: boolean; qa_index: number }>;
   initialSegmentIndex?: number;
+  onLoadSegment?: (segmentIndex: number) => Promise<SegmentData>;
 }
 
 export default function WorkflowDetailModal({
@@ -44,6 +45,7 @@ export default function WorkflowDetailModal({
   onAddQa,
   onDeleteQa,
   initialSegmentIndex = 0,
+  onLoadSegment,
 }: WorkflowDetailModalProps) {
   const { t } = useTranslation();
   const [currentSegmentIndex, setCurrentSegmentIndex] =
@@ -76,6 +78,94 @@ export default function WorkflowDetailModal({
   );
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  // On-demand segment loading
+  const [segmentCache, setSegmentCache] = useState<Map<number, SegmentData>>(
+    () => new Map(),
+  );
+  const [segmentLoading, setSegmentLoading] = useState(false);
+  const prefetchingRef = useRef<Set<number>>(new Set());
+
+  const currentSegment = segmentCache.get(currentSegmentIndex) ?? null;
+
+  const fetchSegment = useCallback(
+    async (index: number) => {
+      if (!onLoadSegment || segmentCache.has(index)) return;
+      if (prefetchingRef.current.has(index)) return;
+      prefetchingRef.current.add(index);
+      try {
+        const data = await onLoadSegment(index);
+        setSegmentCache((prev) => {
+          const next = new Map(prev);
+          next.set(index, data);
+          return next;
+        });
+      } catch (e) {
+        console.error(`Failed to load segment ${index}:`, e);
+      } finally {
+        prefetchingRef.current.delete(index);
+      }
+    },
+    [onLoadSegment, segmentCache],
+  );
+
+  // Fetch current segment on index change
+  useEffect(() => {
+    if (!onLoadSegment) return;
+    if (segmentCache.has(currentSegmentIndex)) {
+      // Prefetch adjacent
+      if (currentSegmentIndex > 0) fetchSegment(currentSegmentIndex - 1);
+      if (currentSegmentIndex < workflow.total_segments - 1)
+        fetchSegment(currentSegmentIndex + 1);
+      return;
+    }
+
+    let cancelled = false;
+    setSegmentLoading(true);
+    onLoadSegment(currentSegmentIndex)
+      .then((data) => {
+        if (cancelled) return;
+        setSegmentCache((prev) => {
+          const next = new Map(prev);
+          next.set(currentSegmentIndex, data);
+          return next;
+        });
+        setSegmentLoading(false);
+        // Prefetch adjacent
+        if (currentSegmentIndex > 0) fetchSegment(currentSegmentIndex - 1);
+        if (currentSegmentIndex < workflow.total_segments - 1)
+          fetchSegment(currentSegmentIndex + 1);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        console.error(`Failed to load segment ${currentSegmentIndex}:`, e);
+        setSegmentLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    currentSegmentIndex,
+    onLoadSegment,
+    segmentCache,
+    fetchSegment,
+    workflow.total_segments,
+  ]);
+
+  // Helper to update a segment in the cache
+  const updateCachedSegment = useCallback(
+    (index: number, updater: (seg: SegmentData) => SegmentData) => {
+      setSegmentCache((prev) => {
+        const seg = prev.get(index);
+        if (!seg) return prev;
+        const next = new Map(prev);
+        next.set(index, updater(seg));
+        return next;
+      });
+    },
+    [],
+  );
+
   const handleRegenerateQa = async () => {
     if (!regenerateTarget || !onRegenerateQa) return;
     const { qaIndex, question, userInstructions } = regenerateTarget;
@@ -95,6 +185,14 @@ export default function WorkflowDetailModal({
           answer: result.content,
         };
         return { ...prev, qaItems: newItems };
+      });
+      updateCachedSegment(currentSegmentIndex, (seg) => {
+        const analysis = [...seg.ai_analysis];
+        analysis[qaIndex] = {
+          analysis_query: result.analysis_query,
+          content: result.content,
+        };
+        return { ...seg, ai_analysis: analysis };
       });
     } finally {
       setRegeneratingIndex(null);
@@ -119,6 +217,13 @@ export default function WorkflowDetailModal({
           { question: result.analysis_query, answer: result.content },
         ],
       }));
+      updateCachedSegment(currentSegmentIndex, (seg) => ({
+        ...seg,
+        ai_analysis: [
+          ...seg.ai_analysis,
+          { analysis_query: result.analysis_query, content: result.content },
+        ],
+      }));
     } finally {
       setAddingQa(false);
     }
@@ -134,6 +239,10 @@ export default function WorkflowDetailModal({
       setAnalysisPopup((prev) => ({
         ...prev,
         qaItems: prev.qaItems.filter((_, idx) => idx !== qaIndex),
+      }));
+      updateCachedSegment(currentSegmentIndex, (seg) => ({
+        ...seg,
+        ai_analysis: seg.ai_analysis.filter((_, idx) => idx !== qaIndex),
       }));
     } finally {
       setDeletingIndex(null);
@@ -158,16 +267,17 @@ export default function WorkflowDetailModal({
     setReanalyzeInstructions('');
   };
 
-  const currentSegment = workflow.segments[currentSegmentIndex];
-
   // Update analysisPopup content when segment changes
+  // Skip when currentSegment is null (still loading) to avoid flashing empty state
   useEffect(() => {
+    if (!currentSegment) return;
+
     setAnalysisPopup((prev) => {
       if (!prev.type) return prev;
 
       if (prev.type === 'ai') {
         const qaItems =
-          currentSegment?.ai_analysis?.map((a) => ({
+          currentSegment.ai_analysis?.map((a) => ({
             question: a.analysis_query,
             answer: a.content,
           })) || [];
@@ -180,8 +290,8 @@ export default function WorkflowDetailModal({
         // Determine which content type is being viewed from the title
         const contentType = prev.title.split(' ')[0]; // 'BDA' or 'Parser'
         const contentMap: Record<string, string> = {
-          BDA: currentSegment?.bda_indexer || '',
-          Parser: currentSegment?.format_parser || '',
+          BDA: currentSegment.bda_indexer || '',
+          Parser: currentSegment.format_parser || '',
         };
         return {
           ...prev,
@@ -692,7 +802,7 @@ export default function WorkflowDetailModal({
                 <hr className="border-slate-200" />
 
                 {/* Analysis Summary */}
-                {workflow.segments.length > 0 && (
+                {workflow.total_segments > 0 && (
                   <div>
                     <h3 className="text-sm font-medium text-slate-700 mb-4">
                       {t('workflow.segmentAiAnalysis', 'Segment AI Analysis')}
@@ -700,98 +810,115 @@ export default function WorkflowDetailModal({
                     <p className="text-xs text-slate-400 mb-3">
                       {t('workflow.clickToView')}
                     </p>
-                    <div className="flex gap-2">
-                      {[
-                        {
-                          type: 'bda',
-                          label: 'BDA',
-                          content: currentSegment?.bda_indexer,
-                        },
-                        {
-                          type: 'ocr',
-                          label: 'OCR',
-                          hasBlocks:
-                            !!currentSegment?.paddleocr_blocks?.blocks?.length,
-                          content: currentSegment?.paddleocr_blocks?.blocks
-                            ?.length
-                            ? 'blocks'
-                            : '',
-                        },
-                        {
-                          type: 'bda',
-                          label: 'Parser',
-                          content: currentSegment?.format_parser,
-                        },
-                        {
-                          type: 'stt',
-                          label: 'STT',
-                          content:
-                            (currentSegment?.transcribe_segments?.length ?? 0) >
-                            0
-                              ? 'stt'
-                              : '',
-                          count:
-                            currentSegment?.transcribe_segments?.length ?? 0,
-                        },
-                        {
-                          type: 'ai',
-                          label: 'AI',
-                          content:
-                            (currentSegment?.ai_analysis?.length ?? 0) > 0
-                              ? 'ai'
-                              : '',
-                          count: currentSegment?.ai_analysis?.length ?? 0,
-                        },
-                      ]
-                        .filter(({ content }) => !!content)
-                        .map(({ type, label, content, hasBlocks, count }) => (
-                          <button
+                    {segmentLoading && !currentSegment ? (
+                      <div className="flex gap-2">
+                        {['BDA', 'OCR', 'Parser', 'STT', 'AI'].map((label) => (
+                          <div
                             key={label}
-                            onClick={() => {
-                              if (type === 'ai') {
-                                const qaItems =
-                                  currentSegment?.ai_analysis?.map((a) => ({
-                                    question: a.analysis_query,
-                                    answer: a.content,
-                                  })) || [];
-                                setAnalysisPopup({
-                                  type: 'ai',
-                                  content: '',
-                                  title: `AI Analysis - Segment ${currentSegmentIndex + 1}`,
-                                  qaItems,
-                                });
-                              } else if (type === 'ocr') {
-                                setAnalysisPopup({
-                                  type: 'ocr',
-                                  content: hasBlocks ? '' : (content as string),
-                                  title: `OCR Content - Segment ${currentSegmentIndex + 1}`,
-                                  qaItems: [],
-                                });
-                              } else if (type === 'stt') {
-                                setAnalysisPopup({
-                                  type: 'stt',
-                                  content: '',
-                                  title: `Transcribe - Segment ${currentSegmentIndex + 1}`,
-                                  qaItems: [],
-                                });
-                              } else {
-                                setAnalysisPopup({
-                                  type: type as 'bda',
-                                  content: content as string,
-                                  title: `${label} Content - Segment ${currentSegmentIndex + 1}`,
-                                  qaItems: [],
-                                });
-                              }
-                            }}
-                            className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-center hover:bg-slate-50 hover:border-slate-300 transition-colors"
+                            className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-center animate-pulse"
                           >
-                            <p className="text-xs text-slate-500">{label}</p>
-                            <p className="text-lg font-semibold text-slate-800">
-                              {type === 'ai' || type === 'stt' ? count : 1}
-                            </p>
-                          </button>
+                            <div className="h-3 w-8 bg-slate-200 rounded mx-auto mb-2" />
+                            <div className="h-6 w-6 bg-slate-200 rounded mx-auto" />
+                          </div>
                         ))}
-                    </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        {[
+                          {
+                            type: 'bda',
+                            label: 'BDA',
+                            content: currentSegment?.bda_indexer,
+                          },
+                          {
+                            type: 'ocr',
+                            label: 'OCR',
+                            hasBlocks:
+                              !!currentSegment?.paddleocr_blocks?.blocks
+                                ?.length,
+                            content: currentSegment?.paddleocr_blocks?.blocks
+                              ?.length
+                              ? 'blocks'
+                              : '',
+                          },
+                          {
+                            type: 'bda',
+                            label: 'Parser',
+                            content: currentSegment?.format_parser,
+                          },
+                          {
+                            type: 'stt',
+                            label: 'STT',
+                            content:
+                              (currentSegment?.transcribe_segments?.length ??
+                                0) > 0
+                                ? 'stt'
+                                : '',
+                            count:
+                              currentSegment?.transcribe_segments?.length ?? 0,
+                          },
+                          {
+                            type: 'ai',
+                            label: 'AI',
+                            content:
+                              (currentSegment?.ai_analysis?.length ?? 0) > 0
+                                ? 'ai'
+                                : '',
+                            count: currentSegment?.ai_analysis?.length ?? 0,
+                          },
+                        ]
+                          .filter(({ content }) => !!content)
+                          .map(({ type, label, content, hasBlocks, count }) => (
+                            <button
+                              key={label}
+                              onClick={() => {
+                                if (type === 'ai') {
+                                  const qaItems =
+                                    currentSegment?.ai_analysis?.map((a) => ({
+                                      question: a.analysis_query,
+                                      answer: a.content,
+                                    })) || [];
+                                  setAnalysisPopup({
+                                    type: 'ai',
+                                    content: '',
+                                    title: `AI Analysis - Segment ${currentSegmentIndex + 1}`,
+                                    qaItems,
+                                  });
+                                } else if (type === 'ocr') {
+                                  setAnalysisPopup({
+                                    type: 'ocr',
+                                    content: hasBlocks
+                                      ? ''
+                                      : (content as string),
+                                    title: `OCR Content - Segment ${currentSegmentIndex + 1}`,
+                                    qaItems: [],
+                                  });
+                                } else if (type === 'stt') {
+                                  setAnalysisPopup({
+                                    type: 'stt',
+                                    content: '',
+                                    title: `Transcribe - Segment ${currentSegmentIndex + 1}`,
+                                    qaItems: [],
+                                  });
+                                } else {
+                                  setAnalysisPopup({
+                                    type: type as 'bda',
+                                    content: content as string,
+                                    title: `${label} Content - Segment ${currentSegmentIndex + 1}`,
+                                    qaItems: [],
+                                  });
+                                }
+                              }}
+                              className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-center hover:bg-slate-50 hover:border-slate-300 transition-colors"
+                            >
+                              <p className="text-xs text-slate-500">{label}</p>
+                              <p className="text-lg font-semibold text-slate-800">
+                                {type === 'ai' || type === 'stt' ? count : 1}
+                              </p>
+                            </button>
+                          ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -835,7 +962,7 @@ export default function WorkflowDetailModal({
                 }}
                 className="bg-white border border-slate-300 text-slate-800 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {workflow.segments.map((segment, idx) => (
+                {Array.from({ length: workflow.total_segments }, (_, idx) => (
                   <option key={idx} value={idx}>
                     {`${t('workflow.segment')} ${idx + 1}`}
                   </option>
@@ -854,10 +981,10 @@ export default function WorkflowDetailModal({
                 onClick={() => {
                   setImageLoading(true);
                   setCurrentSegmentIndex((prev) =>
-                    Math.min(workflow.segments.length - 1, prev + 1),
+                    Math.min(workflow.total_segments - 1, prev + 1),
                   );
                 }}
-                disabled={currentSegmentIndex >= workflow.segments.length - 1}
+                disabled={currentSegmentIndex >= workflow.total_segments - 1}
                 className="p-2 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <svg
@@ -879,8 +1006,33 @@ export default function WorkflowDetailModal({
 
           {/* Media Display */}
           <div className="flex-1 flex items-center justify-center p-6 overflow-auto relative">
-            {workflow.segments.length === 0 ? (
+            {workflow.total_segments === 0 ? (
               <div className="text-slate-500">{t('workflow.noSegments')}</div>
+            ) : segmentLoading && !currentSegment ? (
+              <div className="flex flex-col items-center gap-3">
+                <svg
+                  className="h-8 w-8 text-slate-400 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                <p className="text-sm text-slate-500">
+                  {t('workflow.loadingSegment', 'Loading segment...')}
+                </p>
+              </div>
             ) : (
               (() => {
                 const isVideoSegment =

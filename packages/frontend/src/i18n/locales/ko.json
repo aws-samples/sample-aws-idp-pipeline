@@ -22,7 +22,9 @@
     "yesterday": "어제",
     "daysAgo": "{{count}}일 전",
     "showMore": "더 보기",
-    "showLess": "접기"
+    "showLess": "접기",
+    "expand": "펼치기",
+    "collapse": "접기"
   },
   "nav": {
     "projects": "프로젝트",
@@ -97,7 +99,13 @@
     "deleteConfirm": "이 문서를 삭제하시겠습니까?",
     "view": "보기",
     "useBda": "BDA 분석 사용",
-    "useBdaDescription": "Bedrock Document Analysis를 사용하여 고급 문서 분석을 수행합니다. 표, 차트, 다단 레이아웃이 포함된 복잡한 문서에 권장됩니다."
+    "useBdaDescription": "Bedrock Document Analysis를 사용하여 고급 문서 분석을 수행합니다. 표, 차트, 다단 레이아웃이 포함된 복잡한 문서에 권장됩니다.",
+    "searchPlaceholder": "문서 검색...",
+    "filterAll": "전체",
+    "filterCompleted": "완료",
+    "filterProcessing": "처리중",
+    "filterFailed": "실패",
+    "noMatchingDocuments": "일치하는 문서가 없습니다"
   },
   "workflow": {
     "title": "워크플로우",
@@ -250,7 +258,25 @@
     "selectArtifact": "아티팩트 선택",
     "documents": "문서",
     "noDocuments": "문서를 찾을 수 없습니다",
-    "tabToSwitch": "Tab 키로 전환"
+    "tabToSwitch": "Tab 키로 전환",
+    "addFileOrPhoto": "파일 또는 사진 추가",
+    "research": "리서치",
+    "researchNotAvailable": "리서치 에이전트가 구성되지 않았습니다",
+    "useAgent": "에이전트 사용",
+    "manageAgents": "에이전트 관리",
+    "removeAgentConfirm": "에이전트를 변경하면 새 대화가 시작됩니다. 계속하시겠습니까?",
+    "stage": {
+      "research_agent": "리서치 중",
+      "plan_agent": "계획 수립 중",
+      "write_agent": "작성 중",
+      "pptx_agent": "프레젠테이션 생성 중"
+    },
+    "stageResult": {
+      "research_agent": "리서치 결과",
+      "plan_agent": "계획",
+      "write_agent": "작성 결과",
+      "pptx_agent": "프레젠테이션"
+    }
   },
   "viewer": {
     "zoomIn": "확대",
@@ -286,6 +312,7 @@
     "searchPlaceholder": "아티팩트 검색...",
     "noArtifacts": "아티팩트가 없습니다",
     "noArtifactsDescription": "채팅 대화 중에 생성된 아티팩트가 여기에 표시됩니다.",
+    "noMatchingArtifacts": "일치하는 아티팩트가 없습니다",
     "items": "개",
     "goToProject": "프로젝트로 이동",
     "unsupportedType": "이 파일 형식은 미리보기를 지원하지 않습니다",

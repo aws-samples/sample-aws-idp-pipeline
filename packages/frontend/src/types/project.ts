@@ -90,7 +90,7 @@ export interface WorkflowDetail {
   total_segments: number;
   created_at: string;
   updated_at: string;
-  segments: SegmentData[];
+  segments?: SegmentData[];
 }
 
 export interface ChatAttachment {
@@ -119,6 +119,8 @@ export interface ChatMessage {
   toolResultType?: 'image' | 'artifact' | 'text';
   artifact?: ChatArtifact;
   sources?: { document_id: string; segment_id: string }[];
+  isStageResult?: boolean;
+  stageName?: string;
 }
 
 export interface ChatSession {
