@@ -150,7 +150,10 @@ export class AgentStack extends Stack {
     });
 
     const bidiAgent = new IdpAgent(this, 'BidiAgent', {
-      agentPath: path.resolve(process.cwd(), '../../packages/agents/bidi-agent'),
+      agentPath: path.resolve(
+        process.cwd(),
+        '../../packages/agents/bidi-agent',
+      ),
       agentName: 'bidi_agent',
       sessionStorageBucket,
       backendTable,
