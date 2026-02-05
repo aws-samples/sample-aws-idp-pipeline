@@ -28,7 +28,6 @@ import {
   Settings2,
   Mic,
   MicOff,
-  PhoneOff,
   type LucideIcon,
 } from 'lucide-react';
 import DOMPurify from 'isomorphic-dompurify';
@@ -47,7 +46,7 @@ import { useToast } from './Toast';
 import ImageModal from './ImageModal';
 import ConfirmModal from './ConfirmModal';
 import BouncingCirclesLoader from './ui/bouncing-circles-loader';
-import AudioWaveform from './AudioWaveform';
+import { AnimatedAudioBars } from './AnimatedAudioBars';
 import type { NovaSonicState } from '../hooks/useNovaSonic';
 
 export interface AttachedFile {
@@ -88,6 +87,8 @@ interface ChatPanelProps {
   novaSonicAvailable?: boolean;
   novaSonicState?: NovaSonicState;
   novaSonicAudioLevel?: { input: number; output: number };
+  novaSonicMode?: boolean;
+  onNovaSonicModeChange?: (mode: boolean) => void;
   onNovaSonicConnect?: () => void;
   onNovaSonicDisconnect?: () => void;
   onNovaSonicText?: (text: string) => void;
@@ -303,6 +304,8 @@ export default function ChatPanel({
   novaSonicAvailable,
   novaSonicState,
   novaSonicAudioLevel,
+  novaSonicMode: novaSonicModeProp,
+  onNovaSonicModeChange,
   onNovaSonicConnect,
   onNovaSonicDisconnect,
   onNovaSonicText,
@@ -333,19 +336,46 @@ export default function ChatPanel({
     new Set(),
   );
   const [researchMode, setResearchMode] = useState(false);
-  const [novaSonicMode, setNovaSonicMode] = useState(false);
-  // Reset modes when loading a session history
+  // Nova Sonic mode: use controlled prop if provided, otherwise internal state
+  const [novaSonicModeInternal, setNovaSonicModeInternal] = useState(false);
+  const novaSonicMode = novaSonicModeProp ?? novaSonicModeInternal;
+  const setNovaSonicMode = useCallback(
+    (mode: boolean) => {
+      if (onNovaSonicModeChange) {
+        onNovaSonicModeChange(mode);
+      } else {
+        setNovaSonicModeInternal(mode);
+      }
+    },
+    [onNovaSonicModeChange],
+  );
+  // Reset research mode when loading a session history (nova sonic mode is controlled by parent)
   const prevLoadingHistory = useRef(false);
   useEffect(() => {
     if (loadingHistory && !prevLoadingHistory.current) {
       setResearchMode(false);
-      setNovaSonicMode(false);
+      // Only reset internal state if not controlled
+      if (!onNovaSonicModeChange) {
+        setNovaSonicModeInternal(false);
+      }
     }
     prevLoadingHistory.current = loadingHistory;
-  }, [loadingHistory]);
+  }, [loadingHistory, onNovaSonicModeChange]);
+  // Sync novaSonicMode with connection status (only for internal state)
+  useEffect(() => {
+    if (
+      !onNovaSonicModeChange &&
+      (novaSonicState?.status === 'connected' ||
+        novaSonicState?.status === 'connecting')
+    ) {
+      setNovaSonicModeInternal(true);
+    }
+  }, [novaSonicState?.status, onNovaSonicModeChange]);
   const [showToolsMenu, setShowToolsMenu] = useState(false);
   const [showAgentSubmenu, setShowAgentSubmenu] = useState(false);
   const [showRemoveAgentConfirm, setShowRemoveAgentConfirm] = useState(false);
+  const [showNovaSonicDisableConfirm, setShowNovaSonicDisableConfirm] =
+    useState(false);
   const [pendingAgentChange, setPendingAgentChange] = useState<
     string | null | undefined
   >(undefined);
@@ -359,6 +389,23 @@ export default function ChatPanel({
   );
   const mentionDropdownRef = useRef<HTMLDivElement>(null);
   const mentionRangeRef = useRef<Range | null>(null);
+
+  // Handle Nova Sonic mode disable with confirmation if needed
+  const handleNovaSonicDisable = useCallback(() => {
+    if (messages.length > 0) {
+      setShowNovaSonicDisableConfirm(true);
+    } else {
+      setNovaSonicMode(false);
+      onNovaSonicDisconnect?.();
+    }
+  }, [messages.length, setNovaSonicMode, onNovaSonicDisconnect]);
+
+  const confirmNovaSonicDisable = useCallback(() => {
+    setShowNovaSonicDisableConfirm(false);
+    setNovaSonicMode(false);
+    onNovaSonicDisconnect?.();
+    onNewChat();
+  }, [setNovaSonicMode, onNovaSonicDisconnect, onNewChat]);
 
   const handleArtifactDownload = useCallback(
     async (artifact: ChatArtifact) => {
@@ -1103,23 +1150,18 @@ export default function ChatPanel({
                       {novaSonicAvailable && (
                         <button
                           type="button"
-                          disabled={
-                            !!selectedAgent ||
-                            researchMode ||
-                            messages.length > 0
-                          }
+                          disabled={!!selectedAgent || researchMode}
                           onClick={() => {
-                            const next = !novaSonicMode;
-                            setNovaSonicMode(next);
+                            console.log('[ChatPanel] Nova Sonic menu clicked');
                             setShowToolsMenu(false);
-                            if (next && onNovaSonicConnect) {
-                              onNovaSonicConnect();
-                            } else if (!next && onNovaSonicDisconnect) {
-                              onNovaSonicDisconnect();
+                            if (novaSonicMode) {
+                              handleNovaSonicDisable();
+                            } else {
+                              setNovaSonicMode(true);
                             }
                           }}
                           className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                            selectedAgent || researchMode || messages.length > 0
+                            selectedAgent || researchMode
                               ? 'opacity-40 cursor-not-allowed'
                               : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
                           }`}
@@ -1269,73 +1311,8 @@ export default function ChatPanel({
                 </div>
               )}
 
-              {/* Nova Sonic mic toggle + waveform */}
-              {novaSonicMode && novaSonicState && (
-                <div className="flex items-center gap-2">
-                  <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
-                  {/* Connection status */}
-                  <span
-                    className={`inline-block w-2 h-2 rounded-full ${
-                      novaSonicState.status === 'connected'
-                        ? 'bg-green-500'
-                        : novaSonicState.status === 'connecting'
-                          ? 'bg-yellow-500 animate-pulse'
-                          : novaSonicState.status === 'error'
-                            ? 'bg-red-500'
-                            : 'bg-slate-400'
-                    }`}
-                  />
-                  {/* Mic toggle */}
-                  <button
-                    type="button"
-                    disabled={novaSonicState.status !== 'connected'}
-                    onClick={onNovaSonicToggleMic}
-                    className={`inline-flex items-center justify-center h-8 w-8 rounded-lg transition-colors active:scale-95 ${
-                      novaSonicState.isListening
-                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
-                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    {novaSonicState.isListening ? (
-                      <Mic className="w-4 h-4" />
-                    ) : (
-                      <MicOff className="w-4 h-4" />
-                    )}
-                  </button>
-                  {/* Input waveform */}
-                  {novaSonicState.isListening &&
-                    novaSonicAudioLevel !== undefined && (
-                      <AudioWaveform
-                        level={novaSonicAudioLevel.input}
-                        color="#8b5cf6"
-                        barCount={4}
-                      />
-                    )}
-                  {/* Output waveform */}
-                  {novaSonicState.isSpeaking &&
-                    novaSonicAudioLevel !== undefined && (
-                      <AudioWaveform
-                        level={novaSonicAudioLevel.output}
-                        color="#6366f1"
-                        barCount={4}
-                      />
-                    )}
-                  {/* Disconnect button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNovaSonicMode(false);
-                      onNovaSonicDisconnect?.();
-                    }}
-                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                  >
-                    <PhoneOff className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-
               {/* Selected tool chips */}
-              {(researchMode || selectedAgent) && !novaSonicMode && (
+              {(researchMode || selectedAgent || novaSonicMode) && (
                 <>
                   <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
                   {researchMode && onResearch && (
@@ -1345,10 +1322,10 @@ export default function ChatPanel({
                         if (messages.length === 0) setResearchMode(false);
                       }}
                       disabled={messages.length > 0}
-                      className={`inline-flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 transition-colors ${
+                      className={`inline-flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 transition-colors ${
                         messages.length > 0
                           ? 'cursor-default'
-                          : 'hover:bg-violet-200 dark:hover:bg-violet-800/40'
+                          : 'hover:bg-emerald-200 dark:hover:bg-emerald-800/40'
                       }`}
                     >
                       <Search className="w-3.5 h-3.5" />
@@ -1376,6 +1353,17 @@ export default function ChatPanel({
                       <X className="w-3.5 h-3.5 ml-0.5 opacity-60 hover:opacity-100" />
                     </button>
                   )}
+                  {novaSonicMode && (
+                    <button
+                      type="button"
+                      onClick={handleNovaSonicDisable}
+                      className="inline-flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-800/40 transition-colors"
+                    >
+                      <Mic className="w-3.5 h-3.5" />
+                      Nova Sonic
+                      <X className="w-3.5 h-3.5 ml-0.5 opacity-60 hover:opacity-100" />
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -1388,7 +1376,7 @@ export default function ChatPanel({
                   ? novaSonicMode
                     ? 'bg-purple-500 hover:bg-purple-600 text-white shadow-md'
                     : researchMode
-                      ? 'bg-violet-500 hover:bg-violet-600 text-white shadow-md'
+                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md'
                       : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md'
                   : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
@@ -1571,8 +1559,227 @@ export default function ChatPanel({
     </div>
   );
 
+  // Nova Sonic Voice Panel - reusable across welcome and messages screens
+  const novaSonicPanel = novaSonicMode && novaSonicState && (
+    <div className="mb-3 w-full relative overflow-hidden rounded-2xl">
+      {/* Animated gradient background */}
+      <div
+        className={`absolute inset-0 transition-opacity duration-500 ${
+          novaSonicState.status === 'connected' ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-violet-600/20 via-purple-600/20 to-indigo-600/20 dark:from-violet-600/30 dark:via-purple-600/30 dark:to-indigo-600/30 animate-pulse" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-400/10 via-transparent to-transparent" />
+      </div>
+
+      {/* Glass card */}
+      <div className="relative backdrop-blur-xl bg-white/80 dark:bg-slate-900/80 border-2 border-purple-300 dark:border-purple-500/60 rounded-2xl p-5 shadow-xl shadow-purple-500/10">
+        {/* Glow effect when connected */}
+        {novaSonicState.status === 'connected' && (
+          <div className="absolute -inset-[1px] bg-gradient-to-r from-violet-500 via-purple-500 to-indigo-500 rounded-2xl opacity-20 blur-sm -z-10" />
+        )}
+
+        {/* Close button */}
+        <button
+          type="button"
+          onClick={handleNovaSonicDisable}
+          className="absolute right-3 top-3 p-2 rounded-full text-slate-400 hover:text-white hover:bg-red-500 transition-all duration-200 group"
+          title="Close"
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+
+        {/* Content */}
+        <div className="flex items-center justify-center gap-6">
+          {/* Idle or Error state */}
+          {(novaSonicState.status === 'idle' ||
+            novaSonicState.status === 'error') && (
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/50 dark:to-indigo-900/50 flex items-center justify-center">
+                  <Mic className="w-7 h-7 text-purple-500" />
+                </div>
+                {novaSonicState.status === 'error' && (
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">!</span>
+                  </div>
+                )}
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+                  {t('novaSonic.title')}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {novaSonicState.status === 'error'
+                    ? t('novaSonic.connectionFailed')
+                    : t('novaSonic.description')}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  console.log(
+                    '[ChatPanel] Start Voice clicked, onNovaSonicConnect:',
+                    typeof onNovaSonicConnect,
+                  );
+                  onNovaSonicConnect?.();
+                }}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-violet-500 via-purple-500 to-indigo-500 text-white font-medium hover:shadow-lg hover:shadow-purple-500/40 hover:scale-105 transition-all duration-200"
+              >
+                <Mic className="w-5 h-5" />
+                <span>
+                  {novaSonicState.status === 'error'
+                    ? t('novaSonic.retryConnection')
+                    : t('novaSonic.startVoiceChat')}
+                </span>
+              </button>
+            </div>
+          )}
+
+          {/* Connecting state */}
+          {novaSonicState.status === 'connecting' && (
+            <div className="flex flex-col items-center gap-4 py-2">
+              <div className="relative">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/50 dark:to-indigo-900/50 flex items-center justify-center">
+                  <Loader2 className="w-7 h-7 text-purple-500 animate-spin" />
+                </div>
+                {/* Pulsing rings */}
+                <div className="absolute inset-0 rounded-full border-2 border-purple-400/50 animate-ping" />
+              </div>
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                {t('novaSonic.connecting')}
+              </p>
+            </div>
+          )}
+
+          {/* Connected state */}
+          {novaSonicState.status === 'connected' && (
+            <div className="flex items-center gap-8">
+              {/* AI indicator */}
+              <div className="flex flex-col items-center gap-2">
+                <div
+                  className={`relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${
+                    novaSonicState.isSpeaking
+                      ? 'bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-purple-500/50'
+                      : 'bg-slate-100 dark:bg-slate-800'
+                  }`}
+                >
+                  {/* Pulsing rings when speaking */}
+                  {novaSonicState.isSpeaking && (
+                    <>
+                      <div className="absolute inset-0 rounded-full bg-purple-400/30 animate-ping" />
+                      <div
+                        className="absolute inset-[-4px] rounded-full border-2 border-purple-400/50 animate-pulse"
+                        style={{ animationDelay: '0.2s' }}
+                      />
+                    </>
+                  )}
+                  <AnimatedAudioBars
+                    audioLevel={novaSonicAudioLevel?.output || 0}
+                    barCount={5}
+                    color={
+                      novaSonicState.isSpeaking
+                        ? 'bg-white'
+                        : 'bg-slate-300 dark:bg-slate-600'
+                    }
+                    minHeight={4}
+                    maxHeight={20}
+                    isActive={novaSonicState.isSpeaking}
+                    threshold={0.2}
+                  />
+                </div>
+                <span
+                  className={`text-xs font-medium ${
+                    novaSonicState.isSpeaking
+                      ? 'text-purple-600 dark:text-purple-400'
+                      : 'text-slate-400'
+                  }`}
+                >
+                  {t('novaSonic.ai')}
+                </span>
+              </div>
+
+              {/* Connection indicator */}
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-[10px] text-green-600 dark:text-green-400 font-medium uppercase tracking-wider">
+                    {t('novaSonic.live')}
+                  </span>
+                </div>
+                <div className="w-8 h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-600 to-transparent" />
+              </div>
+
+              {/* User mic */}
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onNovaSonicToggleMic}
+                  className={`relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${
+                    novaSonicState.isListening
+                      ? 'bg-gradient-to-br from-purple-500 to-violet-600 shadow-lg shadow-purple-500/50 hover:shadow-purple-500/70'
+                      : 'bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50'
+                  }`}
+                  title={
+                    novaSonicState.isListening
+                      ? t('novaSonic.mute')
+                      : t('novaSonic.unmute')
+                  }
+                >
+                  {novaSonicState.isListening ? (
+                    <>
+                      {/* Pulsing ring when listening */}
+                      <div
+                        className="absolute inset-[-4px] rounded-full border-2 border-purple-400/50 animate-pulse"
+                        style={{ animationDelay: '0.1s' }}
+                      />
+                      <AnimatedAudioBars
+                        audioLevel={novaSonicAudioLevel?.input || 0}
+                        barCount={5}
+                        color="bg-white"
+                        minHeight={4}
+                        maxHeight={20}
+                        isActive={novaSonicState.isListening}
+                        threshold={0.5}
+                      />
+                    </>
+                  ) : (
+                    <MicOff className="w-6 h-6 text-red-500" />
+                  )}
+                </button>
+                <span
+                  className={`text-xs font-medium ${
+                    novaSonicState.isListening
+                      ? 'text-purple-600 dark:text-purple-400'
+                      : 'text-red-500'
+                  }`}
+                >
+                  {novaSonicState.isListening
+                    ? t('novaSonic.you')
+                    : t('novaSonic.muted')}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="w-full h-full flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 overflow-hidden">
+    <div className="w-full h-full flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 overflow-hidden relative">
       {/* Messages Container */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
         {loadingHistory ? (
@@ -1617,6 +1824,7 @@ export default function ChatPanel({
               {t('chat.welcomeDescription')}
             </p>
             <div className="mt-10 w-full flex flex-col items-center">
+              {novaSonicPanel}
               {inputBox}
               <p className="text-xs text-slate-400 dark:text-slate-500 text-center mt-3">
                 {t('chat.enterToSend')}
@@ -2160,7 +2368,10 @@ export default function ChatPanel({
       {/* Bottom Input */}
       {hasMessages && (
         <div className="p-4">
-          <div className="max-w-3xl mx-auto">{inputBox}</div>
+          <div className="max-w-3xl mx-auto">
+            {novaSonicPanel}
+            {inputBox}
+          </div>
         </div>
       )}
 
@@ -2186,6 +2397,15 @@ export default function ChatPanel({
         title={t('chat.useAgent')}
         message={t('chat.removeAgentConfirm')}
         confirmText={t('common.confirm')}
+        variant="warning"
+      />
+      <ConfirmModal
+        isOpen={showNovaSonicDisableConfirm}
+        onClose={() => setShowNovaSonicDisableConfirm(false)}
+        onConfirm={confirmNovaSonicDisable}
+        title={t('novaSonic.title')}
+        message={t('chat.removeAgentConfirm')}
+        confirmText={t('agent.startNewChat')}
         variant="warning"
       />
     </div>

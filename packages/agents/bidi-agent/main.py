@@ -1,8 +1,10 @@
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 
 import boto3
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from strands.experimental.bidi.models import BidiNovaSonicModel
 from strands.experimental.bidi.types.events import (
@@ -14,11 +16,71 @@ from strands.experimental.bidi.types.events import (
     BidiResponseStartEvent,
     BidiResponseCompleteEvent,
     BidiInterruptionEvent,
+    ToolUseStreamEvent,
 )
+from strands.session import S3SessionManager
+from strands.types.content import ContentBlock, Message
+from strands.types.session import SessionMessage
+from strands.types._events import ToolResultEvent
 
 from config import get_config
+from tools import get_tools, execute_tool
 
 logger = logging.getLogger(__name__)
+
+
+class TranscriptSaver:
+    """Save voice transcripts to S3 using Strands SDK S3SessionManager."""
+
+    def __init__(
+        self,
+        bucket: str,
+        user_id: str,
+        project_id: str,
+        session_id: str,
+    ):
+        self.session_id = session_id
+        self.message_index = 0
+        self.enabled = bool(bucket and user_id and project_id and session_id)
+
+        if self.enabled:
+            prefix = f"sessions/{user_id}/{project_id}"
+            # SDK가 자동으로 session.json 생성 (채팅과 동일)
+            self.session_manager = S3SessionManager(
+                session_id=session_id,
+                bucket=bucket,
+                prefix=prefix,
+            )
+        else:
+            self.session_manager = None
+
+    def save_transcript(self, role: str, text: str) -> None:
+        """Save a transcript message to S3 using SDK."""
+        if not self.enabled or not self.session_manager:
+            return
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        try:
+            message = Message(
+                role=role,
+                content=[ContentBlock(text=text)],
+            )
+            session_message = SessionMessage(
+                message=message,
+                message_id=self.message_index,
+                created_at=now,
+                updated_at=now,
+            )
+            self.session_manager.create_message(
+                session_id=self.session_id,
+                agent_id="voice",
+                session_message=session_message,
+            )
+            logger.info(f"Saved transcript message_{self.message_index}")
+            self.message_index += 1
+        except Exception as e:
+            logger.error(f"Failed to save transcript: {e}")
 
 TIMEZONE_TO_LANGUAGE: dict[str, str] = {
     "Asia/Seoul": "Korean",
@@ -105,12 +167,25 @@ async def ping():
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket):
     await websocket.accept()
+    config = get_config()
 
     try:
-        # First message: config (voice, system_prompt)
+        # First message: config (voice, system_prompt, session info)
         config_msg = await websocket.receive_json()
     except (WebSocketDisconnect, json.JSONDecodeError):
         return
+
+    # Create transcript saver for persisting voice messages
+    transcript_saver = TranscriptSaver(
+        bucket=config.session_storage_bucket_name,
+        user_id=config_msg.get("user_id", ""),
+        project_id=config_msg.get("project_id", ""),
+        session_id=config_msg.get("session_id", ""),
+    )
+    if transcript_saver.enabled:
+        logger.info(
+            f"Transcript saving enabled for session {config_msg.get('session_id')}"
+        )
 
     model = BidiNovaSonicModel(
         model_id="amazon.nova-2-sonic-v1:0",
@@ -122,11 +197,13 @@ async def ws_endpoint(websocket: WebSocket):
         client_config={"region": "us-east-1"},
     )
 
+    # Get user's timezone for tool execution
+    user_timezone = config_msg.get("browser_time_zone", "UTC")
+
     try:
-        timezone = config_msg.get("browser_time_zone", "")
         custom_prompt = config_msg.get("system_prompt")
-        system_prompt = custom_prompt or build_system_prompt(timezone)
-        await model.start(system_prompt=system_prompt)
+        system_prompt = custom_prompt or build_system_prompt(user_timezone)
+        await model.start(system_prompt=system_prompt, tools=get_tools())
     except Exception:
         logger.exception("Failed to start BidiNovaSonicModel")
         await websocket.close(code=1011, reason="Failed to start model")
@@ -155,6 +232,8 @@ async def ws_endpoint(websocket: WebSocket):
 
     async def bedrock_to_browser():
         """Forward events from BidiNovaSonicModel to browser WebSocket."""
+        processed_tool_use_ids: set[str] = set()
+
         try:
             async for event in model.receive():
                 if isinstance(event, BidiAudioStreamEvent):
@@ -174,6 +253,49 @@ async def ws_endpoint(websocket: WebSocket):
                             "is_final": event.is_final,
                         }
                     )
+                    # Save final transcripts to S3
+                    if event.is_final and event.text.strip():
+                        transcript_saver.save_transcript(event.role, event.text)
+                elif isinstance(event, ToolUseStreamEvent):
+                    # Handle tool use requests from the model
+                    tool_use = event.current_tool_use
+                    if tool_use:
+                        tool_use_id = tool_use.get("toolUseId")
+                        tool_input = tool_use.get("input")
+                        # Only process complete tool uses that haven't been processed
+                        if (
+                            tool_use_id
+                            and tool_use_id not in processed_tool_use_ids
+                            and tool_input is not None
+                        ):
+                            processed_tool_use_ids.add(tool_use_id)
+                            logger.info(
+                                f"Tool use detected: {tool_use.get('name')} (id: {tool_use_id})"
+                            )
+
+                            # Notify browser about tool use
+                            await websocket.send_json(
+                                {
+                                    "type": "tool_use",
+                                    "tool_name": tool_use.get("name"),
+                                    "tool_use_id": tool_use_id,
+                                }
+                            )
+
+                            # Execute tool and send result back to model
+                            tool_context = {"timezone": user_timezone}
+                            tool_result = await execute_tool(tool_use, tool_context)
+                            await model.send(ToolResultEvent(tool_result))
+
+                            # Notify browser about tool result
+                            await websocket.send_json(
+                                {
+                                    "type": "tool_result",
+                                    "tool_name": tool_use.get("name"),
+                                    "tool_use_id": tool_use_id,
+                                    "status": tool_result.get("status"),
+                                }
+                            )
                 elif isinstance(event, BidiConnectionStartEvent):
                     await websocket.send_json(
                         {

@@ -313,11 +313,12 @@ export class WorkflowStack extends Stack {
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/analysis-finalizer'),
       ),
-      layers: [coreLayer, sharedLayer],
+      layers: [strandsLayer, sharedLayer],
       environment: {
         ...commonLambdaProps.environment,
         LANCEDB_WRITE_QUEUE_URL: lancedbWriteQueue.queueUrl,
         LANCEDB_FUNCTION_NAME: lancedbService.functionName,
+        PAGE_DESCRIPTION_MODEL_ID: models.summarizer,
       },
     });
 
@@ -330,12 +331,11 @@ export class WorkflowStack extends Stack {
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/document-summarizer'),
       ),
-      layers: [coreLayer, sharedLayer],
+      layers: [strandsLayer, sharedLayer],
       environment: {
         ...commonLambdaProps.environment,
         LANCEDB_FUNCTION_NAME: lancedbService.functionName,
         SUMMARIZER_MODEL_ID: models.summarizer,
-        SUMMARIZER_LITE_MODEL_ID: models.summarizerLite,
       },
     });
 
@@ -463,11 +463,11 @@ export class WorkflowStack extends Stack {
         lambdaFunction: documentSummarizer,
         outputPath: '$.Payload',
         payload: sfn.TaskInput.fromObject({
-          'workflow_id': sfn.JsonPath.stringAt('$.workflow_id'),
-          'document_id': sfn.JsonPath.stringAt('$.document_id'),
-          'project_id': sfn.JsonPath.stringAt('$.project_id'),
-          'file_uri': sfn.JsonPath.stringAt('$.file_uri'),
-          'segment_count': sfn.JsonPath.numberAt('$.segment_count'),
+          'workflow_id.$': '$.workflow_id',
+          'document_id.$': '$.document_id',
+          'project_id.$': '$.project_id',
+          'file_uri.$': '$.file_uri',
+          'segment_count.$': '$.segment_count',
         }),
       },
     );
@@ -522,6 +522,7 @@ export class WorkflowStack extends Stack {
           'file_uri.$': '$.file_uri',
           'file_type.$': '$.file_type',
           'segment_count.$': '$.segment_count',
+          'language.$': '$.language',
           'segment_index.$': '$$.Map.Item.Value',
           'is_reanalysis.$': '$.is_reanalysis',
         },

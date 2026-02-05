@@ -381,5 +381,6 @@ export function useAwsClient() {
     researchAgentRuntimeArn,
     bidiAgentRuntimeArn,
     getCredentials,
+    userId: user?.profile?.['cognito:username'] as string | undefined,
   };
 }

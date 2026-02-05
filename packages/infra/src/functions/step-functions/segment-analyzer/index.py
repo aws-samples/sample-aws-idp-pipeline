@@ -56,6 +56,7 @@ def handler(event, _context):
             'segment_index': segment_index,
             'file_uri': file_uri,
             'file_type': file_type,
+            'language': language,
             'status': 'not_found'
         }
 
@@ -151,6 +152,7 @@ def handler(event, _context):
             'segment_index': segment_index,
             'file_uri': file_uri,
             'file_type': file_type,
+            'language': language,
             'status': 'analyzed',
             'analysis_count': len(analysis_steps) if analysis_steps else 1
         }
@@ -177,6 +179,7 @@ def handler(event, _context):
             'segment_index': segment_index,
             'file_uri': file_uri,
             'file_type': file_type,
+            'language': language,
             'status': 'failed',
             'error': str(e)
         }

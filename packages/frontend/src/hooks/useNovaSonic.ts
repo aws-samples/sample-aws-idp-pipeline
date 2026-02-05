@@ -18,6 +18,12 @@ type TranscriptCallback = (
 
 const SESSION_TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes
 
+export interface UseNovaSonicOptions {
+  sessionId: string;
+  projectId: string;
+  userId: string;
+}
+
 export interface UseNovaSonicReturn {
   state: NovaSonicState;
   connect: () => Promise<void>;
@@ -33,13 +39,15 @@ function extractRegionFromArn(arn: string): string {
   return arn.split(':')[3];
 }
 
-export function useNovaSonic(): UseNovaSonicReturn {
+export function useNovaSonic(options: UseNovaSonicOptions): UseNovaSonicReturn {
+  const { sessionId, projectId, userId } = options;
   const { bidiAgentRuntimeArn, getCredentials } = useAwsClient();
   const [state, setState] = useState<NovaSonicState>({
     status: 'idle',
     isListening: false,
     isSpeaking: false,
   });
+  const [inputAudioLevel, setInputAudioLevel] = useState(0);
 
   const wsRef = useRef<WebSocket | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -54,7 +62,14 @@ export function useNovaSonic(): UseNovaSonicReturn {
     }
   }, []);
 
-  const capture = useAudioCapture({ onAudioChunk: handleAudioChunk });
+  const handleAudioLevel = useCallback((level: number) => {
+    setInputAudioLevel(level);
+  }, []);
+
+  const capture = useAudioCapture({
+    onAudioChunk: handleAudioChunk,
+    onAudioLevel: handleAudioLevel,
+  });
 
   const disconnect = useCallback(() => {
     if (timeoutRef.current) {
@@ -78,12 +93,15 @@ export function useNovaSonic(): UseNovaSonicReturn {
   }, [capture, playback]);
 
   const connect = useCallback(async () => {
+    console.log('[NovaSonic] connect called, arn:', bidiAgentRuntimeArn);
     if (!bidiAgentRuntimeArn) {
+      console.log('[NovaSonic] ERROR: no bidiAgentRuntimeArn');
       setState((s) => ({ ...s, status: 'error' }));
       return;
     }
 
     setState((s) => ({ ...s, status: 'connecting' }));
+    console.log('[NovaSonic] status set to connecting');
 
     try {
       const credentials = await getCredentials();
@@ -102,16 +120,22 @@ export function useNovaSonic(): UseNovaSonicReturn {
         service: 'bedrock-agentcore',
       });
 
+      console.log('[NovaSonic] Creating WebSocket...');
       const ws = new WebSocket(signedUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
+        console.log('[NovaSonic] WebSocket opened');
         // Send config as first message
         ws.send(
           JSON.stringify({
             voice: 'tiffany',
             system_prompt: '',
             browser_time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            // Session info for transcript persistence
+            session_id: sessionId,
+            project_id: projectId,
+            user_id: userId,
           }),
         );
         setState({
@@ -119,6 +143,18 @@ export function useNovaSonic(): UseNovaSonicReturn {
           isListening: false,
           isSpeaking: false,
         });
+
+        // Auto-start mic capture on connect
+        console.log('[NovaSonic] Starting mic capture...');
+        capture
+          .startCapture()
+          .then(() => {
+            console.log('[NovaSonic] Mic capture started successfully');
+            setState((s) => ({ ...s, isListening: true }));
+          })
+          .catch((err) => {
+            console.log('[NovaSonic] Mic capture failed:', err);
+          });
 
         // Auto-timeout after 8 minutes
         timeoutRef.current = setTimeout(() => {
@@ -160,11 +196,13 @@ export function useNovaSonic(): UseNovaSonicReturn {
         }
       };
 
-      ws.onerror = () => {
+      ws.onerror = (err) => {
+        console.log('[NovaSonic] WebSocket error:', err);
         setState((s) => ({ ...s, status: 'error' }));
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        console.log('[NovaSonic] WebSocket closed:', event.code, event.reason);
         if (wsRef.current === ws) {
           capture.stopCapture();
           playback.stop();
@@ -172,10 +210,20 @@ export function useNovaSonic(): UseNovaSonicReturn {
           wsRef.current = null;
         }
       };
-    } catch {
+    } catch (err) {
+      console.log('[NovaSonic] Connect error:', err);
       setState({ status: 'error', isListening: false, isSpeaking: false });
     }
-  }, [bidiAgentRuntimeArn, getCredentials, capture, playback, disconnect]);
+  }, [
+    bidiAgentRuntimeArn,
+    getCredentials,
+    capture,
+    playback,
+    disconnect,
+    sessionId,
+    projectId,
+    userId,
+  ]);
 
   const sendText = useCallback((text: string) => {
     const ws = wsRef.current;
@@ -185,11 +233,16 @@ export function useNovaSonic(): UseNovaSonicReturn {
   }, []);
 
   const toggleMic = useCallback(() => {
+    console.log(
+      '[NovaSonic] toggleMic called, isCapturing:',
+      capture.isCapturing,
+    );
     if (capture.isCapturing) {
       capture.stopCapture();
       setState((s) => ({ ...s, isListening: false }));
     } else {
       capture.startCapture().then(() => {
+        console.log('[NovaSonic] capture started');
         setState((s) => ({ ...s, isListening: true }));
       });
     }
@@ -215,13 +268,22 @@ export function useNovaSonic(): UseNovaSonicReturn {
     };
   }, []);
 
+  // Debug: log audio levels periodically
+  useEffect(() => {
+    if (!state.isListening) return;
+    const interval = setInterval(() => {
+      console.log('[NovaSonic] inputAudioLevel:', inputAudioLevel);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [state.isListening, inputAudioLevel]);
+
   return {
     state,
     connect,
     disconnect,
     sendText,
     toggleMic,
-    inputAudioLevel: capture.audioLevel,
+    inputAudioLevel,
     outputAudioLevel: playback.audioLevel,
     onTranscript,
   };

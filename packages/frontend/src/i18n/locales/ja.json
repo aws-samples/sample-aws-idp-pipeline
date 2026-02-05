@@ -384,5 +384,19 @@
   },
   "voiceSystemPrompt": {
     "saveSuccess": "音声システムプロンプトが保存されました"
+  },
+  "novaSonic": {
+    "title": "Nova Sonic 音声",
+    "description": "AIとのリアルタイム音声会話",
+    "connectionFailed": "接続に失敗しました。もう一度お試しください。",
+    "startVoiceChat": "音声チャットを開始",
+    "retryConnection": "再接続",
+    "connecting": "Nova Sonicに接続中...",
+    "live": "接続中",
+    "ai": "AI",
+    "you": "あなた",
+    "muted": "ミュート",
+    "mute": "ミュート",
+    "unmute": "ミュート解除"
   }
 }

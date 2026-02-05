@@ -79,6 +79,7 @@ function ProjectDetailPage() {
     getPresignedDownloadUrl,
     researchAgentRuntimeArn,
     bidiAgentRuntimeArn,
+    userId,
   } = useAwsClient();
   const { showToast } = useToast();
   const { sendMessage, status: wsStatus } = useWebSocket();
@@ -100,6 +101,7 @@ function ProjectDetailPage() {
     setStreamingBlocks([]);
     setSelectedAgent(null);
     setSelectedArtifact(null);
+    setNovaSonicMode(false);
     pendingMessagesRef.current = [];
     progressFetchedRef.current = false;
   }, [projectId]);
@@ -149,9 +151,18 @@ function ProjectDetailPage() {
   const progressFetchedRef = useRef(false);
   const sidePanelAutoExpandedRef = useRef(false);
   const chatScrollPositionRef = useRef(0);
+  const [novaSonicMode, setNovaSonicMode] = useState(false);
 
   // Nova Sonic voice chat
-  const novaSonic = useNovaSonic();
+  const novaSonic = useNovaSonic({
+    sessionId: currentSessionId,
+    projectId,
+    userId: userId || '',
+  });
+
+  // Keep ref to novaSonic.disconnect for stable callback
+  const novaSonicDisconnectRef = useRef(novaSonic.disconnect);
+  novaSonicDisconnectRef.current = novaSonic.disconnect;
 
   // Handle Nova Sonic transcripts as chat messages
   const novaSonicMsgIdRef = useRef<{ user?: string; assistant?: string }>({});
@@ -216,6 +227,16 @@ function ProjectDetailPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Sync novaSonicMode with connection status
+  useEffect(() => {
+    if (
+      novaSonic.state.status === 'connected' ||
+      novaSonic.state.status === 'connecting'
+    ) {
+      setNovaSonicMode(true);
+    }
+  }, [novaSonic.state.status]);
 
   // Persist panel sizes in localStorage
   const panelStorageKey = 'idp-panel-sizes-v2';
@@ -307,6 +328,28 @@ function ProjectDetailPage() {
     [fetchApi, showToast, t],
   );
 
+  // Memoize system prompt tabs to avoid infinite loop in SystemPromptModal
+  const systemPromptTabs = useMemo(
+    () => [
+      {
+        type: 'chat' as const,
+        onLoad: loadSystemPrompt,
+        onSave: saveSystemPrompt,
+      },
+      {
+        type: 'voice' as const,
+        onLoad: loadVoiceSystemPrompt,
+        onSave: saveVoiceSystemPrompt,
+      },
+    ],
+    [
+      loadSystemPrompt,
+      saveSystemPrompt,
+      loadVoiceSystemPrompt,
+      saveVoiceSystemPrompt,
+    ],
+  );
+
   const loadProject = useCallback(async () => {
     try {
       const data = await fetchApi<Project>(`projects/${projectId}`);
@@ -386,6 +429,8 @@ function ProjectDetailPage() {
     const newSessionId = nanoid(33);
     setCurrentSessionId(newSessionId);
     setMessages([]);
+    setNovaSonicMode(false);
+    novaSonicDisconnectRef.current();
   }, []);
 
   const loadAgents = useCallback(async () => {
@@ -703,7 +748,13 @@ function ProjectDetailPage() {
 
       // Match agent from session
       const session = sessions.find((s) => s.session_id === sessionId);
-      if (session?.agent_id && session.agent_id !== 'default') {
+
+      // Check if this is a voice session
+      if (session?.agent_id === 'voice') {
+        setNovaSonicMode(true);
+        setSelectedAgent(null);
+      } else if (session?.agent_id && session.agent_id !== 'default') {
+        setNovaSonicMode(false);
         const agent = agents.find(
           (a) => a.agent_id === session.agent_id || a.name === session.agent_id,
         );
@@ -723,6 +774,7 @@ function ProjectDetailPage() {
           setSelectedAgent(null);
         }
       } else {
+        setNovaSonicMode(false);
         setSelectedAgent(null);
       }
 
@@ -2018,6 +2070,8 @@ function ProjectDetailPage() {
                   input: novaSonic.inputAudioLevel,
                   output: novaSonic.outputAudioLevel,
                 }}
+                novaSonicMode={novaSonicMode}
+                onNovaSonicModeChange={setNovaSonicMode}
                 onNovaSonicConnect={novaSonic.connect}
                 onNovaSonicDisconnect={novaSonic.disconnect}
                 onNovaSonicText={novaSonic.sendText}
@@ -2223,14 +2277,7 @@ function ProjectDetailPage() {
       <SystemPromptModal
         isOpen={showSystemPrompt}
         onClose={() => setShowSystemPrompt(false)}
-        tabs={[
-          { type: 'chat', onLoad: loadSystemPrompt, onSave: saveSystemPrompt },
-          {
-            type: 'voice',
-            onLoad: loadVoiceSystemPrompt,
-            onSave: saveVoiceSystemPrompt,
-          },
-        ]}
+        tabs={systemPromptTabs}
       />
     </div>
   );

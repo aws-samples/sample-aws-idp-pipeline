@@ -49,11 +49,14 @@ export function useAudioPlayback(): UseAudioPlaybackReturn {
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
     const update = () => {
       analyser.getByteFrequencyData(dataArray);
-      let sum = 0;
+      // Use max value for better responsiveness
+      let max = 0;
       for (let i = 0; i < dataArray.length; i++) {
-        sum += dataArray[i];
+        if (dataArray[i] > max) max = dataArray[i];
       }
-      setAudioLevel(sum / (dataArray.length * 255));
+      const normalized = max / 255;
+      const boosted = Math.pow(normalized, 0.5);
+      setAudioLevel(boosted);
       animFrameRef.current = requestAnimationFrame(update);
     };
     update();

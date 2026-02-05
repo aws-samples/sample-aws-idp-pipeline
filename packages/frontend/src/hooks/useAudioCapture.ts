@@ -46,6 +46,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 interface UseAudioCaptureOptions {
   onAudioChunk: (base64Pcm: string) => void;
+  onAudioLevel?: (level: number) => void;
 }
 
 export interface UseAudioCaptureReturn {
@@ -57,6 +58,7 @@ export interface UseAudioCaptureReturn {
 
 export function useAudioCapture({
   onAudioChunk,
+  onAudioLevel,
 }: UseAudioCaptureOptions): UseAudioCaptureReturn {
   const [isCapturing, setIsCapturing] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
@@ -66,7 +68,9 @@ export function useAudioCapture({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number>(0);
   const onAudioChunkRef = useRef(onAudioChunk);
+  const onAudioLevelRef = useRef(onAudioLevel);
   onAudioChunkRef.current = onAudioChunk;
+  onAudioLevelRef.current = onAudioLevel;
 
   const startCapture = useCallback(async () => {
     if (audioContextRef.current) return;
@@ -116,16 +120,29 @@ export function useAudioCapture({
 
     // Audio level animation loop
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    let frameCount = 0;
     const updateLevel = () => {
       analyser.getByteFrequencyData(dataArray);
-      let sum = 0;
+      // Find max value for better responsiveness
+      let max = 0;
       for (let i = 0; i < dataArray.length; i++) {
-        sum += dataArray[i];
+        if (dataArray[i] > max) max = dataArray[i];
       }
-      setAudioLevel(sum / (dataArray.length * 255));
+      // Normalize and apply curve for better visual response
+      const normalized = max / 255;
+      const boosted = Math.pow(normalized, 0.5); // Square root for more sensitivity at low levels
+      setAudioLevel(boosted);
+      // Call callback with audio level
+      onAudioLevelRef.current?.(boosted);
+      // Debug log every 60 frames (~1 second)
+      frameCount++;
+      if (frameCount % 60 === 0) {
+        console.log('[AudioCapture] level:', boosted.toFixed(3), 'max:', max);
+      }
       animFrameRef.current = requestAnimationFrame(updateLevel);
     };
     updateLevel();
+    console.log('[AudioCapture] Started capture, analyser connected');
 
     setIsCapturing(true);
   }, []);

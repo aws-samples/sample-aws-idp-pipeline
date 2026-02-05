@@ -21,6 +21,7 @@ from shared.ddb_client import (
     record_step_complete,
     record_step_error,
     update_workflow_status,
+    get_project_language,
     WorkflowStatus,
     StepName,
 )
@@ -512,14 +513,18 @@ def handler(event, _context):
 
         print(f'Built {segment_count} segments')
 
+        project_id = event.get('project_id', 'default')
+        language = get_project_language(project_id)
+
         return {
             'workflow_id': workflow_id,
             'document_id': document_id,
-            'project_id': event.get('project_id', 'default'),
+            'project_id': project_id,
             'file_uri': file_uri,
             'file_type': file_type,
-            'segment_ids': list(range(segment_count)),
             'segment_count': segment_count,
+            'segment_ids': list(range(segment_count)),
+            'language': language,
             'is_reanalysis': event.get('is_reanalysis', False)
         }
 

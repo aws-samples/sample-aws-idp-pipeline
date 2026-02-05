@@ -384,5 +384,19 @@
   },
   "voiceSystemPrompt": {
     "saveSuccess": "음성 시스템 프롬프트가 저장되었습니다"
+  },
+  "novaSonic": {
+    "title": "Nova Sonic 음성",
+    "description": "AI와 실시간 음성 대화",
+    "connectionFailed": "연결에 실패했습니다. 다시 시도하세요.",
+    "startVoiceChat": "음성 대화 시작",
+    "retryConnection": "다시 연결",
+    "connecting": "Nova Sonic에 연결 중...",
+    "live": "연결됨",
+    "ai": "AI",
+    "you": "나",
+    "muted": "음소거",
+    "mute": "음소거",
+    "unmute": "음소거 해제"
   }
 }

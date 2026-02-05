@@ -384,5 +384,19 @@
   },
   "voiceSystemPrompt": {
     "saveSuccess": "Voice system prompt saved successfully"
+  },
+  "novaSonic": {
+    "title": "Nova Sonic Voice",
+    "description": "Real-time voice conversation with AI",
+    "connectionFailed": "Connection failed. Try again.",
+    "startVoiceChat": "Start Voice Chat",
+    "retryConnection": "Retry Connection",
+    "connecting": "Connecting to Nova Sonic...",
+    "live": "Live",
+    "ai": "AI",
+    "you": "You",
+    "muted": "Muted",
+    "mute": "Mute",
+    "unmute": "Unmute"
   }
 }
