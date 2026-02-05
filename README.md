@@ -37,7 +37,11 @@
 
 An AI-powered IDP prototype that transforms unstructured data into actionable insights. Analyzes **documents, videos, audio files, and images** with hybrid search (vector + keyword) and a conversational AI interface. Built as an Nx monorepo with AWS CDK, featuring real-time workflow status notifications.
 
-> **Note**: This is an AWS sample project designed for experimentation, evaluation, and development purposes.
+> [!CAUTION]
+> This is a development version. Do not deploy to production.
+
+> [!NOTE]
+> This is an AWS sample project designed for experimentation, evaluation, and development purposes.
 
 <p align="center">
   <img src="docs/assets/main-screen.png" alt="Main Screen" width="900">
