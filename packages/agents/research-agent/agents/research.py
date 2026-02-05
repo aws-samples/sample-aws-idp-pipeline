@@ -1,5 +1,3 @@
-import asyncio
-
 import boto3
 from strands import Agent, tool
 from strands.hooks.events import BeforeToolCallEvent
@@ -14,7 +12,7 @@ from config import get_config
 class ToolParameterEnforcerHook(HookProvider):
     """Hook that enforces user_id and project_id parameters for MCP tools."""
 
-    def __init__(self, user_id: str | None = None, project_id: str | None = None):
+    def __init__(self, user_id: str, project_id: str):
         self.user_id = user_id
         self.project_id = project_id
 
@@ -30,14 +28,11 @@ class ToolParameterEnforcerHook(HookProvider):
 
         if not is_mcp_tool:
             return
-        
+
         print("inject params", self.user_id, self.project_id)
 
-        if self.user_id:
-            event.tool_use["input"]["user_id"] = self.user_id
-
-        if self.project_id:
-            event.tool_use["input"]["project_id"] = self.project_id
+        event.tool_use["input"]["user_id"] = self.user_id
+        event.tool_use["input"]["project_id"] = self.project_id
 
 
 def get_mcp_client():
@@ -75,13 +70,13 @@ You MUST NOT specify these parameters in tool calls.
 """
 
 
-def _run_research_sync(
+async def _run_research_async(
     session_id: str,
-    project_id: str | None,
-    user_id: str | None,
+    project_id: str,
+    user_id: str,
     query: str,
 ) -> str:
-    """Run research agent synchronously (for use with asyncio.to_thread)."""
+    """Run research agent asynchronously."""
     config = get_config()
     mcp_client = get_mcp_client()
 
@@ -91,6 +86,8 @@ def _run_research_sync(
         model_id=RESEARCH_MODEL_ID,
         region_name=config.aws_region,
     )
+
+    print("run search: ", project_id, user_id)
 
     hooks: list[HookProvider] = [
         ToolParameterEnforcerHook(user_id=user_id, project_id=project_id),
@@ -107,16 +104,14 @@ def _run_research_sync(
     if mcp_client:
         with mcp_client:
             mcp_tools = mcp_client.list_tools_sync()
-            filtered_tools = [
-                t for t in mcp_tools if "search" in t.tool_name
-            ]
+            filtered_tools = [t for t in mcp_tools if "search" in t.tool_name]
             tools.extend(filtered_tools)
             agent = create_agent()
-            result = agent(query)
+            result = await agent.invoke_async(query)
             return str(result)
     else:
         agent = create_agent()
-        result = agent(query)
+        result = await agent.invoke_async(query)
         return str(result)
 
 
@@ -138,8 +133,6 @@ def create_research_tool(session_id: str, project_id: str | None, user_id: str |
         Returns:
             Research findings and gathered information
         """
-        return await asyncio.to_thread(
-            _run_research_sync, session_id, project_id, user_id, query
-        )
+        return await _run_research_async(session_id, project_id, user_id, query)
 
     return research_agent

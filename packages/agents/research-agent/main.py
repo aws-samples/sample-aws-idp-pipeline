@@ -1,6 +1,6 @@
+from agents.supervisor import get_supervisor_agent
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
-from agents.supervisor import get_supervisor_agent
 from config import get_config
 from models import InvokeRequest
 
