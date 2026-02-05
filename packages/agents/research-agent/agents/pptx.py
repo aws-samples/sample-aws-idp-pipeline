@@ -8,7 +8,6 @@ from strands_tools import current_time, http_request
 from strands_tools.code_interpreter import AgentCoreCodeInterpreter
 
 from agents.constants import REPORT_MODEL_ID
-from agents.tools import create_s3_download_url, create_s3_upload_url, search_unsplash_images
 from config import get_config
 
 
@@ -43,71 +42,73 @@ def get_report_agent(
         current_time,
         http_request,
         interpreter.code_interpreter,
-        create_s3_upload_url,
-        create_s3_download_url,
     ]
-
-    # Add Unsplash tool if API key is configured
-    if config.unsplash_access_key:
-        tools.append(search_unsplash_images)
 
     # Image handling guide (only if Unsplash is enabled)
     image_guide = ""
     if config.unsplash_access_key:
-        image_guide = """
-## ⚠️ CRITICAL: Image Handling (MANDATORY)
+        unsplash_access_key = config.unsplash_access_key
+        image_guide = f"""
+## Image Handling (Unsplash API)
 
-**You MUST process ALL `[IMAGE: ...]` placeholders!**
-**Do NOT skip or ignore any image placeholder!**
+**Unsplash Access Key**: `{unsplash_access_key}`
 
-### BEFORE writing any code, you MUST:
-1. Find ALL `[IMAGE: description, position: xxx]` in the content
-2. Call `search_unsplash_images` for EACH one
-3. Save the image URLs
-4. Include ALL images in your code_interpreter script
+When slides have `image_prompt` in frontmatter, search and download images inside your code_interpreter script:
 
-### Step 1: Search Images FIRST (call for EACH placeholder)
-```
-search_unsplash_images(query="description from placeholder", orientation="landscape")
-```
-
-### Step 2: Include in your ONE code_interpreter script
 ```python
 import requests
 from io import BytesIO
 
-def download_image(url):
+UNSPLASH_ACCESS_KEY = "{unsplash_access_key}"
+
+def search_unsplash(query: str, orientation: str = "landscape") -> dict | None:
+    \"\"\"Search Unsplash for an image and return image info.\"\"\"
+    response = requests.get(
+        "https://api.unsplash.com/search/photos",
+        params={{"query": query, "orientation": orientation, "per_page": 1}},
+        headers={{"Authorization": f"Client-ID {{UNSPLASH_ACCESS_KEY}}"}}
+    )
+    if response.status_code == 200:
+        results = response.json().get("results", [])
+        if results:
+            photo = results[0]
+            return {{
+                "url": photo["urls"]["regular"],
+                "author": photo["user"]["name"],
+            }}
+    return None
+
+def download_image(url: str) -> BytesIO:
+    \"\"\"Download image and return as BytesIO.\"\"\"
     response = requests.get(url)
     return BytesIO(response.content)
 
-# Download ALL images at the start
-image_urls = {
-    "slide_3": "https://...",  # from search result
-    "slide_5": "https://...",  # from search result
-}
+# Example: Search and add image to slide
+image_info = search_unsplash("team collaboration modern office")
+if image_info:
+    img_stream = download_image(image_info["url"])
+    slide.shapes.add_picture(img_stream, Inches(5.2), Inches(1.2), width=Inches(4.5))
 
-# When creating each slide with image:
-img_stream = download_image(image_urls["slide_3"])
-# position: right
-slide.shapes.add_picture(img_stream, Inches(5.2), Inches(1.2), width=Inches(4.5))
-# position: left
-slide.shapes.add_picture(img_stream, Inches(0.3), Inches(1.2), width=Inches(4.5))
-# position: center
-slide.shapes.add_picture(img_stream, Inches(2.5), Inches(1.5), width=Inches(5))
-```
-
-### Step 3: Add Attribution (Required for each image)
-```python
-attr_box = slide.shapes.add_textbox(Inches(0.3), Inches(5.3), Inches(9), Inches(0.3))
-p = attr_box.text_frame.paragraphs[0]
-p.text = "Photo by [Name] on Unsplash"
-p.font.size = Pt(8)
-p.font.color.rgb = RGBColor(128, 128, 128)
+    # Add attribution (required)
+    attr_box = slide.shapes.add_textbox(Inches(0.3), Inches(5.3), Inches(9), Inches(0.3))
+    p = attr_box.text_frame.paragraphs[0]
+    p.text = f"Photo by {{image_info['author']}} on Unsplash"
+    p.font.size = Pt(8)
+    p.font.color.rgb = RGBColor(128, 128, 128)
 ```
 """
 
+    # Generate S3 key for artifact
+    artifact_id = f"art_{session_id[:12]}"
+    s3_key = f"{user_id}/{project_id}/artifacts/{artifact_id}.pptx" if user_id and project_id else f"artifacts/{artifact_id}.pptx"
+    bucket_name = config.agent_storage_bucket_name
+
     system_prompt = f"""You are a Report Agent specialized in creating PowerPoint presentations.
 {image_guide}
+
+## S3 Upload Information
+- **Bucket**: `{bucket_name}`
+- **Key**: `{s3_key}`
 
 ## CRITICAL: Generate ALL slides in a SINGLE code_interpreter call
 
@@ -221,66 +222,31 @@ prs.save('./presentation.pptx')
 print(f"Created {{len(prs.slides)}} slides successfully")
 ```
 
-### Step 3: Get S3 Upload URL
-Call `create_s3_upload_url` tool with user_id and project_id to get presigned URLs.
-- For new files: pass user_id, project_id (generates new artifact ID)
-- For updates: pass user_id, project_id, existing_key (uses same path)
-- File path format: `{{user_id}}/{{project_id}}/artifacts/art_{{nanoid}}.pptx`
+### Step 3: Upload to S3 (in the SAME script)
+After saving the PPTX file, upload directly to S3 using boto3:
 
-### Step 4: Upload to S3
 ```python
-import requests
+import boto3
 
-upload_url = "..."  # from create_s3_upload_url tool
+# Upload to S3
+s3 = boto3.client('s3')
+bucket = "{bucket_name}"
+key = "{s3_key}"
 
 with open('./presentation.pptx', 'rb') as f:
-    response = requests.put(
-        upload_url,
-        data=f,
-        headers={{'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation'}}
+    s3.upload_fileobj(
+        f,
+        bucket,
+        key,
+        ExtraArgs={{'ContentType': 'application/vnd.openxmlformats-officedocument.presentationml.presentation'}}
     )
-    print(f"Upload status: {{response.status_code}}")
+
+print(f"Uploaded to s3://{{bucket}}/{{key}}")
 ```
 
-### Step 5: Share Download URL
-Share the download_url with the user.
-
-## Template-Based Workflow (Alternative)
-
-If modifying an existing template:
-
-### Step T1: Get Template Download URL
-Call `create_s3_download_url` with the template's S3 key.
-
-### Step T2: Download and Modify Template (in ONE script)
-```python
-import requests
-from pptx import Presentation
-
-# Download template
-download_url = "..."  # from create_s3_download_url
-response = requests.get(download_url)
-with open('./template.pptx', 'wb') as f:
-    f.write(response.content)
-
-# Open and modify ALL slides
-prs = Presentation('./template.pptx')
-
-for slide in prs.slides:
-    for shape in slide.shapes:
-        if shape.has_text_frame:
-            for paragraph in shape.text_frame.paragraphs:
-                for run in paragraph.runs:
-                    if "{{{{title}}}}" in run.text:
-                        run.text = run.text.replace("{{{{title}}}}", "Actual Title")
-                    if "{{{{date}}}}" in run.text:
-                        run.text = run.text.replace("{{{{date}}}}", "2024-01-30")
-
-prs.save('./modified.pptx')
-```
-
-### Step T3: Upload Modified File
-Call `create_s3_upload_url` with `existing_key` parameter to update the same file
+### Step 4: Report Success
+After upload, report the S3 key to the user:
+- S3 Key: `{s3_key}`
 
 ## python-pptx Reference
 
@@ -319,6 +285,273 @@ shape = slide.shapes.add_shape(MSO_SHAPE.LINE_INVERSE, x1, y1, x2, y2)
 slide.shapes.add_picture('image.png', Inches(1), Inches(1), width=Inches(3))
 ```
 
+## Slidev Layout Implementation Guide
+
+The write_agent outputs Slidev-style markdown. You MUST implement each layout type correctly:
+
+### 1. title_slide - Opening slide
+```python
+slide = prs.slides.add_slide(blank_layout)
+background = slide.background
+fill = background.fill
+fill.solid()
+fill.fore_color.rgb = RGBColor(0, 51, 102)  # Use theme primaryColor
+
+title_box = slide.shapes.add_textbox(Inches(0.5), Inches(2), Inches(9), Inches(1))
+tf = title_box.text_frame
+p = tf.paragraphs[0]
+p.text = "Main Title"
+p.font.size = Pt(44)
+p.font.bold = True
+p.font.color.rgb = RGBColor(255, 255, 255)
+p.alignment = PP_ALIGN.CENTER
+
+subtitle_box = slide.shapes.add_textbox(Inches(0.5), Inches(3.2), Inches(9), Inches(0.6))
+tf = subtitle_box.text_frame
+p = tf.paragraphs[0]
+p.text = "Subtitle"
+p.font.size = Pt(24)
+p.font.color.rgb = RGBColor(200, 200, 200)
+p.alignment = PP_ALIGN.CENTER
+```
+
+### 2. default - Standard content slide
+```python
+slide = prs.slides.add_slide(blank_layout)
+
+title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(9), Inches(0.8))
+tf = title_box.text_frame
+p = tf.paragraphs[0]
+p.text = "Slide Title"
+p.font.size = Pt(32)
+p.font.bold = True
+p.font.color.rgb = RGBColor(0, 51, 102)
+
+content_box = slide.shapes.add_textbox(Inches(0.5), Inches(1.3), Inches(9), Inches(4))
+tf = content_box.text_frame
+tf.word_wrap = True
+points = ["Point 1", "Point 2", "Point 3"]
+for i, point in enumerate(points):
+    p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+    p.text = f"• {{point}}"
+    p.font.size = Pt(20)
+    p.space_before = Pt(12)
+```
+
+### 3. two_column - Split layout with left/right content
+Markdown uses `<!-- left -->` and `<!-- right -->` to separate columns.
+```python
+slide = prs.slides.add_slide(blank_layout)
+
+# Title
+title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(9), Inches(0.8))
+tf = title_box.text_frame
+p = tf.paragraphs[0]
+p.text = "Two Column Title"
+p.font.size = Pt(32)
+p.font.bold = True
+p.font.color.rgb = RGBColor(0, 51, 102)
+
+# Left column (x: 0.5, width: 4.3)
+left_box = slide.shapes.add_textbox(Inches(0.5), Inches(1.3), Inches(4.3), Inches(4))
+tf = left_box.text_frame
+tf.word_wrap = True
+left_points = ["Left point 1", "Left point 2"]
+for i, point in enumerate(left_points):
+    p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+    p.text = f"• {{point}}"
+    p.font.size = Pt(18)
+    p.space_before = Pt(10)
+
+# Right column (x: 5.2, width: 4.3)
+right_box = slide.shapes.add_textbox(Inches(5.2), Inches(1.3), Inches(4.3), Inches(4))
+tf = right_box.text_frame
+tf.word_wrap = True
+right_points = ["Right point 1", "Right point 2"]
+for i, point in enumerate(right_points):
+    p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+    p.text = f"• {{point}}"
+    p.font.size = Pt(18)
+    p.space_before = Pt(10)
+```
+
+### 4. image_right - Content left, image right
+```python
+slide = prs.slides.add_slide(blank_layout)
+
+# Title
+title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(9), Inches(0.8))
+tf = title_box.text_frame
+p = tf.paragraphs[0]
+p.text = "Image Right Title"
+p.font.size = Pt(32)
+p.font.bold = True
+p.font.color.rgb = RGBColor(0, 51, 102)
+
+# Content on left (x: 0.5, width: 4.5)
+content_box = slide.shapes.add_textbox(Inches(0.5), Inches(1.3), Inches(4.5), Inches(4))
+tf = content_box.text_frame
+tf.word_wrap = True
+# ... add content
+
+# Image on right (x: 5.2, width: 4.5)
+img_stream = download_image(image_url)
+slide.shapes.add_picture(img_stream, Inches(5.2), Inches(1.2), width=Inches(4.5))
+```
+
+### 5. image_left - Image left, content right
+```python
+slide = prs.slides.add_slide(blank_layout)
+
+# Title
+title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(9), Inches(0.8))
+# ...
+
+# Image on left (x: 0.3, width: 4.5)
+img_stream = download_image(image_url)
+slide.shapes.add_picture(img_stream, Inches(0.3), Inches(1.2), width=Inches(4.5))
+
+# Content on right (x: 5.0, width: 4.5)
+content_box = slide.shapes.add_textbox(Inches(5.0), Inches(1.3), Inches(4.5), Inches(4))
+# ...
+```
+
+### 6. image_center - Centered image with title/caption
+```python
+slide = prs.slides.add_slide(blank_layout)
+
+# Title at top
+title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(9), Inches(0.8))
+tf = title_box.text_frame
+p = tf.paragraphs[0]
+p.text = "Image Center Title"
+p.font.size = Pt(32)
+p.font.bold = True
+p.font.color.rgb = RGBColor(0, 51, 102)
+
+# Centered image (x: 2.5, width: 5)
+img_stream = download_image(image_url)
+slide.shapes.add_picture(img_stream, Inches(2.5), Inches(1.2), width=Inches(5))
+
+# Caption below image
+caption_box = slide.shapes.add_textbox(Inches(0.5), Inches(4.5), Inches(9), Inches(0.8))
+tf = caption_box.text_frame
+p = tf.paragraphs[0]
+p.text = "Caption text"
+p.font.size = Pt(16)
+p.alignment = PP_ALIGN.CENTER
+```
+
+### 7. comparison - Table-based comparison
+Markdown uses table syntax for comparison data.
+```python
+slide = prs.slides.add_slide(blank_layout)
+
+# Title
+title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(9), Inches(0.8))
+tf = title_box.text_frame
+p = tf.paragraphs[0]
+p.text = "Before vs After"
+p.font.size = Pt(32)
+p.font.bold = True
+p.font.color.rgb = RGBColor(0, 51, 102)
+
+# Table (rows, cols, left, top, width, height)
+table_shape = slide.shapes.add_table(4, 3, Inches(0.5), Inches(1.3), Inches(9), Inches(3.5))
+table = table_shape.table
+
+# Header row
+headers = ["Metric", "Before", "After"]
+for col, header in enumerate(headers):
+    cell = table.cell(0, col)
+    cell.text = header
+    cell.fill.solid()
+    cell.fill.fore_color.rgb = RGBColor(0, 51, 102)
+    p = cell.text_frame.paragraphs[0]
+    p.font.color.rgb = RGBColor(255, 255, 255)
+    p.font.bold = True
+    p.font.size = Pt(16)
+
+# Data rows
+data = [("Cost", "$125K", "$75K"), ("Time", "2 hours", "15 min"), ("Uptime", "99.5%", "99.99%")]
+for row_idx, (metric, before, after) in enumerate(data, start=1):
+    table.cell(row_idx, 0).text = metric
+    table.cell(row_idx, 1).text = before
+    table.cell(row_idx, 2).text = after
+    for col in range(3):
+        p = table.cell(row_idx, col).text_frame.paragraphs[0]
+        p.font.size = Pt(14)
+```
+
+### 8. quote - Featured quote/message
+```python
+slide = prs.slides.add_slide(blank_layout)
+
+# Light background
+background = slide.background
+fill = background.fill
+fill.solid()
+fill.fore_color.rgb = RGBColor(245, 245, 245)
+
+# Large quote mark
+quote_mark = slide.shapes.add_textbox(Inches(0.5), Inches(0.8), Inches(1), Inches(1.2))
+tf = quote_mark.text_frame
+p = tf.paragraphs[0]
+p.text = "\\u201C"  # Opening quote character
+p.font.size = Pt(120)
+p.font.color.rgb = RGBColor(200, 200, 200)
+
+# Quote text
+quote_box = slide.shapes.add_textbox(Inches(1), Inches(2), Inches(8), Inches(2))
+tf = quote_box.text_frame
+tf.word_wrap = True
+p = tf.paragraphs[0]
+p.text = "The quote text goes here."
+p.font.size = Pt(28)
+p.font.italic = True
+p.alignment = PP_ALIGN.CENTER
+
+# Attribution
+attr_box = slide.shapes.add_textbox(Inches(1), Inches(4.2), Inches(8), Inches(0.5))
+tf = attr_box.text_frame
+p = tf.paragraphs[0]
+p.text = "— Author Name"
+p.font.size = Pt(18)
+p.alignment = PP_ALIGN.RIGHT
+```
+
+### 9. end - Closing/thank you slide
+```python
+slide = prs.slides.add_slide(blank_layout)
+
+# Dark background
+background = slide.background
+fill = background.fill
+fill.solid()
+fill.fore_color.rgb = RGBColor(0, 51, 102)
+
+# Thank you text
+title_box = slide.shapes.add_textbox(Inches(0.5), Inches(2), Inches(9), Inches(1))
+tf = title_box.text_frame
+p = tf.paragraphs[0]
+p.text = "Thank You"
+p.font.size = Pt(48)
+p.font.bold = True
+p.font.color.rgb = RGBColor(255, 255, 255)
+p.alignment = PP_ALIGN.CENTER
+
+# Contact info
+contact_box = slide.shapes.add_textbox(Inches(0.5), Inches(3.5), Inches(9), Inches(1.5))
+tf = contact_box.text_frame
+contact_lines = ["Questions?", "email@company.com"]
+for i, line in enumerate(contact_lines):
+    p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+    p.text = line
+    p.font.size = Pt(20)
+    p.font.color.rgb = RGBColor(255, 255, 255)
+    p.alignment = PP_ALIGN.CENTER
+```
+
 ## Design Principles
 
 **Color Palette:**
@@ -339,16 +572,12 @@ slide.shapes.add_picture('image.png', Inches(1), Inches(1), width=Inches(3))
 - Leave adequate margins (0.5" minimum)
 - Consistent positioning across slides
 
-**Slide Types:**
-1. Title slide: Main topic + subtitle + date
-2. Agenda slide: Table of contents
-3. Content slides: One main idea per slide
-4. Summary slide: Key takeaways
-
 ## Important Notes
 - Always use `blank_layout = prs.slide_layouts[6]` for full control
 - Save file as `./presentation.pptx` before uploading
 - Test that generated PPTX opens correctly
+- Parse the layout from Slidev markdown frontmatter (e.g., `layout: two_column`)
+- Apply theme colors from frontmatter: `primaryColor`, `accentColor`
 """
 
     bedrock_model = BedrockModel(
