@@ -2,6 +2,7 @@ import asyncio
 from contextlib import contextmanager
 
 from botocore.config import Config
+from nanoid import generate
 from strands import Agent, tool
 from strands.models import BedrockModel
 from strands_tools import current_time, http_request
@@ -9,6 +10,8 @@ from strands_tools.code_interpreter import AgentCoreCodeInterpreter
 
 from agents.constants import REPORT_MODEL_ID
 from config import get_config
+
+NANOID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"
 
 
 @contextmanager
@@ -99,7 +102,7 @@ if image_info:
 """
 
     # Generate S3 key for artifact
-    artifact_id = f"art_{session_id[:12]}"
+    artifact_id = f"art_{generate(NANOID_ALPHABET, 12)}"
     s3_key = f"{user_id}/{project_id}/artifacts/{artifact_id}.pptx" if user_id and project_id else f"artifacts/{artifact_id}.pptx"
     bucket_name = config.agent_storage_bucket_name
 

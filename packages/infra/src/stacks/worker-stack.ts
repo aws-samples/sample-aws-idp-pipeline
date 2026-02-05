@@ -1,10 +1,12 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Vpc } from 'aws-cdk-lib/aws-ec2';
+import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { Queue } from 'aws-cdk-lib/aws-sqs';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import {
+  ArtifactProcess,
   MessageProcess,
   WebsocketBroker,
   SSM_KEYS,
@@ -65,6 +67,36 @@ export class WorkerStack extends Stack {
       elasticacheEndpoint,
       websocketCallbackUrl,
       websocketApiId,
+      websocketMessageQueue,
+    });
+
+    // Artifact Process - saves artifact metadata to DynamoDB on S3 upload
+    const agentStorageBucketName = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.AGENT_STORAGE_BUCKET_NAME,
+    );
+
+    const agentStorageBucket = Bucket.fromBucketName(
+      this,
+      'AgentStorageBucket',
+      agentStorageBucketName,
+    );
+
+    const backendTableName = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.BACKEND_TABLE_NAME,
+    );
+
+    const backendTable = Table.fromTableName(
+      this,
+      'BackendTable',
+      backendTableName,
+    );
+
+    new ArtifactProcess(this, 'ArtifactProcess', {
+      bucket: agentStorageBucket,
+      table: backendTable,
+      vpc,
       websocketMessageQueue,
     });
   }

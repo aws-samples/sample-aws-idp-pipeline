@@ -14,8 +14,10 @@
   "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.972.0",
+    "@aws-sdk/client-dynamodb": "^3.958.0",
     "@aws-sdk/client-s3": "^3.958.0",
     "@aws-sdk/client-sqs": "^3.974.0",
+    "@aws-sdk/lib-dynamodb": "^3.958.0",
     "nanoid": "^5.1.5"
   },
   "devDependencies": {
