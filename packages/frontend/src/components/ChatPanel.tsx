@@ -61,7 +61,8 @@ export type StreamingBlock =
   | { type: 'text'; content: string }
   | { type: 'tool_use'; name: string }
   | { type: 'stage_start'; stage: string }
-  | { type: 'stage_complete'; stage: string; result: string };
+  | { type: 'stage_complete'; stage: string; result: string }
+  | { type: 'voice_transcript'; role: 'user' | 'assistant'; content: string };
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -2088,6 +2089,28 @@ export default function ChatPanel({
                             >
                               {prepareMarkdown(block.result)}
                             </ReactMarkdown>
+                          </div>
+                        </div>
+                      );
+                    }
+                    if (block.type === 'voice_transcript') {
+                      const isUser = block.role === 'user';
+                      return (
+                        <div
+                          key={idx}
+                          className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div
+                            className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
+                              isUser
+                                ? 'bg-purple-500 text-white'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200'
+                            }`}
+                          >
+                            <p className="text-sm whitespace-pre-wrap">
+                              {block.content}
+                              <span className="inline-block w-1.5 h-4 ml-1 bg-current opacity-60 animate-pulse rounded-sm" />
+                            </p>
                           </div>
                         </div>
                       );
