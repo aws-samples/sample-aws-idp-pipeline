@@ -378,6 +378,11 @@
     "title": "System Prompt",
     "placeholder": "시스템 프롬프트를 입력하세요...",
     "saveHint": "Cmd+Enter로 저장",
-    "saveSuccess": "시스템 프롬프트가 저장되었습니다"
+    "saveSuccess": "시스템 프롬프트가 저장되었습니다",
+    "tabChat": "채팅",
+    "tabVoice": "음성"
+  },
+  "voiceSystemPrompt": {
+    "saveSuccess": "음성 시스템 프롬프트가 저장되었습니다"
   }
 }

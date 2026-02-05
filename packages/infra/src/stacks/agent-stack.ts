@@ -101,6 +101,36 @@ export class AgentStack extends Stack {
       ]),
     });
 
+    // Initialize voice system prompt in S3 on first deployment
+    const voiceSystemPromptPath = path.resolve(
+      process.cwd(),
+      'src/prompts/voice_system_prompt.txt',
+    );
+    const voiceSystemPromptContent = fs.readFileSync(
+      voiceSystemPromptPath,
+      'utf-8',
+    );
+
+    new cr.AwsCustomResource(this, 'InitVoiceSystemPrompt', {
+      onCreate: {
+        service: 'S3',
+        action: 'putObject',
+        parameters: {
+          Bucket: agentStorageBucketName,
+          Key: '__prompts/voice_system_prompt.txt',
+          Body: voiceSystemPromptContent,
+          ContentType: 'text/plain',
+        },
+        physicalResourceId: cr.PhysicalResourceId.of('voice-system-prompt-init'),
+      },
+      policy: cr.AwsCustomResourcePolicy.fromStatements([
+        new iam.PolicyStatement({
+          actions: ['s3:PutObject'],
+          resources: [`${agentStorageBucket.bucketArn}/__prompts/*`],
+        }),
+      ]),
+    });
+
     const idpAgent = new IdpAgent(this, 'IdpAgent', {
       agentPath: path.resolve(process.cwd(), '../../packages/agents/idp-agent'),
       agentName: 'idp_agent',

@@ -378,6 +378,11 @@
     "title": "System Prompt",
     "placeholder": "システムプロンプトを入力してください...",
     "saveHint": "Cmd+Enterで保存",
-    "saveSuccess": "システムプロンプトが保存されました"
+    "saveSuccess": "システムプロンプトが保存されました",
+    "tabChat": "チャット",
+    "tabVoice": "音声"
+  },
+  "voiceSystemPrompt": {
+    "saveSuccess": "音声システムプロンプトが保存されました"
   }
 }

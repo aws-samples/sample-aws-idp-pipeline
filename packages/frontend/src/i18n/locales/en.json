@@ -378,6 +378,11 @@
     "title": "System Prompt",
     "placeholder": "Enter system prompt...",
     "saveHint": "Cmd+Enter to save",
-    "saveSuccess": "System prompt saved successfully"
+    "saveSuccess": "System prompt saved successfully",
+    "tabChat": "Chat",
+    "tabVoice": "Voice"
+  },
+  "voiceSystemPrompt": {
+    "saveSuccess": "Voice system prompt saved successfully"
   }
 }

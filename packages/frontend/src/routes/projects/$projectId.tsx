@@ -154,16 +154,56 @@ function ProjectDetailPage() {
   const novaSonic = useNovaSonic();
 
   // Handle Nova Sonic transcripts as chat messages
+  const novaSonicMsgIdRef = useRef<{ user?: string; assistant?: string }>({});
+
   useEffect(() => {
     const unsubscribe = novaSonic.onTranscript((text, role, isFinal) => {
-      if (!isFinal) return;
-      const msg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: role === 'user' ? 'user' : 'assistant',
-        content: text,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, msg]);
+      const chatRole = role === 'user' ? 'user' : 'assistant';
+      const existingId = novaSonicMsgIdRef.current[chatRole];
+
+      // User: only comes with is_final=true, so add directly
+      if (chatRole === 'user') {
+        if (isFinal) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: crypto.randomUUID(),
+              role: 'user',
+              content: text,
+              timestamp: new Date(),
+            },
+          ]);
+        }
+        return;
+      }
+
+      // Assistant: streams with is_final=false, final is duplicate
+      if (isFinal) {
+        novaSonicMsgIdRef.current.assistant = undefined;
+        return;
+      }
+
+      if (existingId) {
+        // Append to existing message
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === existingId ? { ...m, content: m.content + text } : m,
+          ),
+        );
+      } else {
+        // Create new message
+        const newId = crypto.randomUUID();
+        novaSonicMsgIdRef.current.assistant = newId;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: newId,
+            role: 'assistant',
+            content: text,
+            timestamp: new Date(),
+          },
+        ]);
+      }
     });
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -242,6 +282,27 @@ function ProjectDetailPage() {
         body: JSON.stringify({ content }),
       });
       showToast('success', t('systemPrompt.saveSuccess'));
+    },
+    [fetchApi, showToast, t],
+  );
+
+  const loadVoiceSystemPrompt = useCallback(async () => {
+    try {
+      const data = await fetchApi<{ content: string }>('prompts/voice-system');
+      return data.content;
+    } catch {
+      return '';
+    }
+  }, [fetchApi]);
+
+  const saveVoiceSystemPrompt = useCallback(
+    async (content: string) => {
+      await fetchApi('prompts/voice-system', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      showToast('success', t('voiceSystemPrompt.saveSuccess'));
     },
     [fetchApi, showToast, t],
   );
@@ -2162,8 +2223,14 @@ function ProjectDetailPage() {
       <SystemPromptModal
         isOpen={showSystemPrompt}
         onClose={() => setShowSystemPrompt(false)}
-        onLoad={loadSystemPrompt}
-        onSave={saveSystemPrompt}
+        tabs={[
+          { type: 'chat', onLoad: loadSystemPrompt, onSave: saveSystemPrompt },
+          {
+            type: 'voice',
+            onLoad: loadVoiceSystemPrompt,
+            onSave: saveVoiceSystemPrompt,
+          },
+        ]}
       />
     </div>
   );

@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 
+import boto3
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from strands.experimental.bidi.models import BidiNovaSonicModel
 from strands.experimental.bidi.types.events import (
@@ -14,6 +15,8 @@ from strands.experimental.bidi.types.events import (
     BidiResponseCompleteEvent,
     BidiInterruptionEvent,
 )
+
+from config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +34,24 @@ TIMEZONE_TO_LANGUAGE: dict[str, str] = {
     "America/Mexico_City": "Spanish",
 }
 
-BASE_SYSTEM_PROMPT = """You are a warm, professional, and helpful female AI assistant. \
-Give accurate answers that sound natural, direct, and human. \
-Start by answering the user's question clearly in 1-2 sentences. \
-Then, expand only enough to make the answer understandable, staying within 3-5 short sentences total. \
-Avoid sounding like a lecture or essay."""
+BASE_SYSTEM_PROMPT = """You are a warm, professional, and helpful female AI voice assistant. \
+Your primary purpose is to have natural, conversational voice interactions with users in their preferred language.
+
+Core Principles:
+- Natural Conversation: Speak like a helpful friend, not a lecture. Be direct and human.
+- Brevity: Keep responses concise (3-5 sentences). Start with the answer, then expand only if needed.
+- Active Listening: Pay close attention to what the user says, including context from earlier in the conversation.
+
+Response Style:
+- Start by directly answering the user's question in 1-2 sentences
+- Use conversational language appropriate for spoken dialogue
+- Short sentences work better for voice
+
+Korean Language Understanding:
+- When the user speaks Korean, expect Korean phonemes, grammar patterns, and sentence structures
+- Korean speakers often use English loanwords - recognize these patterns
+- Use conversation context to improve understanding
+- If you hear syllables that could be Korean, interpret them as Korean first"""
 
 LANGUAGE_MIRROR_PROMPT = """
 CRITICAL LANGUAGE MIRRORING RULES:
@@ -43,16 +59,39 @@ CRITICAL LANGUAGE MIRRORING RULES:
 - Please respond in the language the user is talking to you in, If you have a question or suggestion, ask it in the language the user is talking in. I want to ensure that our communication remains in the same language as the user."""
 
 
+def fetch_voice_system_prompt() -> str | None:
+    """Fetch voice system prompt from S3."""
+    config = get_config()
+    if not config.agent_storage_bucket_name:
+        return None
+
+    s3 = boto3.client("s3")
+    key = "__prompts/voice_system_prompt.txt"
+
+    try:
+        response = s3.get_object(
+            Bucket=config.agent_storage_bucket_name,
+            Key=key,
+        )
+        return response["Body"].read().decode("utf-8")
+    except Exception as e:
+        logger.error(f"Failed to fetch voice system prompt: {e}")
+        return None
+
+
 def build_system_prompt(timezone: str) -> str:
+    # Try to fetch from S3 first
+    base_prompt = fetch_voice_system_prompt() or BASE_SYSTEM_PROMPT
+
     language = TIMEZONE_TO_LANGUAGE.get(timezone)
     if language:
         return (
-            f"{BASE_SYSTEM_PROMPT}\n\n"
+            f"{base_prompt}\n\n"
             f"The user's timezone is {timezone}. "
             f"Default to {language} unless the user speaks a different language.\n"
             f"{LANGUAGE_MIRROR_PROMPT}"
         )
-    return f"{BASE_SYSTEM_PROMPT}\n{LANGUAGE_MIRROR_PROMPT}"
+    return f"{base_prompt}\n{LANGUAGE_MIRROR_PROMPT}"
 
 
 app = FastAPI()

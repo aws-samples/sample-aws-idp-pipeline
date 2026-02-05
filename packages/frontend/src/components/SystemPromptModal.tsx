@@ -1,55 +1,95 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Terminal, Save, Loader2 } from 'lucide-react';
+import { X, Terminal, Mic, Save, Loader2 } from 'lucide-react';
+
+type PromptType = 'chat' | 'voice';
+
+interface PromptTab {
+  type: PromptType;
+  onLoad: () => Promise<string>;
+  onSave: (content: string) => Promise<void>;
+}
 
 interface SystemPromptModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoad: () => Promise<string>;
-  onSave: (content: string) => Promise<void>;
+  tabs: PromptTab[];
+  initialTab?: PromptType;
 }
 
 export default function SystemPromptModal({
   isOpen,
   onClose,
-  onLoad,
-  onSave,
+  tabs,
+  initialTab = 'chat',
 }: SystemPromptModalProps) {
   const { t } = useTranslation();
-  const [content, setContent] = useState('');
+  const [activeTab, setActiveTab] = useState<PromptType>(initialTab);
+  const [contents, setContents] = useState<Record<PromptType, string>>({
+    chat: '',
+    voice: '',
+  });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadedTabs, setLoadedTabs] = useState<Set<PromptType>>(new Set());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
+  const activeTabConfig = tabs.find((tab) => tab.type === activeTab);
 
-    const load = async () => {
+  const loadTabContent = useCallback(
+    async (type: PromptType) => {
+      const tabConfig = tabs.find((tab) => tab.type === type);
+      if (!tabConfig) return;
+
       setLoading(true);
       try {
-        const data = await onLoad();
-        setContent(data);
+        const data = await tabConfig.onLoad();
+        setContents((prev) => ({ ...prev, [type]: data }));
+        setLoadedTabs((prev) => new Set(prev).add(type));
       } catch (error) {
-        console.error('Failed to load system prompt:', error);
+        console.error(`Failed to load ${type} prompt:`, error);
       } finally {
         setLoading(false);
       }
-    };
-    load();
-  }, [isOpen, onLoad]);
+    },
+    [tabs],
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      setLoadedTabs(new Set());
+      setContents({ chat: '', voice: '' });
+      return;
+    }
+
+    loadTabContent(activeTab);
+  }, [isOpen, activeTab, loadTabContent]);
 
   useEffect(() => {
     if (isOpen && !loading && textareaRef.current) {
       setTimeout(() => textareaRef.current?.focus(), 100);
     }
-  }, [isOpen, loading]);
+  }, [isOpen, loading, activeTab]);
+
+  const handleSave = useCallback(async () => {
+    if (!activeTabConfig) return;
+
+    setSaving(true);
+    try {
+      await activeTabConfig.onSave(contents[activeTab]);
+      onClose();
+    } catch (error) {
+      console.error(`Failed to save ${activeTab} prompt:`, error);
+    } finally {
+      setSaving(false);
+    }
+  }, [activeTabConfig, activeTab, contents, onClose]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !saving) {
         onClose();
       }
-      // Cmd/Ctrl+Enter to save
       if (
         (e.ctrlKey || e.metaKey) &&
         e.key === 'Enter' &&
@@ -70,8 +110,7 @@ export default function SystemPromptModal({
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, onClose, saving, loading, content]);
+  }, [isOpen, onClose, saving, loading, handleSave]);
 
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget && !saving) {
@@ -79,19 +118,23 @@ export default function SystemPromptModal({
     }
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await onSave(content);
-      onClose();
-    } catch (error) {
-      console.error('Failed to save system prompt:', error);
-    } finally {
-      setSaving(false);
+  const handleTabChange = (type: PromptType) => {
+    if (type === activeTab || saving) return;
+    setActiveTab(type);
+    if (!loadedTabs.has(type)) {
+      loadTabContent(type);
     }
   };
 
   if (!isOpen) return null;
+
+  const tabLabels: Record<
+    PromptType,
+    { label: string; icon: typeof Terminal }
+  > = {
+    chat: { label: t('systemPrompt.tabChat'), icon: Terminal },
+    voice: { label: t('systemPrompt.tabVoice'), icon: Mic },
+  };
 
   return (
     <div
@@ -103,20 +146,41 @@ export default function SystemPromptModal({
         style={{
           boxShadow:
             '0 25px 50px -12px rgba(0, 0, 0, 0.15), 0 0 40px rgba(99, 102, 241, 0.08)',
-          width: '640px',
+          width: '720px',
           maxWidth: '95vw',
           maxHeight: '85vh',
         }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-800/50">
-          <div className="flex items-center gap-2.5">
-            <div className="p-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-500/20">
-              <Terminal className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            </div>
+          <div className="flex items-center gap-4">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
               {t('systemPrompt.title')}
             </h3>
+
+            {/* Tabs */}
+            <div className="flex items-center gap-1 p-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg">
+              {tabs.map((tab) => {
+                const { label, icon: Icon } = tabLabels[tab.type];
+                const isActive = activeTab === tab.type;
+                return (
+                  <button
+                    key={tab.type}
+                    onClick={() => handleTabChange(tab.type)}
+                    disabled={saving}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                      isActive
+                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                    } disabled:opacity-50`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
             <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
               Ctrl+Shift+S
             </span>
@@ -142,8 +206,13 @@ export default function SystemPromptModal({
           ) : (
             <textarea
               ref={textareaRef}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
+              value={contents[activeTab]}
+              onChange={(e) =>
+                setContents((prev) => ({
+                  ...prev,
+                  [activeTab]: e.target.value,
+                }))
+              }
               placeholder={t('systemPrompt.placeholder')}
               spellCheck={false}
               className="w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-950/60 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all resize-none p-4"

@@ -9,4 +9,9 @@ dependencies = [
     "strands-agents[bidi-all]>=1.22.0",
     "fastapi[standard]>=0.123.0",
     "uvicorn>=0.34.0",
+    "pydantic-settings>=2.0.0",
+    "boto3>=1.35.0",
 ]
+
+[tool.setuptools]
+py-modules = ["main", "config"]
