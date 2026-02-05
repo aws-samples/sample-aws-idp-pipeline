@@ -1333,13 +1333,17 @@ version = "0.1.0"
 source = { virtual = "packages/agents/bidi-agent" }
 dependencies = [
     { name = "asyncio" },
+    { name = "fastapi", extra = ["standard"] },
     { name = "strands-agents", extra = ["bidi-all"] },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "asyncio", specifier = ">=4.0.0" },
+    { name = "fastapi", extras = ["standard"], specifier = ">=0.123.0" },
     { name = "strands-agents", extras = ["bidi-all"], specifier = ">=1.22.0" },
+    { name = "uvicorn", specifier = ">=0.34.0" },
 ]
 
 [[package]]

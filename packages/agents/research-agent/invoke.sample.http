@@ -1,0 +1,15 @@
+POST http://localhost:8080/invocations
+Content-Type: text/plain; charset=utf-8
+
+{
+    "session_id": "test1",
+    "project_id": "proj_cnxQzigXN85_goVsOW05x",
+    "user_id": "drskur",
+    "prompt": [
+        {
+            "text": "요도 마님의 대화를 분석해서 ppt로 만들어줘"
+        }
+    ]
+}
+
+---

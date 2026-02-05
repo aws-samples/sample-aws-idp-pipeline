@@ -30,6 +30,8 @@ class ToolParameterEnforcerHook(HookProvider):
 
         if not is_mcp_tool:
             return
+        
+        print("inject params", self.user_id, self.project_id)
 
         if self.user_id:
             event.tool_use["input"]["user_id"] = self.user_id
