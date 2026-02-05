@@ -130,6 +130,7 @@ Create PowerPoint presentation from written content.
         system_prompt=system_prompt,
         tools=tools,
         session_manager=session_manager,
+        agent_id="research",
     )
 
     yield agent
