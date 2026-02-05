@@ -108,7 +108,7 @@ def _run_research_sync(
         with mcp_client:
             mcp_tools = mcp_client.list_tools_sync()
             filtered_tools = [
-                t for t in mcp_tools if "search-documents" in t.tool_name
+                t for t in mcp_tools if "search" in t.tool_name
             ]
             tools.extend(filtered_tools)
             agent = create_agent()

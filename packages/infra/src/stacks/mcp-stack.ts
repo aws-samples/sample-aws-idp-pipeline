@@ -92,7 +92,7 @@ export class McpStack extends Stack {
     });
 
     const searchTarget = this.gateway.addLambdaTarget('SearchTarget', {
-      gatewayTargetName: 'search-documents',
+      gatewayTargetName: 'search',
       description:
         'Search documents in a project to find relevant information. Use this tool when the user asks questions about documents, wants to find specific information, or needs context from their uploaded files.',
       lambdaFunction: this.searchMcp.function,
