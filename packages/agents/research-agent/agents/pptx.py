@@ -1,6 +1,8 @@
 import asyncio
 from contextlib import contextmanager
 
+import boto3
+import requests
 from botocore.config import Config
 from nanoid import generate
 from strands import Agent, tool
@@ -12,6 +14,73 @@ from agents.constants import REPORT_MODEL_ID
 from config import get_config
 
 NANOID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"
+
+
+def get_image_tool(bucket_name: str, artifact_base_path: str, unsplash_key: str | None):
+    """Create an image search and S3 upload tool.
+
+    Args:
+        bucket_name: S3 bucket name for uploading images
+        artifact_base_path: Base path in S3 for storing images
+        unsplash_key: Unsplash API access key (optional)
+
+    Returns:
+        Tool function for searching and downloading images
+    """
+
+    @tool
+    def search_and_download_image(image_prompt: str) -> str:
+        """Search for an image and upload to S3.
+
+        Args:
+            image_prompt: Description of the image to search for
+
+        Returns:
+            S3 URI of the uploaded image with author attribution, or error message if failed.
+            Format: "s3://bucket/key|author_name" on success, "error:reason" on failure.
+        """
+        if not unsplash_key:
+            return "error:no_image_source"
+
+        # 1. Search Unsplash
+        response = requests.get(
+            "https://api.unsplash.com/search/photos",
+            params={"query": image_prompt, "orientation": "landscape", "per_page": 1},
+            headers={"Authorization": f"Client-ID {unsplash_key}"},
+        )
+
+        if response.status_code != 200:
+            return "error:search_failed"
+
+        results = response.json().get("results", [])
+        if not results:
+            return "error:no_results"
+
+        photo = results[0]
+        image_url = photo["urls"]["regular"]
+        author = photo["user"]["name"]
+
+        # 2. Download image
+        img_response = requests.get(image_url)
+        if img_response.status_code != 200:
+            return "error:download_failed"
+
+        # 3. Upload to S3
+        image_name = f"img_{generate(NANOID_ALPHABET, 8)}.jpg"
+        s3_key = f"{artifact_base_path}/{image_name}"
+
+        s3 = boto3.client("s3")
+        s3.put_object(
+            Bucket=bucket_name,
+            Key=s3_key,
+            Body=img_response.content,
+            ContentType="image/jpeg",
+        )
+
+        # Return S3 URI with attribution
+        return f"s3://{bucket_name}/{s3_key}|{author}"
+
+    return search_and_download_image
 
 
 @contextmanager
@@ -41,77 +110,83 @@ def get_report_agent(
         identifier=config.code_interpreter_identifier or None,
     )
 
+    # Generate S3 base path for artifact
+    artifact_id = f"art_{generate(NANOID_ALPHABET, 12)}"
+    artifact_base_path = f"{user_id}/{project_id}/artifacts/{artifact_id}"
+    bucket_name = config.agent_storage_bucket_name
+
     tools = [
         current_time,
         http_request,
         interpreter.code_interpreter,
+        get_image_tool(bucket_name, artifact_base_path, config.unsplash_access_key),
     ]
 
-    # Image handling guide (only if Unsplash is enabled)
-    image_guide = ""
-    if config.unsplash_access_key:
-        unsplash_access_key = config.unsplash_access_key
-        image_guide = f"""
-## Image Handling (Unsplash API)
+    # Image handling guide
+    image_guide = """
+## Image Handling
 
-**Unsplash Access Key**: `{unsplash_access_key}`
+### Before generating PPTX:
+1. Parse the slide content to find `image_prompt` entries
+2. For each image_prompt, call `search_and_download_image(prompt)`
+3. Replace image_prompt with returned s3_uri in your slide data
 
-When slides have `image_prompt` in frontmatter, search and download images inside your code_interpreter script:
-
+### In code_interpreter:
+Images are pre-downloaded to S3. Use the s3_uri directly:
 ```python
-import requests
+import boto3
 from io import BytesIO
 
-UNSPLASH_ACCESS_KEY = "{unsplash_access_key}"
+def load_image_from_s3(s3_uri: str) -> BytesIO:
+    \"\"\"Load image from S3 URI.\"\"\"
+    # Parse s3://bucket/key
+    parts = s3_uri.replace("s3://", "").split("/", 1)
+    bucket, key = parts[0], parts[1]
 
-def search_unsplash(query: str, orientation: str = "landscape") -> dict | None:
-    \"\"\"Search Unsplash for an image and return image info.\"\"\"
-    response = requests.get(
-        "https://api.unsplash.com/search/photos",
-        params={{"query": query, "orientation": orientation, "per_page": 1}},
-        headers={{"Authorization": f"Client-ID {{UNSPLASH_ACCESS_KEY}}"}}
-    )
-    if response.status_code == 200:
-        results = response.json().get("results", [])
-        if results:
-            photo = results[0]
-            return {{
-                "url": photo["urls"]["regular"],
-                "author": photo["user"]["name"],
-            }}
-    return None
+    s3 = boto3.client('s3')
+    response = s3.get_object(Bucket=bucket, Key=key)
+    return BytesIO(response['Body'].read())
 
-def download_image(url: str) -> BytesIO:
-    \"\"\"Download image and return as BytesIO.\"\"\"
-    response = requests.get(url)
-    return BytesIO(response.content)
+# Usage
+img_stream = load_image_from_s3(s3_uri)
+slide.shapes.add_picture(img_stream, Inches(5.2), Inches(1.2), width=Inches(4.5))
 
-# Example: Search and add image to slide
-image_info = search_unsplash("team collaboration modern office")
-if image_info:
-    img_stream = download_image(image_info["url"])
-    slide.shapes.add_picture(img_stream, Inches(5.2), Inches(1.2), width=Inches(4.5))
+# Add attribution (author name is after | in s3_uri result)
+# e.g., "s3://bucket/key|Author Name" -> author = "Author Name"
+```
 
-    # Add attribution (required)
-    attr_box = slide.shapes.add_textbox(Inches(0.3), Inches(5.3), Inches(9), Inches(0.3))
-    p = attr_box.text_frame.paragraphs[0]
-    p.text = f"Photo by {{image_info['author']}} on Unsplash"
-    p.font.size = Pt(8)
-    p.font.color.rgb = RGBColor(128, 128, 128)
+### Fallback (if s3_uri starts with "error:"):
+Create placeholder rectangle with gray background:
+```python
+from pptx.enum.shapes import MSO_SHAPE
+
+# Create placeholder box instead of image
+placeholder = slide.shapes.add_shape(
+    MSO_SHAPE.RECTANGLE,
+    Inches(x), Inches(y), Inches(width), Inches(height)
+)
+placeholder.fill.solid()
+placeholder.fill.fore_color.rgb = RGBColor(230, 230, 230)
+placeholder.line.fill.background()  # No border
+
+# Add text describing intended image
+tf = placeholder.text_frame
+tf.word_wrap = True
+p = tf.paragraphs[0]
+p.text = f"[Image: {image_prompt}]"
+p.font.size = Pt(14)
+p.font.color.rgb = RGBColor(128, 128, 128)
+p.alignment = PP_ALIGN.CENTER
 ```
 """
-
-    # Generate S3 key for artifact
-    artifact_id = f"art_{generate(NANOID_ALPHABET, 12)}"
-    s3_key = f"{user_id}/{project_id}/artifacts/{artifact_id}.pptx" if user_id and project_id else f"artifacts/{artifact_id}.pptx"
-    bucket_name = config.agent_storage_bucket_name
 
     system_prompt = f"""You are a Report Agent specialized in creating PowerPoint presentations.
 {image_guide}
 
 ## S3 Upload Information
 - **Bucket**: `{bucket_name}`
-- **Key**: `{s3_key}`
+- **Base Path**: `{artifact_base_path}`
+- **Filename**: Generate from presentation title (e.g., "AI Trends 2024" → "ai_trends_2024.pptx")
 
 ## CRITICAL: Generate ALL slides in a SINGLE code_interpreter call
 
@@ -145,6 +220,7 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
+from pptx.enum.shapes import MSO_SHAPE
 
 # Create presentation (16:9)
 prs = Presentation()
@@ -230,11 +306,21 @@ After saving the PPTX file, upload directly to S3 using boto3:
 
 ```python
 import boto3
+import re
+
+# Generate filename from title (lowercase, replace spaces with underscores, remove special chars)
+def title_to_filename(title: str) -> str:
+    filename = title.lower()
+    filename = re.sub(r'[^a-z0-9\\s]', '', filename)
+    filename = re.sub(r'\\s+', '_', filename.strip())
+    return f"{{filename}}.pptx"
 
 # Upload to S3
 s3 = boto3.client('s3')
 bucket = "{bucket_name}"
-key = "{s3_key}"
+base_path = "{artifact_base_path}"
+filename = title_to_filename(presentation_title)  # Use your presentation title
+key = f"{{base_path}}/{{filename}}"
 
 with open('./presentation.pptx', 'rb') as f:
     s3.upload_fileobj(
@@ -249,7 +335,7 @@ print(f"Uploaded to s3://{{bucket}}/{{key}}")
 
 ### Step 4: Report Success
 After upload, report the S3 key to the user:
-- S3 Key: `{s3_key}`
+- S3 Key: `{artifact_base_path}/<generated_filename>.pptx`
 
 ## python-pptx Reference
 
@@ -380,6 +466,10 @@ for i, point in enumerate(right_points):
 
 ### 4. image_right - Content left, image right
 ```python
+from pptx.enum.shapes import MSO_SHAPE
+import boto3
+from io import BytesIO
+
 slide = prs.slides.add_slide(blank_layout)
 
 # Title
@@ -397,9 +487,56 @@ tf = content_box.text_frame
 tf.word_wrap = True
 # ... add content
 
+# Helper function for loading images from S3
+def load_image_from_s3(s3_uri: str) -> BytesIO:
+    \"\"\"Load image from S3 URI.\"\"\"
+    parts = s3_uri.replace("s3://", "").split("/", 1)
+    bucket, key = parts[0], parts[1]
+    s3 = boto3.client('s3')
+    response = s3.get_object(Bucket=bucket, Key=key)
+    return BytesIO(response['Body'].read())
+
+# Helper function for adding image or placeholder
+def add_image_or_placeholder(slide, s3_uri_with_author, image_prompt, x, y, width, height):
+    \"\"\"Add image from S3 or create placeholder if unavailable.
+
+    Args:
+        s3_uri_with_author: Result from search_and_download_image tool (format: "s3://bucket/key|author" or "error:reason")
+        image_prompt: Original image prompt for placeholder text
+    \"\"\"
+    if s3_uri_with_author.startswith("error:"):
+        # Fallback: placeholder with description
+        placeholder = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE, Inches(x), Inches(y), Inches(width), Inches(height)
+        )
+        placeholder.fill.solid()
+        placeholder.fill.fore_color.rgb = RGBColor(230, 230, 230)
+        placeholder.line.fill.background()
+        tf = placeholder.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        p.text = f"[Image: {{image_prompt}}]"
+        p.font.size = Pt(14)
+        p.font.color.rgb = RGBColor(128, 128, 128)
+        p.alignment = PP_ALIGN.CENTER
+        return False
+
+    # Parse S3 URI and author
+    s3_uri, author = s3_uri_with_author.split("|", 1)
+    img_stream = load_image_from_s3(s3_uri)
+    slide.shapes.add_picture(img_stream, Inches(x), Inches(y), width=Inches(width))
+
+    # Attribution
+    attr_box = slide.shapes.add_textbox(Inches(0.3), Inches(5.3), Inches(9), Inches(0.3))
+    p = attr_box.text_frame.paragraphs[0]
+    p.text = f"Photo by {{author}} on Unsplash"
+    p.font.size = Pt(8)
+    p.font.color.rgb = RGBColor(128, 128, 128)
+    return True
+
 # Image on right (x: 5.2, width: 4.5)
-img_stream = download_image(image_url)
-slide.shapes.add_picture(img_stream, Inches(5.2), Inches(1.2), width=Inches(4.5))
+# s3_uri_with_author is the result from search_and_download_image tool
+add_image_or_placeholder(slide, s3_uri_with_author, image_prompt, 5.2, 1.2, 4.5, 3)
 ```
 
 ### 5. image_left - Image left, content right
@@ -411,8 +548,7 @@ title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(9), Inches
 # ...
 
 # Image on left (x: 0.3, width: 4.5)
-img_stream = download_image(image_url)
-slide.shapes.add_picture(img_stream, Inches(0.3), Inches(1.2), width=Inches(4.5))
+add_image_or_placeholder(slide, s3_uri_with_author, image_prompt, 0.3, 1.2, 4.5, 3)
 
 # Content on right (x: 5.0, width: 4.5)
 content_box = slide.shapes.add_textbox(Inches(5.0), Inches(1.3), Inches(4.5), Inches(4))
@@ -433,8 +569,7 @@ p.font.bold = True
 p.font.color.rgb = RGBColor(0, 51, 102)
 
 # Centered image (x: 2.5, width: 5)
-img_stream = download_image(image_url)
-slide.shapes.add_picture(img_stream, Inches(2.5), Inches(1.2), width=Inches(5))
+add_image_or_placeholder(slide, s3_uri_with_author, image_prompt, 2.5, 1.2, 5, 2.8)
 
 # Caption below image
 caption_box = slide.shapes.add_textbox(Inches(0.5), Inches(4.5), Inches(9), Inches(0.8))

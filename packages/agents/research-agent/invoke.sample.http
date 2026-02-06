@@ -2,7 +2,7 @@ POST http://localhost:8080/invocations
 Content-Type: application/json
 
 {
-    "session_id": "test5",
+    "session_id": "test6",
     "project_id": "proj_cnxQzigXN85_goVsOW05x",
     "user_id": "drskur",
     "prompt": [

@@ -29,7 +29,7 @@ export const handler = async (event: S3Event): Promise<void> => {
       new HeadObjectCommand({
         Bucket: bucket,
         Key: key,
-      })
+      }),
     );
 
     const now = new Date().toISOString();
@@ -47,7 +47,7 @@ export const handler = async (event: S3Event): Promise<void> => {
           created_at: now,
           data: {
             content_type: contentType,
-            filename: `${keyInfo.artifactId}.${keyInfo.extension}`,
+            filename: keyInfo.filename,
             file_size: fileSize,
             project_id: keyInfo.projectId,
             s3_bucket: bucket,
@@ -59,13 +59,12 @@ export const handler = async (event: S3Event): Promise<void> => {
           GSI2PK: `USR#${keyInfo.userId}#PROJ#${keyInfo.projectId}#ART`,
           GSI2SK: now,
         },
-      })
+      }),
     );
 
     console.log(`Saved artifact metadata: ${keyInfo.artifactId}`);
 
     // Send websocket message
-    const filename = `${keyInfo.artifactId}.${keyInfo.extension}`;
     await sendWebsocketMessage(
       keyInfo.userId,
       {
@@ -73,7 +72,7 @@ export const handler = async (event: S3Event): Promise<void> => {
         data: {
           event: 'created',
           artifact_id: keyInfo.artifactId,
-          filename,
+          filename: keyInfo.filename,
           created_at: now,
         },
       },

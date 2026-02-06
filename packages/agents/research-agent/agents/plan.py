@@ -18,18 +18,16 @@ Guidelines:
 - Use bullet points, avoid lengthy explanations
 
 Do NOT include:
-- Detailed descriptions of each section
 - Time or page estimates
 - Specific content to write in each section
 - Quality criteria or checklists
 
-Output Format:
-1. **목적**: 1-2 sentences describing what the document will achieve
-2. **구성**:
-   - Section 1: Title
-   - Section 2: Title
-   - ...
-3. **핵심 포인트**: 3-5 key themes to cover (one line each)
+Your outline should convey:
+- The document's purpose
+- The structure (sections/chapters)
+- Key themes or points to cover
+
+Format the outline in whatever way best fits the document type.
 """
 
 
