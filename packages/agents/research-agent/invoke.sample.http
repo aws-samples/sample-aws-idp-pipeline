@@ -2,12 +2,12 @@ POST http://localhost:8080/invocations
 Content-Type: application/json
 
 {
-    "session_id": "test6",
-    "project_id": "proj_cnxQzigXN85_goVsOW05x",
+    "session_id": "test7",
+    "project_id": "proj_aoGa4kFiCpVmy8MBslZUY",
     "user_id": "drskur",
     "prompt": [
         {
-            "text": "요도 마님의 대화 내용을 분석하는 레포트를 ppt 형식으로 작성"
+            "text": "떡볶이 레시피를 정리해서 ppt로 만들어줘"
         }
     ]
 }

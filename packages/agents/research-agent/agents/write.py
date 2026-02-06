@@ -175,16 +175,26 @@ Documentation: docs.company.com/cloud
 
 ### Image Prompt Format
 
-For slides with images, use `image_prompt` in the frontmatter:
-- Write a descriptive prompt for image search
-- Include style, subject, and color tone
-- Keep it concise but specific
+For slides with images, use `image_prompt` in the frontmatter.
+**Write simple, searchable keywords** (Unsplash photo search):
+
+**DO:**
+- Use 2-4 simple keywords
+- Focus on the main subject
+- Use common, concrete nouns
+
+**DO NOT:**
+- Include style descriptions (e.g., "blue tones", "minimal style")
+- Use abstract concepts that don't photograph well
+- Write long descriptive sentences
 
 Examples:
 ```yaml
-image_prompt: "professional team collaboration in modern office, blue tones"
-image_prompt: "world map with glowing connection points, dark background"
-image_prompt: "abstract technology background, gradient blue"
+image_prompt: "team meeting office"
+image_prompt: "world map global"
+image_prompt: "laptop coding workspace"
+image_prompt: "food ingredients kitchen"
+image_prompt: "city skyline night"
 ```
 
 ### Design Direction Guidelines
