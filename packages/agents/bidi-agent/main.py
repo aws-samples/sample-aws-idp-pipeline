@@ -307,6 +307,8 @@ async def ws_endpoint(websocket: WebSocket):
                                 tool_context = {
                                     "timezone": user_timezone,
                                     "project_id": config_msg.get("project_id"),
+                                    "session_id": config_msg.get("session_id"),
+                                    "user_id": config_msg.get("user_id"),
                                 }
                                 tool_result = await execute_tool(tool_use, tool_context)
                                 logger.info(f"Tool result: {tool_name} -> {tool_result.get('status')}")

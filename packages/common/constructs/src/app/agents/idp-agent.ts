@@ -22,6 +22,8 @@ export interface IdpAgentProps {
   websocketMessageQueue?: IQueue;
   codeInterpreterIdentifier?: string;
   backendUrl?: string;
+  /** ARN of the chat agent runtime to invoke as a tool */
+  chatAgentRuntimeArn?: string;
 }
 
 export class IdpAgent extends Construct {
@@ -41,6 +43,7 @@ export class IdpAgent extends Construct {
       websocketMessageQueue,
       codeInterpreterIdentifier,
       backendUrl,
+      chatAgentRuntimeArn,
     } = props;
 
     const dockerImage = AgentRuntimeArtifact.fromAsset(agentPath, {
@@ -66,6 +69,9 @@ export class IdpAgent extends Construct {
           CODE_INTERPRETER_IDENTIFIER: codeInterpreterIdentifier,
         }),
         ...(backendUrl && { BACKEND_URL: backendUrl }),
+        ...(chatAgentRuntimeArn && {
+          CHAT_AGENT_RUNTIME_ARN: chatAgentRuntimeArn,
+        }),
       },
     });
 
@@ -107,6 +113,16 @@ export class IdpAgent extends Construct {
         new iam.PolicyStatement({
           actions: ['execute-api:Invoke'],
           resources: ['arn:aws:execute-api:*:*:*'],
+        }),
+      );
+    }
+
+    // Add AgentCore invoke permissions for chat agent
+    if (chatAgentRuntimeArn) {
+      this.runtime.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['bedrock-agentcore:InvokeAgentRuntime'],
+          resources: [chatAgentRuntimeArn, `${chatAgentRuntimeArn}/*`],
         }),
       );
     }
