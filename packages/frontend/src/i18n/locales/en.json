@@ -397,6 +397,8 @@
     "you": "You",
     "muted": "Muted",
     "mute": "Mute",
-    "unmute": "Unmute"
+    "unmute": "Unmute",
+    "connectFirst": "Start voice chat first",
+    "sessionTimedOut": "Session ended due to 3 minutes of inactivity"
   }
 }

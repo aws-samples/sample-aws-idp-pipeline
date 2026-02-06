@@ -220,6 +220,60 @@ function ProjectDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [novaSonic.onTranscript]);
 
+  // Handle Nova Sonic tool use events - add to messages for correct ordering
+  useEffect(() => {
+    const unsubscribe = novaSonic.onToolUse((toolName, toolUseId, status) => {
+      if (status === 'started') {
+        // Clear current assistant message ref so next transcript creates new message
+        novaSonicMsgIdRef.current.assistant = undefined;
+        // Add tool_use as a message
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: toolUseId,
+            role: 'assistant',
+            content: toolName,
+            timestamp: new Date(),
+            isToolUse: true,
+            toolUseName: toolName,
+            toolUseStatus: 'running',
+          },
+        ]);
+      } else {
+        // Update tool_use message status
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === toolUseId
+              ? { ...m, toolUseStatus: status as 'success' | 'error' }
+              : m,
+          ),
+        );
+      }
+    });
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [novaSonic.onToolUse]);
+
+  // Handle Nova Sonic text input - add user message and send to WebSocket
+  const handleNovaSonicText = useCallback(
+    (text: string) => {
+      // Add user message to chat
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: text,
+          timestamp: new Date(),
+        },
+      ]);
+      // Send to Nova Sonic
+      novaSonic.sendText(text);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [novaSonic.sendText],
+  );
+
   // Disconnect Nova Sonic on page leave
   useEffect(() => {
     return () => {
@@ -235,6 +289,17 @@ function ProjectDetailPage() {
       novaSonic.state.status === 'connecting'
     ) {
       setNovaSonicMode(true);
+    }
+  }, [novaSonic.state.status]);
+
+  // Clear streaming blocks when Nova Sonic connects or disconnects
+  useEffect(() => {
+    if (
+      novaSonic.state.status === 'idle' ||
+      novaSonic.state.status === 'error' ||
+      novaSonic.state.status === 'connecting'
+    ) {
+      setStreamingBlocks([]);
     }
   }, [novaSonic.state.status]);
 
@@ -2074,7 +2139,7 @@ function ProjectDetailPage() {
                 onNovaSonicModeChange={setNovaSonicMode}
                 onNovaSonicConnect={novaSonic.connect}
                 onNovaSonicDisconnect={novaSonic.disconnect}
-                onNovaSonicText={novaSonic.sendText}
+                onNovaSonicText={handleNovaSonicText}
                 onNovaSonicToggleMic={novaSonic.toggleMic}
               />
             </div>
