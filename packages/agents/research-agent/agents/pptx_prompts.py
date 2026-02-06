@@ -50,14 +50,17 @@ def add_image_or_placeholder(slide, image_url, author, image_prompt, x, y, width
 WORKFLOW_GUIDE = """
 ## Workflow
 
-### Step 1: Prepare Images
-1. Parse slide content to find `image_prompt` entries
-2. For each image_prompt, call:
+### Step 1: Prepare Images (MUST DO BEFORE code_interpreter)
+**CRITICAL: You MUST call `search_image` tool for each image. The `image_prompt` in markdown is NOT a URL - it's a search query.**
+
+1. Parse slide content to find `image_prompt` entries in frontmatter
+2. For EACH image_prompt, call `search_image` tool:
    ```
    search_image(prompt="...", orientation="landscape")
    ```
-3. The tool returns: `{url, author}`
-4. Store `url` and `author` for use in code_interpreter
+3. The tool returns: `{url, author}` - the `url` is the actual image URL
+4. Store the returned `url` and `author` for use in code_interpreter
+5. **DO NOT use image_prompt directly as URL** - it will fail
 
 ### Step 2: Generate COMPLETE PPTX in ONE Script
 Write a SINGLE Python script that creates ALL slides. Use LAYOUT_REFERENCE for positioning.
