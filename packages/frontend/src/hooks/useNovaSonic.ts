@@ -4,16 +4,25 @@ import { useAudioCapture } from './useAudioCapture';
 import { useAudioPlayback } from './useAudioPlayback';
 import { createSignedWebSocketUrl } from '../lib/websocket-signer';
 
+export type DisconnectReason = 'user' | 'timeout' | 'error' | null;
+
 export interface NovaSonicState {
   status: 'idle' | 'connecting' | 'connected' | 'error';
   isListening: boolean;
   isSpeaking: boolean;
+  disconnectReason: DisconnectReason;
 }
 
 type TranscriptCallback = (
   text: string,
   role: string,
   isFinal: boolean,
+) => void;
+
+type ToolUseCallback = (
+  toolName: string,
+  toolUseId: string,
+  status: 'started' | 'success' | 'error',
 ) => void;
 
 const SESSION_TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes
@@ -33,6 +42,7 @@ export interface UseNovaSonicReturn {
   inputAudioLevel: number;
   outputAudioLevel: number;
   onTranscript: (cb: TranscriptCallback) => () => void;
+  onToolUse: (cb: ToolUseCallback) => () => void;
 }
 
 function extractRegionFromArn(arn: string): string {
@@ -46,12 +56,15 @@ export function useNovaSonic(options: UseNovaSonicOptions): UseNovaSonicReturn {
     status: 'idle',
     isListening: false,
     isSpeaking: false,
+    disconnectReason: null,
   });
   const [inputAudioLevel, setInputAudioLevel] = useState(0);
 
   const wsRef = useRef<WebSocket | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const transcriptCallbacksRef = useRef<Set<TranscriptCallback>>(new Set());
+  const toolUseCallbacksRef = useRef<Set<ToolUseCallback>>(new Set());
+  const pendingDisconnectReasonRef = useRef<DisconnectReason>(null);
 
   const playback = useAudioPlayback();
 
@@ -71,26 +84,35 @@ export function useNovaSonic(options: UseNovaSonicOptions): UseNovaSonicReturn {
     onAudioLevel: handleAudioLevel,
   });
 
-  const disconnect = useCallback(() => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-
-    const ws = wsRef.current;
-    if (ws) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'stop' }));
+  const disconnect = useCallback(
+    (reason: DisconnectReason = 'user') => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
-      ws.close();
-      wsRef.current = null;
-    }
 
-    capture.stopCapture();
-    playback.stop();
+      const ws = wsRef.current;
+      if (ws) {
+        pendingDisconnectReasonRef.current = reason;
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'stop' }));
+        }
+        ws.close();
+        wsRef.current = null;
+      }
 
-    setState({ status: 'idle', isListening: false, isSpeaking: false });
-  }, [capture, playback]);
+      capture.stopCapture();
+      playback.stop();
+
+      setState({
+        status: 'idle',
+        isListening: false,
+        isSpeaking: false,
+        disconnectReason: reason,
+      });
+    },
+    [capture, playback],
+  );
 
   const connect = useCallback(async () => {
     console.log('[NovaSonic] connect called, arn:', bidiAgentRuntimeArn);
@@ -100,7 +122,7 @@ export function useNovaSonic(options: UseNovaSonicOptions): UseNovaSonicReturn {
       return;
     }
 
-    setState((s) => ({ ...s, status: 'connecting' }));
+    setState((s) => ({ ...s, status: 'connecting', disconnectReason: null }));
     console.log('[NovaSonic] status set to connecting');
 
     try {
@@ -142,6 +164,7 @@ export function useNovaSonic(options: UseNovaSonicOptions): UseNovaSonicReturn {
           status: 'connected',
           isListening: false,
           isSpeaking: false,
+          disconnectReason: null,
         });
 
         // Auto-start mic capture on connect
@@ -190,6 +213,34 @@ export function useNovaSonic(options: UseNovaSonicOptions): UseNovaSonicReturn {
               playback.stop();
               setState((s) => ({ ...s, isSpeaking: false }));
               break;
+
+            case 'tool_use':
+              console.log('[NovaSonic] tool_use received:', data.tool_name);
+              for (const cb of toolUseCallbacksRef.current) {
+                cb(data.tool_name, data.tool_use_id, 'started');
+              }
+              break;
+
+            case 'tool_result':
+              console.log(
+                '[NovaSonic] tool_result received:',
+                data.tool_name,
+                data.status,
+              );
+              for (const cb of toolUseCallbacksRef.current) {
+                cb(
+                  data.tool_name,
+                  data.tool_use_id,
+                  data.status === 'success' ? 'success' : 'error',
+                );
+              }
+              break;
+
+            case 'timeout':
+              console.log('[NovaSonic] Session timed out:', data.reason);
+              pendingDisconnectReasonRef.current = 'timeout';
+              ws.close();
+              break;
           }
         } catch {
           // Ignore malformed messages
@@ -206,13 +257,25 @@ export function useNovaSonic(options: UseNovaSonicOptions): UseNovaSonicReturn {
         if (wsRef.current === ws) {
           capture.stopCapture();
           playback.stop();
-          setState({ status: 'idle', isListening: false, isSpeaking: false });
+          const reason = pendingDisconnectReasonRef.current || 'user';
+          pendingDisconnectReasonRef.current = null;
+          setState({
+            status: 'idle',
+            isListening: false,
+            isSpeaking: false,
+            disconnectReason: reason,
+          });
           wsRef.current = null;
         }
       };
     } catch (err) {
       console.log('[NovaSonic] Connect error:', err);
-      setState({ status: 'error', isListening: false, isSpeaking: false });
+      setState({
+        status: 'error',
+        isListening: false,
+        isSpeaking: false,
+        disconnectReason: 'error',
+      });
     }
   }, [
     bidiAgentRuntimeArn,
@@ -255,6 +318,13 @@ export function useNovaSonic(options: UseNovaSonicOptions): UseNovaSonicReturn {
     };
   }, []);
 
+  const onToolUse = useCallback((cb: ToolUseCallback) => {
+    toolUseCallbacksRef.current.add(cb);
+    return () => {
+      toolUseCallbacksRef.current.delete(cb);
+    };
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -268,15 +338,6 @@ export function useNovaSonic(options: UseNovaSonicOptions): UseNovaSonicReturn {
     };
   }, []);
 
-  // Debug: log audio levels periodically
-  useEffect(() => {
-    if (!state.isListening) return;
-    const interval = setInterval(() => {
-      console.log('[NovaSonic] inputAudioLevel:', inputAudioLevel);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [state.isListening, inputAudioLevel]);
-
   return {
     state,
     connect,
@@ -286,5 +347,6 @@ export function useNovaSonic(options: UseNovaSonicOptions): UseNovaSonicReturn {
     inputAudioLevel,
     outputAudioLevel: playback.audioLevel,
     onTranscript,
+    onToolUse,
   };
 }

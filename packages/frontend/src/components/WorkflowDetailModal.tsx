@@ -84,12 +84,16 @@ export default function WorkflowDetailModal({
   );
   const [segmentLoading, setSegmentLoading] = useState(false);
   const prefetchingRef = useRef<Set<number>>(new Set());
+  // Use ref to check cache without triggering re-renders
+  const segmentCacheRef = useRef(segmentCache);
+  segmentCacheRef.current = segmentCache;
 
   const currentSegment = segmentCache.get(currentSegmentIndex) ?? null;
 
   const fetchSegment = useCallback(
     async (index: number) => {
-      if (!onLoadSegment || segmentCache.has(index)) return;
+      // Use ref to check cache to avoid dependency on segmentCache
+      if (!onLoadSegment || segmentCacheRef.current.has(index)) return;
       if (prefetchingRef.current.has(index)) return;
       prefetchingRef.current.add(index);
       try {
@@ -105,13 +109,14 @@ export default function WorkflowDetailModal({
         prefetchingRef.current.delete(index);
       }
     },
-    [onLoadSegment, segmentCache],
+    [onLoadSegment],
   );
 
   // Fetch current segment on index change
   useEffect(() => {
     if (!onLoadSegment) return;
-    if (segmentCache.has(currentSegmentIndex)) {
+    // Use ref to check cache to avoid infinite loop
+    if (segmentCacheRef.current.has(currentSegmentIndex)) {
       // Prefetch adjacent
       if (currentSegmentIndex > 0) fetchSegment(currentSegmentIndex - 1);
       if (currentSegmentIndex < workflow.total_segments - 1)
@@ -147,7 +152,6 @@ export default function WorkflowDetailModal({
   }, [
     currentSegmentIndex,
     onLoadSegment,
-    segmentCache,
     fetchSegment,
     workflow.total_segments,
   ]);

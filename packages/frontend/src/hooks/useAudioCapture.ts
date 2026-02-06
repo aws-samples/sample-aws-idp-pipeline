@@ -120,7 +120,6 @@ export function useAudioCapture({
 
     // Audio level animation loop
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
-    let frameCount = 0;
     const updateLevel = () => {
       analyser.getByteFrequencyData(dataArray);
       // Find max value for better responsiveness
@@ -134,15 +133,9 @@ export function useAudioCapture({
       setAudioLevel(boosted);
       // Call callback with audio level
       onAudioLevelRef.current?.(boosted);
-      // Debug log every 60 frames (~1 second)
-      frameCount++;
-      if (frameCount % 60 === 0) {
-        console.log('[AudioCapture] level:', boosted.toFixed(3), 'max:', max);
-      }
       animFrameRef.current = requestAnimationFrame(updateLevel);
     };
     updateLevel();
-    console.log('[AudioCapture] Started capture, analyser connected');
 
     setIsCapturing(true);
   }, []);
