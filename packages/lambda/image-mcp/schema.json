@@ -1,0 +1,23 @@
+[
+  {
+    "name": "search_image",
+    "description": "Search for an image on Unsplash. Optionally save to S3 if s3_key is provided.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "prompt": { "type": "string" },
+        "orientation": { "type": "string", "enum": ["landscape", "portrait", "squarish"] },
+        "s3_key": { "type": "string", "description": "S3 key to save the image. If not provided, only returns the URL." }
+      },
+      "required": ["prompt"]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" },
+        "s3_uri": { "type": "string" },
+        "author": { "type": "string" }
+      }
+    }
+  }
+]

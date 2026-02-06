@@ -1,0 +1,26 @@
+{
+  "name": "@idp-v2/image-mcp",
+  "version": "1.0.0",
+  "description": "Image MCP Lambda handler for searching Unsplash and saving to S3",
+  "main": "dist/handler.js",
+  "types": "dist/handler.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.972.0",
+    "@aws-sdk/client-ssm": "^3.972.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^22.19.1",
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "packageManager": "pnpm@10.12.4"
+}

@@ -30,4 +30,6 @@ export const SSM_KEYS = {
   PREPROCESS_WORKFLOW_QUEUE_URL: '/idp-v2/preprocess/workflow/queue-url',
   QA_REGENERATOR_FUNCTION_ARN: '/idp-v2/qa-regenerator/function-arn',
   WEBSOCKET_MESSAGE_QUEUE_ARN: '/idp-v2/websocket/message-queue-arn',
+  // External services
+  UNSPLASH_ACCESS_KEY: '/idp-v2/external-service/unsplash/access-key',
 } as const;

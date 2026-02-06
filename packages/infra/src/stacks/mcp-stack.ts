@@ -10,6 +10,7 @@ import {
   PdfMcp,
   DocxMcp,
   PptxMcp,
+  ImageMcp,
   SSM_KEYS,
 } from ':idp-v2/common-constructs';
 import * as agentcore from '@aws-cdk/aws-bedrock-agentcore-alpha';
@@ -21,6 +22,7 @@ export class McpStack extends Stack {
   public readonly pdfMcp: PdfMcp;
   public readonly docxMcp: DocxMcp;
   public readonly pptxMcp: PptxMcp;
+  public readonly imageMcp?: ImageMcp;
   public readonly gateway: agentcore.Gateway;
 
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -170,5 +172,29 @@ export class McpStack extends Stack {
     // Workaround: CDK timing issue - explicitly grant and add dependency
     this.pptxMcp.function.grantInvoke(this.gateway.role);
     pptxTarget.node.addDependency(this.gateway.role);
+
+    // ImageMcp is optional - enable with context: enableImageMcp=true in cdk.json
+    if (this.node.tryGetContext('enableImageMcp')) {
+      this.imageMcp = new ImageMcp(this, 'ImageMcp', {
+        storageBucket: agentStorageBucket,
+      });
+
+      const imageTarget = this.gateway.addLambdaTarget('ImageMcpTarget', {
+        gatewayTargetName: 'image',
+        description:
+          'Image search tool: Search for images on Unsplash and optionally save to S3. Use this tool when the user needs images for presentations or documents.',
+        lambdaFunction: this.imageMcp.function,
+        toolSchema: agentcore.ToolSchema.fromLocalAsset(
+          path.resolve(
+            process.cwd(),
+            '../../packages/lambda/image-mcp/schema.json',
+          ),
+        ),
+      });
+
+      // Workaround: CDK timing issue - explicitly grant and add dependency
+      this.imageMcp.function.grantInvoke(this.gateway.role);
+      imageTarget.node.addDependency(this.gateway.role);
+    }
   }
 }
