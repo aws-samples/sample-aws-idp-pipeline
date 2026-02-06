@@ -121,7 +121,9 @@ export class AgentStack extends Stack {
           Body: voiceSystemPromptContent,
           ContentType: 'text/plain',
         },
-        physicalResourceId: cr.PhysicalResourceId.of('voice-system-prompt-init'),
+        physicalResourceId: cr.PhysicalResourceId.of(
+          'voice-system-prompt-init',
+        ),
       },
       policy: cr.AwsCustomResourcePolicy.fromStatements([
         new iam.PolicyStatement({
@@ -179,6 +181,12 @@ export class AgentStack extends Stack {
       description: 'ARN of the Research Agent Runtime',
     });
 
+    // Get backend URL from SSM for bidi-agent
+    const backendUrl = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.BACKEND_URL,
+    );
+
     const bidiAgent = new IdpAgent(this, 'BidiAgent', {
       agentPath: path.resolve(
         process.cwd(),
@@ -189,6 +197,7 @@ export class AgentStack extends Stack {
       backendTable,
       gateway,
       agentStorageBucket,
+      backendUrl,
     });
 
     new StringParameter(this, 'BidiAgentRuntimeArnParam', {

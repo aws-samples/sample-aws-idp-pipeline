@@ -121,6 +121,10 @@ export interface ChatMessage {
   sources?: { document_id: string; segment_id: string }[];
   isStageResult?: boolean;
   stageName?: string;
+  // Tool use (Nova Sonic)
+  isToolUse?: boolean;
+  toolUseName?: string;
+  toolUseStatus?: 'running' | 'success' | 'error';
 }
 
 export interface ChatSession {

@@ -21,6 +21,7 @@ export interface IdpAgentProps {
   agentStorageBucket?: IBucket;
   websocketMessageQueue?: IQueue;
   codeInterpreterIdentifier?: string;
+  backendUrl?: string;
 }
 
 export class IdpAgent extends Construct {
@@ -39,6 +40,7 @@ export class IdpAgent extends Construct {
       agentStorageBucket,
       websocketMessageQueue,
       codeInterpreterIdentifier,
+      backendUrl,
     } = props;
 
     const dockerImage = AgentRuntimeArtifact.fromAsset(agentPath, {
@@ -63,6 +65,7 @@ export class IdpAgent extends Construct {
         ...(codeInterpreterIdentifier && {
           CODE_INTERPRETER_IDENTIFIER: codeInterpreterIdentifier,
         }),
+        ...(backendUrl && { BACKEND_URL: backendUrl }),
       },
     });
 
@@ -97,5 +100,15 @@ export class IdpAgent extends Construct {
         resources: ['*'],
       }),
     );
+
+    // Add API Gateway invoke permissions for backend API
+    if (backendUrl) {
+      this.runtime.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['execute-api:Invoke'],
+          resources: ['arn:aws:execute-api:*:*:*'],
+        }),
+      );
+    }
   }
 }

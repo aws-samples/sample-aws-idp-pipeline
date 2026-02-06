@@ -1,12 +1,29 @@
 import asyncio
 import json
 import logging
+import sys
 from datetime import datetime, timezone
 
 import boto3
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+
+# Configure logging to stdout for CloudWatch
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+    force=True,
+)
+
+# Startup verification log
+print("=" * 50, flush=True)
+print("[BIDI-AGENT] Module loaded - logging initialized", flush=True)
+print(f"[BIDI-AGENT] Python buffering: PYTHONUNBUFFERED={__import__('os').environ.get('PYTHONUNBUFFERED', 'NOT SET')}", flush=True)
+print("=" * 50, flush=True)
+
 from strands.experimental.bidi.models import BidiNovaSonicModel
+from strands.experimental.bidi.models.model import BidiModelTimeoutError
 from strands.experimental.bidi.types.events import (
     BidiTextInputEvent,
     BidiAudioInputEvent,
@@ -45,7 +62,6 @@ class TranscriptSaver:
 
         if self.enabled:
             prefix = f"sessions/{user_id}/{project_id}"
-            # SDK가 자동으로 session.json 생성 (채팅과 동일)
             self.session_manager = S3SessionManager(
                 session_id=session_id,
                 bucket=bucket,
@@ -77,10 +93,11 @@ class TranscriptSaver:
                 agent_id="voice",
                 session_message=session_message,
             )
-            logger.info(f"Saved transcript message_{self.message_index}")
+            logger.debug(f"Saved transcript message_{self.message_index}")
             self.message_index += 1
         except Exception as e:
             logger.error(f"Failed to save transcript: {e}")
+
 
 TIMEZONE_TO_LANGUAGE: dict[str, str] = {
     "Asia/Seoul": "Korean",
@@ -137,12 +154,11 @@ def fetch_voice_system_prompt() -> str | None:
         )
         return response["Body"].read().decode("utf-8")
     except Exception as e:
-        logger.error(f"Failed to fetch voice system prompt: {e}")
+        logger.warning(f"Failed to fetch voice system prompt: {e}")
         return None
 
 
 def build_system_prompt(timezone: str) -> str:
-    # Try to fetch from S3 first
     base_prompt = fetch_voice_system_prompt() or BASE_SYSTEM_PROMPT
 
     language = TIMEZONE_TO_LANGUAGE.get(timezone)
@@ -167,12 +183,17 @@ async def ping():
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket):
     await websocket.accept()
+    logger.info("WebSocket connection accepted")
     config = get_config()
 
     try:
-        # First message: config (voice, system_prompt, session info)
         config_msg = await websocket.receive_json()
-    except (WebSocketDisconnect, json.JSONDecodeError):
+        logger.info(
+            f"Session started: voice={config_msg.get('voice')}, "
+            f"timezone={config_msg.get('browser_time_zone')}"
+        )
+    except (WebSocketDisconnect, json.JSONDecodeError) as e:
+        logger.warning(f"Failed to receive config: {e}")
         return
 
     # Create transcript saver for persisting voice messages
@@ -183,9 +204,7 @@ async def ws_endpoint(websocket: WebSocket):
         session_id=config_msg.get("session_id", ""),
     )
     if transcript_saver.enabled:
-        logger.info(
-            f"Transcript saving enabled for session {config_msg.get('session_id')}"
-        )
+        logger.info(f"Transcript saving enabled for session {config_msg.get('session_id')}")
 
     model = BidiNovaSonicModel(
         model_id="amazon.nova-2-sonic-v1:0",
@@ -197,13 +216,15 @@ async def ws_endpoint(websocket: WebSocket):
         client_config={"region": "us-east-1"},
     )
 
-    # Get user's timezone for tool execution
     user_timezone = config_msg.get("browser_time_zone", "UTC")
 
     try:
         custom_prompt = config_msg.get("system_prompt")
         system_prompt = custom_prompt or build_system_prompt(user_timezone)
-        await model.start(system_prompt=system_prompt, tools=get_tools())
+        tools = get_tools()
+        logger.info(f"Starting model with {len(tools)} tools: {[t['name'] for t in tools]}")
+        await model.start(system_prompt=system_prompt, tools=tools)
+        logger.info("BidiNovaSonicModel started successfully")
     except Exception:
         logger.exception("Failed to start BidiNovaSonicModel")
         await websocket.close(code=1011, reason="Failed to start model")
@@ -253,49 +274,72 @@ async def ws_endpoint(websocket: WebSocket):
                             "is_final": event.is_final,
                         }
                     )
-                    # Save final transcripts to S3
                     if event.is_final and event.text.strip():
                         transcript_saver.save_transcript(event.role, event.text)
                 elif isinstance(event, ToolUseStreamEvent):
                     # Handle tool use requests from the model
-                    tool_use = event.current_tool_use
+                    tool_use = (
+                        getattr(event, "current_tool_use", None)
+                        or getattr(event, "tool_use", None)
+                        or (event.get("current_tool_use") if hasattr(event, "get") else None)
+                    )
                     if tool_use:
                         tool_use_id = tool_use.get("toolUseId")
                         tool_input = tool_use.get("input")
-                        # Only process complete tool uses that haven't been processed
                         if (
                             tool_use_id
                             and tool_use_id not in processed_tool_use_ids
                             and tool_input is not None
                         ):
                             processed_tool_use_ids.add(tool_use_id)
-                            logger.info(
-                                f"Tool use detected: {tool_use.get('name')} (id: {tool_use_id})"
-                            )
+                            tool_name = tool_use.get("name")
+                            logger.info(f"Tool use: {tool_name} (id: {tool_use_id})")
 
-                            # Notify browser about tool use
                             await websocket.send_json(
                                 {
                                     "type": "tool_use",
-                                    "tool_name": tool_use.get("name"),
+                                    "tool_name": tool_name,
                                     "tool_use_id": tool_use_id,
                                 }
                             )
 
-                            # Execute tool and send result back to model
-                            tool_context = {"timezone": user_timezone}
-                            tool_result = await execute_tool(tool_use, tool_context)
-                            await model.send(ToolResultEvent(tool_result))
-
-                            # Notify browser about tool result
-                            await websocket.send_json(
-                                {
-                                    "type": "tool_result",
-                                    "tool_name": tool_use.get("name"),
-                                    "tool_use_id": tool_use_id,
-                                    "status": tool_result.get("status"),
+                            try:
+                                tool_context = {
+                                    "timezone": user_timezone,
+                                    "project_id": config_msg.get("project_id"),
                                 }
-                            )
+                                tool_result = await execute_tool(tool_use, tool_context)
+                                logger.info(f"Tool result: {tool_name} -> {tool_result.get('status')}")
+                                await model.send(ToolResultEvent(tool_result))
+
+                                await websocket.send_json(
+                                    {
+                                        "type": "tool_result",
+                                        "tool_name": tool_name,
+                                        "tool_use_id": tool_use_id,
+                                        "status": tool_result.get("status"),
+                                    }
+                                )
+                            except Exception as e:
+                                logger.exception(f"Tool execution error: {tool_name}")
+                                error_result = {
+                                    "toolUseId": tool_use_id,
+                                    "status": "error",
+                                    "content": [{"text": f"Tool execution error: {str(e)}"}],
+                                }
+                                try:
+                                    await model.send(ToolResultEvent(error_result))
+                                except Exception:
+                                    logger.exception("Failed to send error result")
+                                await websocket.send_json(
+                                    {
+                                        "type": "tool_result",
+                                        "tool_name": tool_name,
+                                        "tool_use_id": tool_use_id,
+                                        "status": "error",
+                                        "error": str(e),
+                                    }
+                                )
                 elif isinstance(event, BidiConnectionStartEvent):
                     await websocket.send_json(
                         {
@@ -315,7 +359,18 @@ async def ws_endpoint(websocket: WebSocket):
                         }
                     )
         except WebSocketDisconnect:
-            pass
+            logger.info("WebSocket disconnected")
+        except BidiModelTimeoutError:
+            logger.info("Nova Sonic session timed out due to inactivity")
+            try:
+                await websocket.send_json({
+                    "type": "timeout",
+                    "reason": "Session timed out due to inactivity",
+                })
+            except Exception:
+                pass
+        except Exception:
+            logger.exception("Error in bedrock_to_browser")
 
     try:
         async with asyncio.TaskGroup() as tg:
@@ -323,5 +378,8 @@ async def ws_endpoint(websocket: WebSocket):
             tg.create_task(bedrock_to_browser())
     except* WebSocketDisconnect:
         pass
+    except* Exception as eg:
+        logger.exception(f"TaskGroup error: {eg.exceptions}")
     finally:
         await model.stop()
+        logger.info("Session ended")

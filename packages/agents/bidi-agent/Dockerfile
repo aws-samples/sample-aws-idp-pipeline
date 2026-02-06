@@ -1,5 +1,8 @@
 FROM public.ecr.aws/docker/library/python:3.13-slim
 
+# Ensure Python output is sent straight to terminal without buffering
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
 # Install audio libraries and build tools for pyaudio

@@ -27,7 +27,6 @@ import {
   Check,
   Settings2,
   Mic,
-  MicOff,
   type LucideIcon,
 } from 'lucide-react';
 import DOMPurify from 'isomorphic-dompurify';
@@ -58,7 +57,7 @@ export interface AttachedFile {
 
 export type StreamingBlock =
   | { type: 'text'; content: string }
-  | { type: 'tool_use'; name: string }
+  | { type: 'tool_use'; name: string; status?: 'running' | 'success' | 'error' }
   | { type: 'stage_start'; stage: string }
   | { type: 'stage_complete'; stage: string; result: string }
   | { type: 'voice_transcript'; role: 'user' | 'assistant'; content: string };
@@ -894,6 +893,9 @@ export default function ChatPanel({
   const handleSend = useCallback(() => {
     if (!hasContent || sending) return;
 
+    // Block send if Nova Sonic mode but not connected
+    if (novaSonicMode && novaSonicState?.status !== 'connected') return;
+
     // Get content with artifact references
     const messageContent = getInputContent();
 
@@ -918,6 +920,7 @@ export default function ChatPanel({
     sending,
     researchMode,
     novaSonicMode,
+    novaSonicState?.status,
     onResearch,
     onNovaSonicText,
     onSendMessage,
@@ -1055,7 +1058,9 @@ export default function ChatPanel({
           <div className="max-h-48 w-full overflow-y-auto">
             <div
               ref={inputRef}
-              contentEditable
+              contentEditable={
+                !(novaSonicMode && novaSonicState?.status !== 'connected')
+              }
               onInput={handleInputChange}
               onCompositionStart={() => {
                 isComposingRef.current = true;
@@ -1064,7 +1069,11 @@ export default function ChatPanel({
                 isComposingRef.current = false;
               }}
               onKeyDown={handleKeyDown}
-              data-placeholder={t('chat.placeholder')}
+              data-placeholder={
+                novaSonicMode && novaSonicState?.status !== 'connected'
+                  ? t('novaSonic.connectFirst')
+                  : t('chat.placeholder')
+              }
               className="chat-input-editable w-full border-0 outline-none text-base py-0 leading-relaxed empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 empty:before:pointer-events-none"
               style={{
                 minHeight: '1.5em',
@@ -1369,10 +1378,16 @@ export default function ChatPanel({
             </div>
             <button
               onClick={handleSend}
-              disabled={!hasContent || sending}
+              disabled={
+                !hasContent ||
+                sending ||
+                (novaSonicMode && novaSonicState?.status !== 'connected')
+              }
               type="button"
               className={`inline-flex items-center justify-center h-8 w-8 rounded-xl transition-all active:scale-95 ${
-                hasContent && !sending
+                hasContent &&
+                !sending &&
+                !(novaSonicMode && novaSonicState?.status !== 'connected')
                   ? novaSonicMode
                     ? 'bg-purple-500 hover:bg-purple-600 text-white shadow-md'
                     : researchMode
@@ -1579,66 +1594,50 @@ export default function ChatPanel({
           <div className="absolute -inset-[1px] bg-gradient-to-r from-violet-500 via-purple-500 to-indigo-500 rounded-2xl opacity-20 blur-sm -z-10" />
         )}
 
-        {/* Close button */}
-        <button
-          type="button"
-          onClick={handleNovaSonicDisable}
-          className="absolute right-3 top-3 p-2 rounded-full text-slate-400 hover:text-white hover:bg-red-500 transition-all duration-200 group"
-          title="Close"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+        {/* Close button - only show when connected or connecting */}
+        {(novaSonicState.status === 'connected' ||
+          novaSonicState.status === 'connecting') && (
+          <button
+            type="button"
+            onClick={() => onNovaSonicDisconnect?.()}
+            className="absolute right-3 top-3 p-2 rounded-full text-slate-400 hover:text-white hover:bg-red-500 transition-all duration-200 group"
+            title="Stop"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        )}
 
-        {/* Content */}
-        <div className="flex items-center justify-center gap-6">
+        {/* Content - min-height ensures consistent size across states */}
+        <div className="flex items-center justify-center gap-6 min-h-[80px]">
           {/* Idle or Error state */}
           {(novaSonicState.status === 'idle' ||
             novaSonicState.status === 'error') && (
-            <div className="flex flex-col items-center gap-4">
-              <div className="relative">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/50 dark:to-indigo-900/50 flex items-center justify-center">
-                  <Mic className="w-7 h-7 text-purple-500" />
-                </div>
-                {novaSonicState.status === 'error' && (
-                  <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">!</span>
-                  </div>
-                )}
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
-                  {t('novaSonic.title')}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {novaSonicState.status === 'error'
-                    ? t('novaSonic.connectionFailed')
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {novaSonicState.status === 'error'
+                  ? t('novaSonic.connectionFailed')
+                  : novaSonicState.disconnectReason === 'timeout'
+                    ? t('novaSonic.sessionTimedOut')
                     : t('novaSonic.description')}
-                </p>
-              </div>
+              </p>
               <button
                 type="button"
-                onClick={() => {
-                  console.log(
-                    '[ChatPanel] Start Voice clicked, onNovaSonicConnect:',
-                    typeof onNovaSonicConnect,
-                  );
-                  onNovaSonicConnect?.();
-                }}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-violet-500 via-purple-500 to-indigo-500 text-white font-medium hover:shadow-lg hover:shadow-purple-500/40 hover:scale-105 transition-all duration-200"
+                onClick={() => onNovaSonicConnect?.()}
+                className="flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r from-violet-500 via-purple-500 to-indigo-500 text-white text-sm font-medium hover:shadow-lg hover:shadow-purple-500/40 hover:scale-105 transition-all duration-200"
               >
-                <Mic className="w-5 h-5" />
+                <Mic className="w-4 h-4" />
                 <span>
                   {novaSonicState.status === 'error'
                     ? t('novaSonic.retryConnection')
@@ -1650,17 +1649,18 @@ export default function ChatPanel({
 
           {/* Connecting state */}
           {novaSonicState.status === 'connecting' && (
-            <div className="flex flex-col items-center gap-4 py-2">
+            <div className="flex items-center justify-center gap-4">
               <div className="relative">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/50 dark:to-indigo-900/50 flex items-center justify-center">
-                  <Loader2 className="w-7 h-7 text-purple-500 animate-spin" />
+                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/50 dark:to-indigo-900/50 flex items-center justify-center">
+                  <Loader2 className="w-6 h-6 text-purple-500 animate-spin" />
                 </div>
-                {/* Pulsing rings */}
                 <div className="absolute inset-0 rounded-full border-2 border-purple-400/50 animate-ping" />
               </div>
-              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                {t('novaSonic.connecting')}
-              </p>
+              <div>
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                  {t('novaSonic.connecting')}
+                </p>
+              </div>
             </div>
           )}
 
@@ -1676,7 +1676,6 @@ export default function ChatPanel({
                       : 'bg-slate-100 dark:bg-slate-800'
                   }`}
                 >
-                  {/* Pulsing rings when speaking */}
                   {novaSonicState.isSpeaking && (
                     <>
                       <div className="absolute inset-0 rounded-full bg-purple-400/30 animate-ping" />
@@ -1722,53 +1721,25 @@ export default function ChatPanel({
                 <div className="w-8 h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-600 to-transparent" />
               </div>
 
-              {/* User mic */}
+              {/* User mic indicator (always on, no toggle) */}
               <div className="flex flex-col items-center gap-2">
-                <button
-                  type="button"
-                  onClick={onNovaSonicToggleMic}
-                  className={`relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${
-                    novaSonicState.isListening
-                      ? 'bg-gradient-to-br from-purple-500 to-violet-600 shadow-lg shadow-purple-500/50 hover:shadow-purple-500/70'
-                      : 'bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50'
-                  }`}
-                  title={
-                    novaSonicState.isListening
-                      ? t('novaSonic.mute')
-                      : t('novaSonic.unmute')
-                  }
-                >
-                  {novaSonicState.isListening ? (
-                    <>
-                      {/* Pulsing ring when listening */}
-                      <div
-                        className="absolute inset-[-4px] rounded-full border-2 border-purple-400/50 animate-pulse"
-                        style={{ animationDelay: '0.1s' }}
-                      />
-                      <AnimatedAudioBars
-                        audioLevel={novaSonicAudioLevel?.input || 0}
-                        barCount={5}
-                        color="bg-white"
-                        minHeight={4}
-                        maxHeight={20}
-                        isActive={novaSonicState.isListening}
-                        threshold={0.5}
-                      />
-                    </>
-                  ) : (
-                    <MicOff className="w-6 h-6 text-red-500" />
-                  )}
-                </button>
-                <span
-                  className={`text-xs font-medium ${
-                    novaSonicState.isListening
-                      ? 'text-purple-600 dark:text-purple-400'
-                      : 'text-red-500'
-                  }`}
-                >
-                  {novaSonicState.isListening
-                    ? t('novaSonic.you')
-                    : t('novaSonic.muted')}
+                <div className="relative w-14 h-14 rounded-full flex items-center justify-center bg-gradient-to-br from-purple-500 to-violet-600 shadow-lg shadow-purple-500/50">
+                  <div
+                    className="absolute inset-[-4px] rounded-full border-2 border-purple-400/50 animate-pulse"
+                    style={{ animationDelay: '0.1s' }}
+                  />
+                  <AnimatedAudioBars
+                    audioLevel={novaSonicAudioLevel?.input || 0}
+                    barCount={5}
+                    color="bg-white"
+                    minHeight={4}
+                    maxHeight={20}
+                    isActive={novaSonicState.isListening}
+                    threshold={0.5}
+                  />
+                </div>
+                <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                  {t('novaSonic.you')}
                 </span>
               </div>
             </div>
@@ -1893,6 +1864,34 @@ export default function ChatPanel({
                       </div>
                     )}
                   </div>
+                </div>
+              ) : message.isToolUse ? (
+                /* Tool use message - inline indicator */
+                <div
+                  key={message.id}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm ${
+                    message.toolUseStatus === 'success'
+                      ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/40'
+                      : message.toolUseStatus === 'error'
+                        ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-500/40'
+                        : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/40'
+                  }`}
+                >
+                  {message.toolUseStatus === 'running' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : message.toolUseStatus === 'success' ? (
+                    <Check className="w-4 h-4" />
+                  ) : (
+                    <X className="w-4 h-4" />
+                  )}
+                  <span className="font-medium">
+                    {formatToolDisplayName(message.toolUseName || '')}
+                  </span>
+                  {message.toolUseStatus === 'running' && (
+                    <span className="text-xs opacity-70">
+                      {t('chat.usingTool', { tool: '' })}
+                    </span>
+                  )}
                 </div>
               ) : message.isToolResult ? (
                 /* Tool result message - special card design */
@@ -2232,7 +2231,7 @@ export default function ChatPanel({
               ),
             )}
 
-            {sending && (
+            {(sending || (novaSonicMode && streamingBlocks.length > 0)) && (
               <div className="space-y-3">
                 {streamingBlocks.length > 0 ? (
                   streamingBlocks.map((block, idx) => {
@@ -2324,28 +2323,63 @@ export default function ChatPanel({
                       );
                     }
                     // tool_use
+                    const isComplete =
+                      block.status === 'success' || block.status === 'error';
+                    const isSuccess = block.status === 'success';
                     return (
                       <div
                         key={idx}
-                        className="rounded-xl border border-blue-200 dark:border-blue-500/40 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 dark:from-blue-900/20 dark:to-indigo-900/20 shadow-sm overflow-hidden"
+                        className={`rounded-xl border shadow-sm overflow-hidden ${
+                          isComplete
+                            ? isSuccess
+                              ? 'border-emerald-200 dark:border-emerald-500/40 bg-gradient-to-r from-emerald-50/80 to-teal-50/80 dark:from-emerald-900/20 dark:to-teal-900/20'
+                              : 'border-red-200 dark:border-red-500/40 bg-gradient-to-r from-red-50/80 to-orange-50/80 dark:from-red-900/20 dark:to-orange-900/20'
+                            : 'border-blue-200 dark:border-blue-500/40 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 dark:from-blue-900/20 dark:to-indigo-900/20'
+                        }`}
                       >
                         <div className="flex items-center gap-2.5 px-3 py-2.5">
-                          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 shadow-sm flex-shrink-0">
-                            {block.name.toLowerCase().includes('search') ? (
+                          <div
+                            className={`flex items-center justify-center w-7 h-7 rounded-lg shadow-sm flex-shrink-0 ${
+                              isComplete
+                                ? isSuccess
+                                  ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
+                                  : 'bg-gradient-to-br from-red-500 to-orange-600'
+                                : 'bg-gradient-to-br from-blue-500 to-indigo-600'
+                            }`}
+                          >
+                            {isComplete ? (
+                              isSuccess ? (
+                                <Check className="w-3.5 h-3.5 text-white" />
+                              ) : (
+                                <X className="w-3.5 h-3.5 text-white" />
+                              )
+                            ) : block.name.toLowerCase().includes('search') ? (
                               <Search className="w-3.5 h-3.5 text-white" />
                             ) : (
                               <Sparkles className="w-3.5 h-3.5 text-white" />
                             )}
                           </div>
-                          <span className="text-sm font-medium text-slate-700 dark:text-blue-200">
+                          <span
+                            className={`text-sm font-medium ${
+                              isComplete
+                                ? isSuccess
+                                  ? 'text-slate-700 dark:text-emerald-200'
+                                  : 'text-slate-700 dark:text-red-200'
+                                : 'text-slate-700 dark:text-blue-200'
+                            }`}
+                          >
                             {formatToolDisplayName(block.name)}
                           </span>
                           <div className="flex-1" />
-                          <Loader2 className="w-4 h-4 animate-spin text-blue-500 dark:text-blue-400" />
+                          {!isComplete && (
+                            <Loader2 className="w-4 h-4 animate-spin text-blue-500 dark:text-blue-400" />
+                          )}
                         </div>
-                        <div className="h-0.5 bg-slate-100 dark:bg-slate-700 overflow-hidden">
-                          <div className="shimmer-bar h-full w-1/3 bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-400 rounded-full" />
-                        </div>
+                        {!isComplete && (
+                          <div className="h-0.5 bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                            <div className="shimmer-bar h-full w-1/3 bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-400 rounded-full" />
+                          </div>
+                        )}
                       </div>
                     );
                   })

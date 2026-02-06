@@ -397,6 +397,8 @@
     "you": "나",
     "muted": "음소거",
     "mute": "음소거",
-    "unmute": "음소거 해제"
+    "unmute": "음소거 해제",
+    "connectFirst": "음성 대화를 먼저 시작하세요",
+    "sessionTimedOut": "3분간 입력이 없어 연결이 종료되었습니다"
   }
 }
