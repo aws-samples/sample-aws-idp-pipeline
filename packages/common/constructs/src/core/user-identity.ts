@@ -239,6 +239,42 @@ export class UserIdentity extends Construct {
               active: { backgroundColor: 'b45309ff', textColor: '0f172aff' },
             },
           },
+          secondaryButton: {
+            lightMode: {
+              defaults: {
+                backgroundColor: 'ffffffff',
+                borderColor: 'cbd5e1ff',
+                textColor: '475569ff',
+              },
+              hover: {
+                backgroundColor: 'f1f5f9ff',
+                borderColor: '94a3b8ff',
+                textColor: '334155ff',
+              },
+              active: {
+                backgroundColor: 'e2e8f0ff',
+                borderColor: '64748bff',
+                textColor: '1e293bff',
+              },
+            },
+            darkMode: {
+              defaults: {
+                backgroundColor: 'ffffffff',
+                borderColor: 'cbd5e1ff',
+                textColor: '475569ff',
+              },
+              hover: {
+                backgroundColor: 'f1f5f9ff',
+                borderColor: '94a3b8ff',
+                textColor: '334155ff',
+              },
+              active: {
+                backgroundColor: 'e2e8f0ff',
+                borderColor: '64748bff',
+                textColor: '1e293bff',
+              },
+            },
+          },
           pageText: {
             lightMode: {
               headingColor: '0f172aff',

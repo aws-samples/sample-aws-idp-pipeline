@@ -33,6 +33,8 @@ export default function ArtifactViewer({
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pptxData, setPptxData] = useState<ArrayBuffer | null>(null);
+  const [pptxRendered, setPptxRendered] = useState(false);
 
   const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
   const isImage =
@@ -61,27 +63,44 @@ export default function ArtifactViewer({
     artifact.filename.toLowerCase().endsWith('.pptx');
 
   const pptxContainerRef = useRef<HTMLDivElement>(null);
-  const pptxDataRef = useRef<ArrayBuffer | null>(null);
+  const pptxLastWidthRef = useRef<number>(0);
 
-  const renderPptx = useCallback((arrayBuffer: ArrayBuffer) => {
-    if (!pptxContainerRef.current) return;
-    pptxContainerRef.current.innerHTML = '';
-    const containerWidth = pptxContainerRef.current.clientWidth - 32;
-    const width = containerWidth;
-    const height = Math.round(width * 0.5625); // 16:9 aspect ratio
-    const previewer = initPptxPreview(pptxContainerRef.current, {
-      width,
-      height,
-    });
-    previewer.preview(arrayBuffer).then(() => {
-      const wrapper = pptxContainerRef.current
-        ?.firstElementChild as HTMLElement | null;
-      if (wrapper) {
-        wrapper.style.setProperty('height', 'auto', 'important');
-        wrapper.style.setProperty('overflow-y', 'visible', 'important');
+  const renderPptx = useCallback(
+    (arrayBuffer: ArrayBuffer, forceRender = false) => {
+      if (!pptxContainerRef.current) return;
+      const containerWidth = pptxContainerRef.current.clientWidth - 32;
+      // Skip if width hasn't changed significantly (unless forced)
+      if (
+        !forceRender &&
+        Math.abs(containerWidth - pptxLastWidthRef.current) < 50
+      ) {
+        return;
       }
-    });
-  }, []);
+      pptxLastWidthRef.current = containerWidth;
+      pptxContainerRef.current.innerHTML = '';
+      const width = containerWidth;
+      const height = Math.round(width * 0.5625); // 16:9 aspect ratio
+      const previewer = initPptxPreview(pptxContainerRef.current, {
+        width,
+        height,
+      });
+      previewer
+        .preview(arrayBuffer)
+        .then(() => {
+          const wrapper = pptxContainerRef.current
+            ?.firstElementChild as HTMLElement | null;
+          if (wrapper) {
+            wrapper.style.setProperty('height', 'auto', 'important');
+            wrapper.style.setProperty('overflow-y', 'visible', 'important');
+          }
+        })
+        .catch((err) => {
+          console.error('PPTX preview error:', err);
+          setError(t('artifacts.loadError'));
+        });
+    },
+    [t],
+  );
 
   const loadContent = useCallback(async () => {
     setLoading(true);
@@ -101,8 +120,8 @@ export default function ArtifactViewer({
           throw new Error(`Failed to load: ${response.status}`);
         }
         const arrayBuffer = await response.arrayBuffer();
-        pptxDataRef.current = arrayBuffer;
-        renderPptx(arrayBuffer);
+        setPptxData(arrayBuffer);
+        // renderPptx will be called by useEffect after loading is false
       } else if (isDocx) {
         const response = await fetch(presignedUrl);
         if (!response.ok) {
@@ -139,7 +158,6 @@ export default function ArtifactViewer({
     isText,
     isMarkdown,
     isHtml,
-    renderPptx,
     t,
   ]);
 
@@ -147,19 +165,40 @@ export default function ArtifactViewer({
     loadContent();
   }, [loadContent]);
 
-  // Resize PPTX on container resize
+  // Render PPTX after loading is complete and container is available (only once)
   useEffect(() => {
-    if (!isPptx || !pptxContainerRef.current) return;
+    if (
+      !isPptx ||
+      loading ||
+      !pptxData ||
+      !pptxContainerRef.current ||
+      pptxRendered
+    )
+      return;
+    setPptxRendered(true);
+    renderPptx(pptxData, true);
+  }, [isPptx, loading, pptxData, pptxRendered, renderPptx]);
 
+  // Resize PPTX on container resize (debounced)
+  useEffect(() => {
+    if (!isPptx || loading || !pptxData || !pptxContainerRef.current) return;
+
+    let resizeTimeout: ReturnType<typeof setTimeout>;
     const resizeObserver = new ResizeObserver(() => {
-      if (pptxDataRef.current) {
-        renderPptx(pptxDataRef.current);
-      }
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        if (pptxRendered && pptxData) {
+          renderPptx(pptxData);
+        }
+      }, 300);
     });
 
     resizeObserver.observe(pptxContainerRef.current);
-    return () => resizeObserver.disconnect();
-  }, [isPptx, renderPptx]);
+    return () => {
+      clearTimeout(resizeTimeout);
+      resizeObserver.disconnect();
+    };
+  }, [isPptx, loading, pptxData, pptxRendered, renderPptx]);
 
   // Close on Escape key
   useEffect(() => {

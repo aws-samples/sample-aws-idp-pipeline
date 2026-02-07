@@ -126,28 +126,47 @@ function ArtifactsPage() {
   const [viewerImageUrl, setViewerImageUrl] = useState<string | null>(null);
   const [viewerLoading, setViewerLoading] = useState(false);
   const [viewerError, setViewerError] = useState<string | null>(null);
+  const [pptxData, setPptxData] = useState<ArrayBuffer | null>(null);
+  const [pptxRendered, setPptxRendered] = useState(false);
   const pptxContainerRef = useRef<HTMLDivElement>(null);
-  const pptxDataRef = useRef<ArrayBuffer | null>(null);
+  const pptxLastWidthRef = useRef<number>(0);
 
-  const renderPptx = useCallback((arrayBuffer: ArrayBuffer) => {
-    if (!pptxContainerRef.current) return;
-    pptxContainerRef.current.innerHTML = '';
-    const containerWidth = pptxContainerRef.current.clientWidth - 32;
-    const width = containerWidth;
-    const height = Math.round(width * 0.5625); // 16:9 aspect ratio
-    const previewer = initPptxPreview(pptxContainerRef.current, {
-      width,
-      height,
-    });
-    previewer.preview(arrayBuffer).then(() => {
-      const wrapper = pptxContainerRef.current
-        ?.firstElementChild as HTMLElement | null;
-      if (wrapper) {
-        wrapper.style.setProperty('height', 'auto', 'important');
-        wrapper.style.setProperty('overflow-y', 'visible', 'important');
+  const renderPptx = useCallback(
+    (arrayBuffer: ArrayBuffer, forceRender = false) => {
+      if (!pptxContainerRef.current) return;
+      const containerWidth = pptxContainerRef.current.clientWidth - 32;
+      // Skip if width hasn't changed significantly (unless forced)
+      if (
+        !forceRender &&
+        Math.abs(containerWidth - pptxLastWidthRef.current) < 50
+      ) {
+        return;
       }
-    });
-  }, []);
+      pptxLastWidthRef.current = containerWidth;
+      pptxContainerRef.current.innerHTML = '';
+      const width = containerWidth;
+      const height = Math.round(width * 0.5625); // 16:9 aspect ratio
+      const previewer = initPptxPreview(pptxContainerRef.current, {
+        width,
+        height,
+      });
+      previewer
+        .preview(arrayBuffer)
+        .then(() => {
+          const wrapper = pptxContainerRef.current
+            ?.firstElementChild as HTMLElement | null;
+          if (wrapper) {
+            wrapper.style.setProperty('height', 'auto', 'important');
+            wrapper.style.setProperty('overflow-y', 'visible', 'important');
+          }
+        })
+        .catch((err) => {
+          console.error('PPTX preview error:', err);
+          setViewerError(t('artifacts.loadError'));
+        });
+    },
+    [t],
+  );
 
   const handleCopyProjectId = async (
     projectId: string,
@@ -341,11 +360,8 @@ function ArtifactsPage() {
             throw new Error(`Failed to load: ${response.status}`);
           }
           const arrayBuffer = await response.arrayBuffer();
-          pptxDataRef.current = arrayBuffer;
-          // Use setTimeout to ensure container is ready
-          setTimeout(() => {
-            renderPptx(arrayBuffer);
-          }, 100);
+          setPptxData(arrayBuffer);
+          // renderPptx will be called by useEffect after loading is false
         } else if (isDocx) {
           const response = await fetch(presignedUrl);
           if (!response.ok) {
@@ -376,7 +392,7 @@ function ArtifactsPage() {
         setViewerLoading(false);
       }
     },
-    [getPresignedDownloadUrl, renderPptx, t],
+    [getPresignedDownloadUrl, t],
   );
 
   const handleCloseViewer = useCallback(() => {
@@ -384,12 +400,35 @@ function ArtifactsPage() {
     setViewerContent(null);
     setViewerImageUrl(null);
     setViewerError(null);
-    pptxDataRef.current = null;
+    setPptxData(null);
+    setPptxRendered(false);
+    pptxLastWidthRef.current = 0;
   }, []);
 
-  // Resize PPTX on container resize
+  // Render PPTX after loading is complete and container is available (only once)
   useEffect(() => {
-    if (!viewingArtifact || !pptxContainerRef.current) return;
+    if (!viewingArtifact || viewerLoading || !pptxData || pptxRendered) return;
+
+    const isPptx =
+      viewingArtifact.content_type ===
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+      viewingArtifact.filename.toLowerCase().endsWith('.pptx');
+
+    if (!isPptx || !pptxContainerRef.current) return;
+
+    setPptxRendered(true);
+    renderPptx(pptxData, true);
+  }, [viewingArtifact, viewerLoading, pptxData, pptxRendered, renderPptx]);
+
+  // Resize PPTX on container resize (debounced)
+  useEffect(() => {
+    if (
+      !viewingArtifact ||
+      viewerLoading ||
+      !pptxData ||
+      !pptxContainerRef.current
+    )
+      return;
 
     const isPptx =
       viewingArtifact.content_type ===
@@ -398,15 +437,22 @@ function ArtifactsPage() {
 
     if (!isPptx) return;
 
+    let resizeTimeout: ReturnType<typeof setTimeout>;
     const resizeObserver = new ResizeObserver(() => {
-      if (pptxDataRef.current) {
-        renderPptx(pptxDataRef.current);
-      }
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        if (pptxRendered && pptxData) {
+          renderPptx(pptxData);
+        }
+      }, 300);
     });
 
     resizeObserver.observe(pptxContainerRef.current);
-    return () => resizeObserver.disconnect();
-  }, [viewingArtifact, renderPptx]);
+    return () => {
+      clearTimeout(resizeTimeout);
+      resizeObserver.disconnect();
+    };
+  }, [viewingArtifact, viewerLoading, pptxData, pptxRendered, renderPptx]);
 
   const handleGoToProject = useCallback(
     (projectId: string) => {
