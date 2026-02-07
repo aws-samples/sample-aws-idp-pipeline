@@ -105,7 +105,16 @@
     "filterCompleted": "完了",
     "filterProcessing": "処理中",
     "filterFailed": "失敗",
-    "noMatchingDocuments": "一致するドキュメントがありません"
+    "noMatchingDocuments": "一致するドキュメントがありません",
+    "tabFile": "ファイル",
+    "tabWeb": "ウェブ",
+    "webUrl": "URL",
+    "webUrlPlaceholder": "https://example.com/page",
+    "webInstruction": "指示（オプション）",
+    "webInstructionPlaceholder": "コンテンツ抽出のための指示を入力してください...\n\n例：\n- 本文のコンテンツに注目\n- 製品仕様を抽出\n- 価格情報を含める",
+    "webInstructionHint": "指示はAIがウェブページから関連コンテンツを抽出するのに役立ちます。",
+    "webDescription": "ページがクロールされ、分析用のドキュメントに変換されます。スクリーンショットと抽出されたコンテンツが保存されます。",
+    "crawl": "クロール"
   },
   "workflow": {
     "title": "ワークフロー",
@@ -163,6 +172,7 @@
     "deleteQaConfirm": "このQ&Aを削除しますか？削除された項目は復元できません。",
     "steps": {
       "segmentPrep": "セグメント準備",
+      "webcrawler": "Webクロール",
       "bdaProcessing": "BDA分析",
       "formatParsing": "フォーマット解析",
       "paddleocrProcessing": "OCR",

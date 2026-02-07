@@ -14,7 +14,8 @@ from shared.ddb_client import (
     record_step_complete,
     record_step_error,
     update_workflow_status,
-    StepName,
+    get_entity_prefix,
+        StepName,
     WorkflowStatus,
 )
 from shared.s3_analysis import (
@@ -76,5 +77,6 @@ def handler(event, _context):
         error_msg = str(e)
         print(f'Error in reanalysis-prep: {error_msg}')
         record_step_error(workflow_id, StepName.SEGMENT_BUILDER, error_msg)
-        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, error=error_msg)
+        entity_type = get_entity_prefix(file_type)
+        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, entity_type=entity_type, error=error_msg)
         raise

@@ -77,6 +77,9 @@ class SegmentData(BaseModel):
     format_parser: str
     ai_analysis: list[dict]
     transcribe_segments: list[TranscribeSegment] | None = None
+    webcrawler_content: str | None = None
+    source_url: str | None = None
+    page_title: str | None = None
 
 
 class WorkflowDetailResponse(BaseModel):
@@ -182,6 +185,11 @@ def _build_segment_data(file_uri: str, s3_key: str) -> SegmentData | None:
         else None
     )
 
+    # Web crawler data
+    webcrawler_content = s3_data.get("webcrawler_content")
+    source_url = s3_data.get("source_url")
+    page_title = s3_data.get("page_title")
+
     return SegmentData(
         segment_index=s3_data.get("segment_index", 0),
         segment_type=segment_type,
@@ -196,6 +204,9 @@ def _build_segment_data(file_uri: str, s3_key: str) -> SegmentData | None:
         format_parser=format_parser,
         ai_analysis=ai_analysis,
         transcribe_segments=transcribe_segments,
+        webcrawler_content=webcrawler_content,
+        source_url=source_url,
+        page_title=page_title,
     )
 
 

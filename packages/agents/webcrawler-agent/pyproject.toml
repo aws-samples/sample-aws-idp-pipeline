@@ -1,0 +1,16 @@
+[project]
+name = "idp_v2.webcrawler-agent"
+version = "0.1.0"
+description = "WebCrawler Agent - Crawls web pages and extracts content"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "aws-opentelemetry-distro>=0.14.2",
+    "bedrock-agentcore>=1.1.0,<1.2.0",
+    "boto3>=1.42.36",
+    "nanoid>=2.0.0",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.12.0",
+    "strands-agents>=1.23.0",
+    "strands-agents-tools[agent_core_browser]>=0.2.19",
+]

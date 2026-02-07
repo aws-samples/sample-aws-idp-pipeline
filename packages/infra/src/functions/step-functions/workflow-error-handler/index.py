@@ -10,7 +10,8 @@ from shared.ddb_client import (
     WorkflowStatus,
     record_step_error,
     update_workflow_status,
-)
+    get_entity_prefix,
+    )
 
 
 def handler(event, context):
@@ -19,6 +20,8 @@ def handler(event, context):
     workflow_id = event.get('workflow_id', '')
     document_id = event.get('document_id', '')
     project_id = event.get('project_id', '')
+    file_uri = event.get('file_uri', '')
+    file_type = event.get('file_type', '')
 
     # Error info injected by Step Functions addCatch (resultPath: $.error_info)
     error_info = event.get('error_info', {})
@@ -57,10 +60,12 @@ def handler(event, context):
 
     # Update workflow + document status to failed
     try:
+        entity_type = get_entity_prefix(file_type)
         update_workflow_status(
             document_id,
             workflow_id,
             WorkflowStatus.FAILED,
+            entity_type=entity_type,
             error=error_message,
         )
         print(f'Updated workflow {workflow_id} status to failed')

@@ -27,7 +27,8 @@ from shared.ddb_client import (
     record_step_error,
     update_workflow_status,
     update_workflow_total_segments,
-    WorkflowStatus,
+    get_entity_prefix,
+        WorkflowStatus,
     StepName,
 )
 from shared.s3_analysis import (
@@ -48,6 +49,9 @@ VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
 
 # Supported audio extensions
 AUDIO_EXTENSIONS = {'.mp3', '.wav', '.flac', '.aac', '.m4a', '.ogg', '.wma'}
+
+# Web request extension
+WEBREQ_EXTENSIONS = {'.webreq'}
 
 
 def get_file_extension(file_uri: str) -> str:
@@ -201,6 +205,25 @@ def process_audio(file_uri: str) -> list[dict]:
     }]
 
 
+def process_webreq(file_uri: str, bucket: str, base_path: str) -> list[dict]:
+    """Process .webreq file: create single WEB type segment.
+
+    Screenshot is saved by webcrawler agent at preprocessed/page_0000.png
+    Content is saved at webcrawler/content.md and merged by segment-builder.
+    """
+    # Screenshot is at preprocessed/page_0000.png (same location as PDF page images)
+    screenshot_key = f'{base_path}/preprocessed/page_0000.png'
+    screenshot_uri = f's3://{bucket}/{screenshot_key}'
+    print(f'WebCrawler screenshot expected at: {screenshot_uri}')
+
+    return [{
+        'segment_index': 0,
+        'segment_type': 'WEB',
+        'image_uri': screenshot_uri,
+        'file_uri': file_uri,
+    }]
+
+
 def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
@@ -216,7 +239,10 @@ def handler(event, _context):
         ext = get_file_extension(file_uri)
 
         # Determine file type and process accordingly
-        if file_type == 'application/pdf' or ext == '.pdf':
+        if ext in WEBREQ_EXTENSIONS or file_type == 'application/x-webreq':
+            print('Processing as web request')
+            segments = process_webreq(file_uri, bucket, base_path)
+        elif file_type == 'application/pdf' or ext == '.pdf':
             print('Processing as PDF')
             segments = process_pdf(file_uri, bucket, base_path)
         elif ext in IMAGE_EXTENSIONS or file_type.startswith('image/'):
@@ -272,11 +298,19 @@ def handler(event, _context):
                 segment_data['transcribe'] = ''
                 segment_data['transcribe_segments'] = []
 
+            # Web-specific fields
+            if segment_type == 'WEB':
+                segment_data['file_uri'] = seg.get('file_uri', file_uri)
+                segment_data['webcrawler_content'] = ''
+                segment_data['source_url'] = ''
+                segment_data['web_title'] = ''
+
             save_segment_analysis(file_uri, seg['segment_index'], segment_data)
             print(f'Created initial segment {seg["segment_index"]}')
 
         # Update workflow total_segments in DynamoDB
-        update_workflow_total_segments(document_id, workflow_id, len(segments))
+        entity_type = get_entity_prefix(file_type)
+        update_workflow_total_segments(document_id, workflow_id, len(segments), entity_type)
 
         record_step_complete(
             workflow_id,
@@ -294,5 +328,6 @@ def handler(event, _context):
         error_msg = str(e)
         print(f'Error in segment-prep: {error_msg}')
         record_step_error(workflow_id, StepName.SEGMENT_PREP, error_msg)
-        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, error=error_msg)
+        entity_type = get_entity_prefix(file_type)
+        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, entity_type=entity_type, error=error_msg)
         raise

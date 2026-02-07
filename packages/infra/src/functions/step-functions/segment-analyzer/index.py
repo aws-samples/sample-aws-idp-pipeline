@@ -33,6 +33,22 @@ def handler(event, _context):
     if isinstance(segment_index, dict):
         segment_index = segment_index.get('segment_index', 0)
 
+    # Skip AI analysis for web documents (webcrawler already extracted content)
+    # STEP record already has segment_analyzer as 'skipped' from workflow creation
+    if file_type == 'application/x-webreq':
+        print(f'Skipping AI analysis for web document: {file_uri}')
+        return {
+            'workflow_id': workflow_id,
+            'document_id': document_id,
+            'project_id': project_id,
+            'segment_index': segment_index,
+            'file_uri': file_uri,
+            'file_type': file_type,
+            'segment_count': segment_count,
+            'language': 'ko',
+            'status': 'skipped'
+        }
+
     # Get project settings
     language = get_project_language(project_id)
     document_prompt = get_project_document_prompt(project_id)
@@ -64,6 +80,7 @@ def handler(event, _context):
     bda_content = segment_data.get('bda_indexer', '')
     pdf_text = segment_data.get('format_parser', '')
     ocr_text = segment_data.get('paddleocr', '')
+    webcrawler_content = segment_data.get('webcrawler_content', '')
     transcribe_segments = segment_data.get('transcribe_segments', [])
     segment_type = segment_data.get('segment_type', 'PAGE')
     video_uri = segment_data.get('file_uri', file_uri)
@@ -80,6 +97,8 @@ def handler(event, _context):
         context_parts.append(f'## Format Parser:\n{pdf_text}')
     if ocr_text:
         context_parts.append(f'## PaddleOCR:\n{ocr_text}')
+    if webcrawler_content:
+        context_parts.append(f'## Web Crawler:\n{webcrawler_content}')
     if transcribe_segments:
         # Format transcribe segments with timing info
         segments_text = []

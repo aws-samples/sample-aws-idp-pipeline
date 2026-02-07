@@ -105,7 +105,16 @@
     "filterCompleted": "Completed",
     "filterProcessing": "Processing",
     "filterFailed": "Failed",
-    "noMatchingDocuments": "No matching documents"
+    "noMatchingDocuments": "No matching documents",
+    "tabFile": "File",
+    "tabWeb": "Web",
+    "webUrl": "URL",
+    "webUrlPlaceholder": "https://example.com/page",
+    "webInstruction": "Instructions (Optional)",
+    "webInstructionPlaceholder": "Enter instructions for content extraction...\n\nExample:\n- Focus on the main article content\n- Extract product specifications\n- Include pricing information",
+    "webInstructionHint": "Instructions help AI extract relevant content from the web page.",
+    "webDescription": "The page will be crawled and converted to a document for analysis. A screenshot and extracted content will be saved.",
+    "crawl": "Crawl"
   },
   "workflow": {
     "title": "Workflow",
@@ -163,6 +172,7 @@
     "deleteQaConfirm": "Are you sure you want to delete this Q&A? This action cannot be undone.",
     "steps": {
       "segmentPrep": "Segment Prep",
+      "webcrawler": "Web Crawling",
       "bdaProcessing": "BDA Processing",
       "formatParsing": "Format Parsing",
       "paddleocrProcessing": "OCR",

@@ -20,6 +20,10 @@ class TestMakeKeys:
         result = workflows.make_workflow_key("doc-456", "wf-789")
         assert result == {"PK": "DOC#doc-456", "SK": "WF#wf-789"}
 
+    def test_make_workflow_key_with_entity_type(self):
+        result = workflows.make_workflow_key("doc-456", "wf-789", "WEB")
+        assert result == {"PK": "WEB#doc-456", "SK": "WF#wf-789"}
+
 
 class TestProjectHelpers:
     @pytest.fixture
@@ -272,38 +276,43 @@ class TestWorkflowHelpers:
         assert result is None
 
     def test_query_workflows(self, mock_table):
-        mock_table.query.return_value = {
-            "Items": [
-                {
-                    "PK": "DOC#doc-1",
-                    "SK": "WF#wf-1",
-                    "data": {
-                        "execution_arn": "arn:aws:states:us-east-1:123456789012:execution:test:wf-1",
-                        "file_name": "test.pdf",
-                        "file_type": "application/pdf",
-                        "file_uri": "s3://bucket/test.pdf",
-                        "project_id": "proj-1",
-                        "status": "completed",
+        # query_workflows now queries both DOC and WEB entities
+        # First call returns DOC workflows, second call returns empty (no WEB workflows)
+        mock_table.query.side_effect = [
+            {
+                "Items": [
+                    {
+                        "PK": "DOC#doc-1",
+                        "SK": "WF#wf-1",
+                        "data": {
+                            "execution_arn": "arn:aws:states:us-east-1:123456789012:execution:test:wf-1",
+                            "file_name": "test.pdf",
+                            "file_type": "application/pdf",
+                            "file_uri": "s3://bucket/test.pdf",
+                            "project_id": "proj-1",
+                            "status": "completed",
+                        },
+                        "created_at": "2024-01-01T00:00:00+00:00",
+                        "updated_at": "2024-01-01T01:00:00+00:00",
                     },
-                    "created_at": "2024-01-01T00:00:00+00:00",
-                    "updated_at": "2024-01-01T01:00:00+00:00",
-                },
-                {
-                    "PK": "DOC#doc-1",
-                    "SK": "WF#wf-2",
-                    "data": {
-                        "execution_arn": "arn:aws:states:us-east-1:123456789012:execution:test:wf-2",
-                        "file_name": "test2.pdf",
-                        "file_type": "application/pdf",
-                        "file_uri": "s3://bucket/test2.pdf",
-                        "project_id": "proj-1",
-                        "status": "pending",
+                    {
+                        "PK": "DOC#doc-1",
+                        "SK": "WF#wf-2",
+                        "data": {
+                            "execution_arn": "arn:aws:states:us-east-1:123456789012:execution:test:wf-2",
+                            "file_name": "test2.pdf",
+                            "file_type": "application/pdf",
+                            "file_uri": "s3://bucket/test2.pdf",
+                            "project_id": "proj-1",
+                            "status": "pending",
+                        },
+                        "created_at": "2024-01-02T00:00:00+00:00",
+                        "updated_at": "2024-01-02T01:00:00+00:00",
                     },
-                    "created_at": "2024-01-02T00:00:00+00:00",
-                    "updated_at": "2024-01-02T01:00:00+00:00",
-                },
-            ]
-        }
+                ]
+            },
+            {"Items": []},  # WEB query returns empty
+        ]
 
         result = workflows.query_workflows("doc-1")
 
@@ -317,8 +326,11 @@ class TestWorkflowHelpers:
 
         result = workflows.delete_workflow_item("doc-1", "wf-1")
 
-        mock_table.delete_item.assert_called_once_with(Key={"PK": "DOC#doc-1", "SK": "WF#wf-1"})
-        assert result == 1  # Only main workflow item deleted
+        # delete_workflow_item now tries to delete both DOC and WEB entities
+        assert mock_table.delete_item.call_count == 2
+        mock_table.delete_item.assert_any_call(Key={"PK": "DOC#doc-1", "SK": "WF#wf-1"})
+        mock_table.delete_item.assert_any_call(Key={"PK": "WEB#doc-1", "SK": "WF#wf-1"})
+        assert result == 2  # Both DOC and WEB workflow items deleted
 
 
 class TestBatchDelete:

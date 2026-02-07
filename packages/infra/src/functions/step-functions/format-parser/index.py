@@ -15,7 +15,8 @@ from pypdf.generic import DecodedStreamObject, NameObject
 
 from shared.ddb_client import (
     update_workflow_status,
-    WorkflowStatus,
+    get_entity_prefix,
+        WorkflowStatus,
     record_step_start,
     record_step_complete,
     record_step_error,
@@ -159,7 +160,8 @@ def handler(event, context):
         print(f'Error in format parser: {error_msg}')
         import traceback
         traceback.print_exc()
-        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, error=error_msg)
+        entity_type = get_entity_prefix(file_type)
+        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, entity_type=entity_type, error=error_msg)
         record_step_error(workflow_id, StepName.FORMAT_PARSER, error_msg)
 
         return {

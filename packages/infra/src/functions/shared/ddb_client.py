@@ -53,6 +53,18 @@ def decimal_to_python(obj):
     return obj
 
 
+class EntityType:
+    DOCUMENT = 'DOC'
+    WEB = 'WEB'
+
+
+def get_entity_prefix(file_type: str) -> str:
+    """Determine entity prefix based on file type."""
+    if file_type == 'application/x-webreq':
+        return EntityType.WEB
+    return EntityType.DOCUMENT
+
+
 class WorkflowStatus:
     PENDING = 'pending'
     IN_PROGRESS = 'in_progress'
@@ -73,8 +85,9 @@ class PreprocessType:
     OCR = 'ocr'
     BDA = 'bda'
     TRANSCRIBE = 'transcribe'
+    WEBCRAWLER = 'webcrawler'
 
-    ALL = ['ocr', 'bda', 'transcribe']
+    ALL = ['ocr', 'bda', 'transcribe', 'webcrawler']
 
 
 def determine_preprocess_required(file_type: str, use_bda: bool = False) -> dict:
@@ -86,19 +99,24 @@ def determine_preprocess_required(file_type: str, use_bda: bool = False) -> dict
     is_image = file_type.startswith('image/')
     is_video = file_type.startswith('video/')
     is_audio = file_type.startswith('audio/')
+    is_webreq = file_type == 'application/x-webreq'
 
     return {
         PreprocessType.OCR: {
-            'required': is_pdf or is_image,
-            'status': PreprocessStatus.PENDING if (is_pdf or is_image) else PreprocessStatus.SKIPPED
+            'required': (is_pdf or is_image) and not is_webreq,
+            'status': PreprocessStatus.PENDING if ((is_pdf or is_image) and not is_webreq) else PreprocessStatus.SKIPPED
         },
         PreprocessType.BDA: {
-            'required': use_bda,
-            'status': PreprocessStatus.PENDING if use_bda else PreprocessStatus.SKIPPED
+            'required': use_bda and not is_webreq,
+            'status': PreprocessStatus.PENDING if (use_bda and not is_webreq) else PreprocessStatus.SKIPPED
         },
         PreprocessType.TRANSCRIBE: {
-            'required': is_video or is_audio,
-            'status': PreprocessStatus.PENDING if (is_video or is_audio) else PreprocessStatus.SKIPPED
+            'required': (is_video or is_audio) and not is_webreq,
+            'status': PreprocessStatus.PENDING if ((is_video or is_audio) and not is_webreq) else PreprocessStatus.SKIPPED
+        },
+        PreprocessType.WEBCRAWLER: {
+            'required': is_webreq,
+            'status': PreprocessStatus.PENDING if is_webreq else PreprocessStatus.SKIPPED
         }
     }
 
@@ -109,6 +127,7 @@ class StepName:
     FORMAT_PARSER = 'format_parser'
     PADDLEOCR_PROCESSOR = 'paddleocr_processor'
     TRANSCRIBE = 'transcribe'
+    WEBCRAWLER = 'webcrawler'
     SEGMENT_BUILDER = 'segment_builder'
     SEGMENT_ANALYZER = 'segment_analyzer'
     DOCUMENT_SUMMARIZER = 'document_summarizer'
@@ -119,6 +138,7 @@ class StepName:
         'format_parser',
         'paddleocr_processor',
         'transcribe',
+        'webcrawler',
         'segment_builder',
         'segment_analyzer',
         'document_summarizer'
@@ -130,6 +150,7 @@ class StepName:
         'format_parser': 'Format Parsing',
         'paddleocr_processor': 'PaddleOCR Processing',
         'transcribe': 'Transcription',
+        'webcrawler': 'Web Crawling',
         'segment_builder': 'Building Segments',
         'segment_analyzer': 'Segment Analysis',
         'document_summarizer': 'Document Summary'
@@ -150,12 +171,15 @@ def create_workflow(
     table = get_table()
     now = now_iso()
 
+    # Determine entity prefix based on file type (WEB# for webreq, DOC# for others)
+    entity_prefix = get_entity_prefix(file_type)
+
     # Determine required preprocessors based on file type and options
     preprocess = determine_preprocess_required(file_type, use_bda)
 
-    # Main workflow item under document
+    # Main workflow item under document/web entity
     workflow_item = {
-        'PK': f'DOC#{document_id}',
+        'PK': f'{entity_prefix}#{document_id}',
         'SK': f'WF#{workflow_id}',
         'data': {
             'project_id': project_id,
@@ -177,12 +201,15 @@ def create_workflow(
     is_image = file_type.startswith('image/')
     is_video = file_type.startswith('video/')
     is_audio = file_type.startswith('audio/')
+    is_webreq = file_type == 'application/x-webreq'
 
     skip_conditions = {
-        StepName.BDA_PROCESSOR: not use_bda,
-        StepName.PADDLEOCR_PROCESSOR: not (is_pdf or is_image),
-        StepName.TRANSCRIBE: not (is_video or is_audio),
-        StepName.FORMAT_PARSER: not is_pdf,
+        StepName.BDA_PROCESSOR: not use_bda or is_webreq,
+        StepName.PADDLEOCR_PROCESSOR: not (is_pdf or is_image) or is_webreq,
+        StepName.TRANSCRIBE: not (is_video or is_audio) or is_webreq,
+        StepName.FORMAT_PARSER: not is_pdf or is_webreq,
+        StepName.WEBCRAWLER: not is_webreq,
+        StepName.SEGMENT_ANALYZER: is_webreq,
     }
 
     # Initialize STEP row with appropriate statuses
@@ -215,11 +242,11 @@ def create_workflow(
     return workflow_item
 
 
-def update_workflow_status(document_id: str, workflow_id: str, status: str, **kwargs) -> dict:
+def update_workflow_status(document_id: str, workflow_id: str, status: str, entity_type: str = EntityType.DOCUMENT, **kwargs) -> dict:
     table = get_table()
     now = now_iso()
 
-    workflow = get_workflow(document_id, workflow_id)
+    workflow = get_workflow(document_id, workflow_id, entity_type)
     if not workflow:
         return {}
 
@@ -234,13 +261,14 @@ def update_workflow_status(document_id: str, workflow_id: str, status: str, **kw
     expr_values = {':data': data, ':updated_at': now}
 
     table.update_item(
-        Key={'PK': f'DOC#{document_id}', 'SK': f'WF#{workflow_id}'},
+        Key={'PK': f'{entity_type}#{document_id}', 'SK': f'WF#{workflow_id}'},
         UpdateExpression=update_expr,
         ExpressionAttributeNames={'#data': 'data'},
         ExpressionAttributeValues=expr_values
     )
 
     # Also update document status to match workflow status
+    # Document record is always at PROJ#/DOC# regardless of entity type
     project_id = data.get('project_id')
     if project_id:
         update_document_status(project_id, document_id, status)
@@ -266,10 +294,10 @@ def update_document_status(project_id: str, document_id: str, status: str) -> bo
         return False
 
 
-def get_workflow(document_id: str, workflow_id: str) -> Optional[dict]:
+def get_workflow(document_id: str, workflow_id: str, entity_type: str = EntityType.DOCUMENT) -> Optional[dict]:
     table = get_table()
     response = table.get_item(
-        Key={'PK': f'DOC#{document_id}', 'SK': f'WF#{workflow_id}'}
+        Key={'PK': f'{entity_type}#{document_id}', 'SK': f'WF#{workflow_id}'}
     )
     item = response.get('Item')
     return decimal_to_python(item) if item else None
@@ -280,6 +308,7 @@ def update_preprocess_status(
     workflow_id: str,
     processor: str,
     status: str,
+    entity_type: str = EntityType.DOCUMENT,
     **kwargs
 ) -> dict:
     """Update preprocess status for a specific processor.
@@ -287,14 +316,15 @@ def update_preprocess_status(
     Args:
         document_id: Document ID
         workflow_id: Workflow ID
-        processor: One of 'ocr', 'parser', 'bda', 'transcribe'
+        processor: One of 'ocr', 'parser', 'bda', 'transcribe', 'webcrawler'
         status: One of 'pending', 'processing', 'completed', 'failed', 'skipped'
+        entity_type: 'DOC' for documents, 'WEB' for web crawled content
         **kwargs: Additional fields to update (e.g., error, output_uri)
     """
     table = get_table()
     now = now_iso()
 
-    workflow = get_workflow(document_id, workflow_id)
+    workflow = get_workflow(document_id, workflow_id, entity_type)
     if not workflow:
         return {}
 
@@ -315,7 +345,7 @@ def update_preprocess_status(
     data['preprocess'] = preprocess
 
     response = table.update_item(
-        Key={'PK': f'DOC#{document_id}', 'SK': f'WF#{workflow_id}'},
+        Key={'PK': f'{entity_type}#{document_id}', 'SK': f'WF#{workflow_id}'},
         UpdateExpression='SET #data = :data, updated_at = :updated_at',
         ExpressionAttributeNames={'#data': 'data'},
         ExpressionAttributeValues={':data': data, ':updated_at': now},
@@ -324,7 +354,7 @@ def update_preprocess_status(
     return decimal_to_python(response.get('Attributes', {}))
 
 
-def is_preprocess_complete(document_id: str, workflow_id: str) -> dict:
+def is_preprocess_complete(document_id: str, workflow_id: str, entity_type: str = EntityType.DOCUMENT) -> dict:
     """Check if all required preprocessing is complete.
 
     Returns:
@@ -333,7 +363,7 @@ def is_preprocess_complete(document_id: str, workflow_id: str) -> dict:
         - any_failed: True if any required preprocessor has failed
         - status: dict of each preprocessor's status
     """
-    workflow = get_workflow(document_id, workflow_id)
+    workflow = get_workflow(document_id, workflow_id, entity_type)
     if not workflow:
         return {'all_completed': False, 'any_failed': False, 'status': {}}
 
@@ -392,13 +422,13 @@ def get_steps(workflow_id: str) -> Optional[dict]:
     return decimal_to_python(item) if item else None
 
 
-def update_workflow_total_segments(document_id: str, workflow_id: str, total_segments: int) -> dict:
+def update_workflow_total_segments(document_id: str, workflow_id: str, total_segments: int, entity_type: str = EntityType.DOCUMENT) -> dict:
     """Update workflow total_segments count"""
     table = get_table()
     now = now_iso()
 
     response = table.update_item(
-        Key={'PK': f'DOC#{document_id}', 'SK': f'WF#{workflow_id}'},
+        Key={'PK': f'{entity_type}#{document_id}', 'SK': f'WF#{workflow_id}'},
         UpdateExpression='SET #data.#ts = :ts, updated_at = :updated_at',
         ExpressionAttributeNames={'#data': 'data', '#ts': 'total_segments'},
         ExpressionAttributeValues={':ts': total_segments, ':updated_at': now},

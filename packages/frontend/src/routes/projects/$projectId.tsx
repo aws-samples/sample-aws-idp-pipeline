@@ -715,6 +715,7 @@ function ProjectDetailPage() {
   const stepLabels = useMemo<Record<string, string>>(
     () => ({
       segment_prep: t('workflow.steps.segmentPrep'),
+      webcrawler: t('workflow.steps.webcrawler'),
       bda_processor: t('workflow.steps.bdaProcessing'),
       format_parser: t('workflow.steps.formatParsing'),
       paddleocr_processor: t('workflow.steps.paddleocrProcessing'),
@@ -726,7 +727,60 @@ function ProjectDetailPage() {
     [t],
   );
 
-  // WebSocket step progress handler
+  // Fetch document progress from API
+  const fetchDocumentProgress = useCallback(async () => {
+    try {
+      const progressData = await fetchApi<
+        {
+          document_id: string;
+          workflow_id: string;
+          status: string;
+          current_step: string;
+          steps: Record<string, { status: string; label: string }>;
+        }[]
+      >(`projects/${projectId}/documents/progress`);
+
+      setWorkflowProgressMap((prev) => {
+        const newMap = { ...prev };
+        for (const progress of progressData) {
+          const doc = documents.find(
+            (d) => d.document_id === progress.document_id,
+          );
+
+          const steps: Record<string, StepStatus> = {};
+          if (progress.steps) {
+            for (const [key, val] of Object.entries(progress.steps)) {
+              steps[key] = {
+                status: val.status as StepStatus['status'],
+                label: stepLabels[key] || val.label,
+              };
+            }
+          }
+
+          const currentStepLabel = progress.current_step
+            ? stepLabels[progress.current_step] || progress.current_step
+            : '';
+
+          newMap[progress.document_id] = {
+            workflowId: progress.workflow_id,
+            documentId: progress.document_id,
+            fileName: doc?.name || prev[progress.document_id]?.fileName || '',
+            status: progress.status as WorkflowProgress['status'],
+            currentStep: currentStepLabel,
+            stepMessage: '',
+            segmentProgress: null,
+            error: progress.status === 'failed' ? 'Workflow failed' : null,
+            steps,
+          };
+        }
+        return newMap;
+      });
+    } catch (error) {
+      console.error('Failed to fetch document progress:', error);
+    }
+  }, [fetchApi, projectId, documents, stepLabels]);
+
+  // WebSocket step progress handler - refetch progress on any step change
   const handleStepMessage = useCallback(
     (data: {
       event: string;
@@ -745,43 +799,11 @@ function ProjectDetailPage() {
       }
 
       if (data.event === 'step_changed') {
-        const documentId = data.documentId;
-        if (!documentId) return;
-
-        const stepLabel = stepLabels[data.stepName] || data.stepName;
-
-        setWorkflowProgressMap((prev) => {
-          const existing = prev[documentId];
-          const newProgress: WorkflowProgress = {
-            workflowId: data.workflowId,
-            documentId,
-            fileName: existing?.fileName || '',
-            status:
-              data.status === 'in_progress'
-                ? 'in_progress'
-                : existing?.status || 'in_progress',
-            currentStep: stepLabel,
-            stepMessage: '',
-            segmentProgress: existing?.segmentProgress || null,
-            error: data.status === 'failed' ? `${stepLabel} failed` : null,
-            steps: {
-              ...(existing?.steps || {}),
-              [data.stepName]: {
-                status: data.status as
-                  | 'pending'
-                  | 'in_progress'
-                  | 'completed'
-                  | 'failed'
-                  | 'skipped',
-                label: stepLabel,
-              },
-            },
-          };
-          return { ...prev, [documentId]: newProgress };
-        });
+        // Refetch progress from API to get complete state
+        fetchDocumentProgress();
       }
     },
-    [projectId, stepLabels],
+    [projectId, fetchDocumentProgress],
   );
 
   useWebSocketMessage('step', handleStepMessage);
@@ -1456,84 +1478,8 @@ function ProjectDetailPage() {
     if (inProgressWorkflows.length === 0) return;
 
     progressFetchedRef.current = true;
-
-    const fetchProgress = async () => {
-      try {
-        const progressData = await fetchApi<
-          {
-            document_id: string;
-            workflow_id: string;
-            status: string;
-            current_step: string;
-            steps: Record<string, { status: string; label: string }>;
-          }[]
-        >(`projects/${projectId}/documents/progress`);
-
-        setWorkflowProgressMap((prev) => {
-          const newMap = { ...prev };
-          for (const wf of inProgressWorkflows) {
-            if (newMap[wf.document_id]) continue;
-
-            const doc = documents.find((d) => d.document_id === wf.document_id);
-            const progress = progressData.find(
-              (p) => p.document_id === wf.document_id,
-            );
-
-            const steps: Record<string, StepStatus> = {};
-            if (progress?.steps) {
-              for (const [key, val] of Object.entries(progress.steps)) {
-                steps[key] = {
-                  status: val.status as StepStatus['status'],
-                  label: stepLabels[key] || val.label,
-                };
-              }
-            }
-
-            const currentStepLabel = progress?.current_step
-              ? stepLabels[progress.current_step] || progress.current_step
-              : t('workflow.inProgress', 'Processing...');
-
-            newMap[wf.document_id] = {
-              workflowId: wf.workflow_id,
-              documentId: wf.document_id,
-              fileName: doc?.name || wf.file_name,
-              status: 'in_progress',
-              currentStep: currentStepLabel,
-              stepMessage: '',
-              segmentProgress: null,
-              error: null,
-              steps,
-            };
-          }
-          return newMap;
-        });
-      } catch (error) {
-        console.error('Failed to fetch document progress:', error);
-        // Fallback: initialize with empty steps, WebSocket will populate
-        setWorkflowProgressMap((prev) => {
-          const newMap = { ...prev };
-          for (const wf of inProgressWorkflows) {
-            if (newMap[wf.document_id]) continue;
-            const doc = documents.find((d) => d.document_id === wf.document_id);
-            newMap[wf.document_id] = {
-              workflowId: wf.workflow_id,
-              documentId: wf.document_id,
-              fileName: doc?.name || wf.file_name,
-              status: 'in_progress',
-              currentStep: t('workflow.inProgress', 'Processing...'),
-              stepMessage: '',
-              segmentProgress: null,
-              error: null,
-              steps: {},
-            };
-          }
-          return newMap;
-        });
-      }
-    };
-
-    fetchProgress();
-  }, [loading, workflows, documents, t, stepLabels, fetchApi, projectId]);
+    fetchDocumentProgress();
+  }, [loading, workflows, fetchDocumentProgress]);
 
   // Handle workflow completion/failure - clear completed/failed after delay
   useEffect(() => {

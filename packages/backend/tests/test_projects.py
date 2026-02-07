@@ -395,12 +395,15 @@ class TestListProjectWorkflows:
         mock_doc_get_table.return_value = mock_doc_table
 
         # Mock workflows query
+        # query_workflows now queries both DOC and WEB entities per document
+        # So for 2 documents, it will be called 4 times:
+        # 1: DOC#doc-1, 2: WEB#doc-1, 3: DOC#doc-2, 4: WEB#doc-2
         mock_wf_table = MagicMock()
         call_count = {"value": 0}
 
         def wf_query_side_effect(**kwargs):
             call_count["value"] += 1
-            if call_count["value"] == 1:
+            if call_count["value"] == 1:  # DOC#doc-1
                 return {
                     "Items": [
                         {
@@ -420,7 +423,9 @@ class TestListProjectWorkflows:
                         }
                     ]
                 }
-            elif call_count["value"] == 2:
+            elif call_count["value"] == 2:  # WEB#doc-1
+                return {"Items": []}
+            elif call_count["value"] == 3:  # DOC#doc-2
                 return {
                     "Items": [
                         {
@@ -440,7 +445,7 @@ class TestListProjectWorkflows:
                         }
                     ]
                 }
-            return {"Items": []}
+            return {"Items": []}  # WEB#doc-2 and any other calls
 
         mock_wf_table.query.side_effect = wf_query_side_effect
         mock_wf_get_table.return_value = mock_wf_table

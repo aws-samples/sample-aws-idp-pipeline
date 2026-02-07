@@ -467,6 +467,7 @@ export class WorkflowStack extends Stack {
           'document_id.$': '$.document_id',
           'project_id.$': '$.project_id',
           'file_uri.$': '$.file_uri',
+          'file_type.$': '$.file_type',
           'segment_count.$': '$.segment_count',
         }),
       },

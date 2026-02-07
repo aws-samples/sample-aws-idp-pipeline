@@ -29,7 +29,7 @@ function getRecordType(image: StreamImage | undefined): RecordType {
   const pk = image.PK?.S || '';
   const sk = image.SK?.S || '';
 
-  if (pk.startsWith('DOC#') && sk.startsWith('WF#')) {
+  if ((pk.startsWith('DOC#') || pk.startsWith('WEB#')) && sk.startsWith('WF#')) {
     return 'workflow';
   }
   if (pk.startsWith('WF#') && sk === 'STEP') {
@@ -45,7 +45,14 @@ function extractWorkflowInfo(image: StreamImage | undefined) {
   const sk = image.SK?.S || '';
   const data = image.data?.M as WorkflowData | undefined;
 
-  const documentId = pk.startsWith('DOC#') ? pk.slice(4) : '';
+  // Extract documentId from DOC# or WEB# prefix
+  let documentId = '';
+  if (pk.startsWith('DOC#')) {
+    documentId = pk.slice(4);
+  } else if (pk.startsWith('WEB#')) {
+    documentId = pk.slice(4);
+  }
+
   const workflowId = sk.startsWith('WF#') ? sk.slice(3) : '';
   const projectId = data?.project_id?.S || '';
   const status = data?.status?.S || '';

@@ -95,16 +95,16 @@ class DocumentProgress(BaseModel):
 
 @router.get("/progress")
 def get_documents_progress(project_id: str) -> list[DocumentProgress]:
-    """Get workflow step progress for non-completed documents."""
+    """Get workflow step progress for all documents (including completed)."""
     documents = query_documents(project_id)
-    non_completed = [doc for doc in documents if doc.data.status not in ("completed", "deleted")]
+    active_docs = [doc for doc in documents if doc.data.status != "deleted"]
 
-    if not non_completed:
+    if not active_docs:
         return []
 
     # Collect workflow_ids for each document
     doc_workflow_map: dict[str, tuple[str, str]] = {}  # workflow_id -> (document_id, wf_status)
-    for doc in non_completed:
+    for doc in active_docs:
         workflows = query_workflows(doc.data.document_id)
         if workflows:
             wf = workflows[0]

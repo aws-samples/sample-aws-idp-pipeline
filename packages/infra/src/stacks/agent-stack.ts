@@ -133,6 +133,38 @@ export class AgentStack extends Stack {
       ]),
     });
 
+    // Initialize webcrawler system prompt in S3 on first deployment
+    const webcrawlerSystemPromptPath = path.resolve(
+      process.cwd(),
+      'src/prompts/webcrawler_system_prompt.txt',
+    );
+    const webcrawlerSystemPromptContent = fs.readFileSync(
+      webcrawlerSystemPromptPath,
+      'utf-8',
+    );
+
+    new cr.AwsCustomResource(this, 'InitWebCrawlerSystemPrompt', {
+      onCreate: {
+        service: 'S3',
+        action: 'putObject',
+        parameters: {
+          Bucket: agentStorageBucketName,
+          Key: '__prompts/webcrawler_system_prompt.txt',
+          Body: webcrawlerSystemPromptContent,
+          ContentType: 'text/plain',
+        },
+        physicalResourceId: cr.PhysicalResourceId.of(
+          'webcrawler-system-prompt-init',
+        ),
+      },
+      policy: cr.AwsCustomResourcePolicy.fromStatements([
+        new iam.PolicyStatement({
+          actions: ['s3:PutObject'],
+          resources: [`${agentStorageBucket.bucketArn}/__prompts/*`],
+        }),
+      ]),
+    });
+
     const idpAgent = new IdpAgent(this, 'IdpAgent', {
       agentPath: path.resolve(process.cwd(), '../../packages/agents/idp-agent'),
       agentName: 'idp_agent',
@@ -204,6 +236,38 @@ export class AgentStack extends Stack {
       parameterName: SSM_KEYS.BIDI_AGENT_RUNTIME_ARN,
       stringValue: bidiAgent.runtime.agentRuntimeArn,
       description: 'ARN of the Bidi Agent Runtime',
+    });
+
+    // Get document storage bucket from SSM
+    const documentBucketName = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.DOCUMENT_STORAGE_BUCKET_NAME,
+    );
+
+    const documentBucket = Bucket.fromBucketName(
+      this,
+      'DocumentBucket',
+      documentBucketName,
+    );
+
+    // WebCrawler Agent - crawls web pages using AgentCore Browser
+    const webcrawlerAgent = new IdpAgent(this, 'WebCrawlerAgent', {
+      agentPath: path.resolve(
+        process.cwd(),
+        '../../packages/agents/webcrawler-agent',
+      ),
+      agentName: 'webcrawler_agent',
+      sessionStorageBucket,
+      backendTable,
+      gateway,
+      documentBucket,
+      agentStorageBucket,
+    });
+
+    new StringParameter(this, 'WebCrawlerAgentRuntimeArnParam', {
+      parameterName: SSM_KEYS.WEBCRAWLER_AGENT_RUNTIME_ARN,
+      stringValue: webcrawlerAgent.runtime.agentRuntimeArn,
+      description: 'ARN of the WebCrawler Agent Runtime',
     });
   }
 }

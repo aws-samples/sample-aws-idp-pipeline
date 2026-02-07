@@ -105,7 +105,16 @@
     "filterCompleted": "완료",
     "filterProcessing": "처리중",
     "filterFailed": "실패",
-    "noMatchingDocuments": "일치하는 문서가 없습니다"
+    "noMatchingDocuments": "일치하는 문서가 없습니다",
+    "tabFile": "파일",
+    "tabWeb": "웹",
+    "webUrl": "URL",
+    "webUrlPlaceholder": "https://example.com/page",
+    "webInstruction": "지시사항 (선택)",
+    "webInstructionPlaceholder": "콘텐츠 추출을 위한 지시사항을 입력하세요...\n\n예시:\n- 본문 내용에 집중\n- 제품 사양 추출\n- 가격 정보 포함",
+    "webInstructionHint": "지시사항은 AI가 웹 페이지에서 관련 콘텐츠를 추출하는 데 도움이 됩니다.",
+    "webDescription": "페이지가 크롤링되어 분석을 위한 문서로 변환됩니다. 스크린샷과 추출된 콘텐츠가 저장됩니다.",
+    "crawl": "크롤링"
   },
   "workflow": {
     "title": "워크플로우",
@@ -163,6 +172,7 @@
     "deleteQaConfirm": "이 Q&A를 삭제하시겠습니까? 삭제된 항목은 복구할 수 없습니다.",
     "steps": {
       "segmentPrep": "세그먼트 준비",
+      "webcrawler": "웹 크롤링",
       "bdaProcessing": "BDA 분석",
       "formatParsing": "포맷 파싱",
       "paddleocrProcessing": "OCR",

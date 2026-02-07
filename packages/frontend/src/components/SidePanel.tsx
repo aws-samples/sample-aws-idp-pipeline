@@ -31,6 +31,7 @@ import {
   Search,
   X,
   Presentation,
+  Globe,
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import {
@@ -88,6 +89,9 @@ const getFileIcon = (fileType: string) => {
   if (fileType.includes('audio')) {
     return <Music className="h-5 w-5 text-amber-400" />;
   }
+  if (fileType.includes('webreq')) {
+    return <Globe className="h-5 w-5 text-cyan-400" />;
+  }
   return <File className="h-5 w-5 text-slate-400" />;
 };
 
@@ -136,6 +140,7 @@ function StepProgressBar({
 
   const STEP_ORDER = [
     'segment_prep',
+    'webcrawler',
     'bda_processor',
     'format_parser',
     'paddleocr_processor',

@@ -19,6 +19,8 @@ export interface IdpAgentProps {
   gateway?: Gateway;
   bedrockModelId?: string;
   agentStorageBucket?: IBucket;
+  /** Document storage bucket for reading/writing documents */
+  documentBucket?: IBucket;
   websocketMessageQueue?: IQueue;
   codeInterpreterIdentifier?: string;
   backendUrl?: string;
@@ -40,6 +42,7 @@ export class IdpAgent extends Construct {
       gateway,
       bedrockModelId,
       agentStorageBucket,
+      documentBucket,
       websocketMessageQueue,
       codeInterpreterIdentifier,
       backendUrl,
@@ -61,6 +64,9 @@ export class IdpAgent extends Construct {
         ...(bedrockModelId && { BEDROCK_MODEL_ID: bedrockModelId }),
         ...(agentStorageBucket && {
           AGENT_STORAGE_BUCKET_NAME: agentStorageBucket.bucketName,
+        }),
+        ...(documentBucket && {
+          DOCUMENT_BUCKET_NAME: documentBucket.bucketName,
         }),
         ...(websocketMessageQueue && {
           WEBSOCKET_MESSAGE_QUEUE_URL: websocketMessageQueue.queueUrl,
@@ -87,6 +93,11 @@ export class IdpAgent extends Construct {
       agentStorageBucket.grantReadWrite(this.runtime.role);
     }
 
+    // Grant S3 read/write access for document storage
+    if (documentBucket) {
+      documentBucket.grantReadWrite(this.runtime.role);
+    }
+
     // Grant SQS send message for websocket notifications
     if (websocketMessageQueue) {
       websocketMessageQueue.grantSendMessages(this.runtime.role);
@@ -102,6 +113,29 @@ export class IdpAgent extends Construct {
           'bedrock:InvokeModel',
           'bedrock:InvokeModelWithResponseStream',
           'bedrock:Rerank',
+        ],
+        resources: ['*'],
+      }),
+    );
+
+    // Add AgentCore Browser permissions (complete set for browser automation)
+    this.runtime.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          // Browser instance management
+          'bedrock-agentcore:CreateBrowser',
+          'bedrock-agentcore:DeleteBrowser',
+          'bedrock-agentcore:GetBrowser',
+          'bedrock-agentcore:ListBrowsers',
+          // Browser session management
+          'bedrock-agentcore:StartBrowserSession',
+          'bedrock-agentcore:StopBrowserSession',
+          'bedrock-agentcore:GetBrowserSession',
+          'bedrock-agentcore:ListBrowserSessions',
+          // Browser streaming
+          'bedrock-agentcore:UpdateBrowserStream',
+          'bedrock-agentcore:ConnectBrowserAutomationStream',
+          'bedrock-agentcore:ConnectBrowserLiveViewStream',
         ],
         resources: ['*'],
       }),

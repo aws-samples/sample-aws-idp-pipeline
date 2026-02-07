@@ -1169,6 +1169,16 @@ export default function ChatPanel({
                             messages.length > 0
                           }
                           onClick={() => {
+                            if (!researchMode) {
+                              // Disable other modes when enabling research
+                              if (selectedAgent && onAgentSelect) {
+                                onAgentSelect(null);
+                              }
+                              if (voiceChatMode) {
+                                setNovaSonicMode(false);
+                                onVoiceChatDisconnect?.();
+                              }
+                            }
                             setResearchMode(!researchMode);
                             setShowToolsMenu(false);
                           }}
@@ -1204,7 +1214,10 @@ export default function ChatPanel({
                           <button
                             type="button"
                             disabled={!!selectedAgent || researchMode}
-                            onClick={() => setShowVoiceModelSubmenu((v) => !v)}
+                            onClick={() => {
+                              setShowVoiceModelSubmenu((v) => !v);
+                              setShowAgentSubmenu(false);
+                            }}
                             className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
                               selectedAgent || researchMode
                                 ? 'opacity-40 cursor-not-allowed'
@@ -1239,6 +1252,13 @@ export default function ChatPanel({
                                   ) {
                                     handleNovaSonicDisable();
                                   } else {
+                                    // Deselect other modes when selecting voice chat
+                                    if (selectedAgent && onAgentSelect) {
+                                      onAgentSelect(null);
+                                    }
+                                    if (researchMode) {
+                                      setResearchMode(false);
+                                    }
                                     onVoiceModelSelect('nova_sonic');
                                     if (!voiceChatMode) {
                                       setNovaSonicMode(true);
@@ -1278,6 +1298,13 @@ export default function ChatPanel({
                                   ) {
                                     handleNovaSonicDisable();
                                   } else {
+                                    // Deselect other modes when selecting voice chat
+                                    if (selectedAgent && onAgentSelect) {
+                                      onAgentSelect(null);
+                                    }
+                                    if (researchMode) {
+                                      setResearchMode(false);
+                                    }
                                     onVoiceModelSelect('gemini');
                                     if (!voiceChatMode) {
                                       setNovaSonicMode(true);
@@ -1317,6 +1344,13 @@ export default function ChatPanel({
                                   ) {
                                     handleNovaSonicDisable();
                                   } else {
+                                    // Deselect other modes when selecting voice chat
+                                    if (selectedAgent && onAgentSelect) {
+                                      onAgentSelect(null);
+                                    }
+                                    if (researchMode) {
+                                      setResearchMode(false);
+                                    }
                                     onVoiceModelSelect('openai');
                                     if (!voiceChatMode) {
                                       setNovaSonicMode(true);
@@ -1382,7 +1416,10 @@ export default function ChatPanel({
                             <button
                               type="button"
                               disabled={researchMode || voiceChatMode}
-                              onClick={() => setShowAgentSubmenu((v) => !v)}
+                              onClick={() => {
+                                setShowAgentSubmenu((v) => !v);
+                                setShowVoiceModelSubmenu(false);
+                              }}
                               className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
                                 researchMode || voiceChatMode
                                   ? 'opacity-40 cursor-not-allowed'
@@ -1451,6 +1488,14 @@ export default function ChatPanel({
                                           setPendingAgentChange(agent.name);
                                           setShowRemoveAgentConfirm(true);
                                         } else {
+                                          // Disable other modes when selecting agent
+                                          if (voiceChatMode) {
+                                            setNovaSonicMode(false);
+                                            onVoiceChatDisconnect?.();
+                                          }
+                                          if (researchMode) {
+                                            setResearchMode(false);
+                                          }
                                           onAgentSelect(agent.name);
                                         }
                                         setShowToolsMenu(false);

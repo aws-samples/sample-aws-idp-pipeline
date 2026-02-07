@@ -22,7 +22,8 @@ from shared.ddb_client import (
     record_step_error,
     update_workflow_status,
     get_project_language,
-    WorkflowStatus,
+    get_entity_prefix,
+        WorkflowStatus,
     StepName,
 )
 from shared.s3_analysis import (
@@ -319,6 +320,61 @@ def parse_preprocessor_metadata(file_uri: str) -> list:
     return metadata.get('segments', [])
 
 
+def download_text_from_s3(uri: str) -> Optional[str]:
+    """Download text file from S3. Returns None if not found."""
+    client = get_s3_client()
+    bucket, key = parse_s3_uri(uri)
+
+    try:
+        response = client.get_object(Bucket=bucket, Key=key)
+        return response['Body'].read().decode('utf-8')
+    except client.exceptions.NoSuchKey:
+        print(f'File not found: {uri}')
+        return None
+    except Exception as e:
+        print(f'Error downloading {uri}: {e}')
+        return None
+
+
+def parse_webcrawler_result(file_uri: str) -> dict:
+    """Read webcrawler result from content.md and metadata.json.
+
+    Returns dict with:
+    - webcrawler_content: markdown content
+    - source_url: original URL
+    - web_title: page title
+    """
+    bucket, base_path = get_document_base_path(file_uri)
+
+    # Read markdown content
+    content_uri = f's3://{bucket}/{base_path}/webcrawler/content.md'
+    content = download_text_from_s3(content_uri)
+    if content is None:
+        print(f'WebCrawler content not found: {content_uri}')
+        return {}
+
+    # Read metadata
+    metadata_uri = f's3://{bucket}/{base_path}/webcrawler/metadata.json'
+    metadata = download_json_from_s3(metadata_uri)
+
+    source_url = ''
+    web_title = ''
+    if metadata:
+        source_url = metadata.get('url', '')
+        web_title = metadata.get('title', '')
+
+    return {
+        'webcrawler_content': content,
+        'source_url': source_url,
+        'web_title': web_title,
+    }
+
+
+def is_webreq_file(file_type: str) -> bool:
+    """Check if file type is a web request file."""
+    return file_type == 'application/x-webreq'
+
+
 def find_bda_output(file_uri: str) -> tuple[str, str]:
     """Find BDA output from S3 by scanning bda-output folder.
 
@@ -388,6 +444,7 @@ def handler(event, _context):
 
     is_video = is_video_file(file_type)
     is_media = is_media_file(file_type)  # video or audio
+    is_webreq = is_webreq_file(file_type)
 
     try:
         # 1. Read preprocessor metadata (always required)
@@ -439,7 +496,17 @@ def handler(event, _context):
             else:
                 print('Transcribe: no result found')
 
-        # 5. Merge preprocessing results into existing segment files
+        # 6. Read webcrawler results (for .webreq files)
+        webcrawler_data = {}
+        if is_webreq:
+            print('Reading webcrawler results...')
+            webcrawler_data = parse_webcrawler_result(file_uri)
+            if webcrawler_data:
+                print(f'WebCrawler: found content for {webcrawler_data.get("web_title", "unknown page")}')
+            else:
+                print('WebCrawler: no result found')
+
+        # 7. Merge preprocessing results into existing segment files
         segment_count = len(preprocessor_segments)
         for seg in preprocessor_segments:
             i = seg['segment_index']
@@ -501,6 +568,20 @@ def handler(event, _context):
                 if 'transcribe_segments' not in segment_data:
                     segment_data['transcribe_segments'] = []
 
+            # Merge webcrawler results (for .webreq files)
+            # image_uri is already set by segment-prep from preprocessed/page_0000.png
+            if is_webreq and webcrawler_data:
+                segment_data['webcrawler_content'] = webcrawler_data.get('webcrawler_content', '')
+                segment_data['source_url'] = webcrawler_data.get('source_url', '')
+                segment_data['web_title'] = webcrawler_data.get('web_title', '')
+            elif is_webreq:
+                if 'webcrawler_content' not in segment_data:
+                    segment_data['webcrawler_content'] = ''
+                if 'source_url' not in segment_data:
+                    segment_data['source_url'] = ''
+                if 'web_title' not in segment_data:
+                    segment_data['web_title'] = ''
+
             # Save merged segment to S3
             save_segment_analysis(file_uri, i, segment_data)
             print(f'Merged segment {i}')
@@ -532,5 +613,6 @@ def handler(event, _context):
         error_msg = str(e)
         print(f'Error building segments: {error_msg}')
         record_step_error(workflow_id, StepName.SEGMENT_BUILDER, error_msg)
-        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, error=error_msg)
+        entity_type = get_entity_prefix(file_type)
+        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, entity_type=entity_type, error=error_msg)
         raise

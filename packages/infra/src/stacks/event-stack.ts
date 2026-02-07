@@ -295,6 +295,13 @@ export class EventStack extends Stack {
       },
     });
 
+    // Get WebCrawler Agent Runtime ARN from SSM
+    const webcrawlerAgentRuntimeArn = ssm.StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.WEBCRAWLER_AGENT_RUNTIME_ARN,
+    );
+    typeDetection.addEnvironment('WEBCRAWLER_AGENT_RUNTIME_ARN', webcrawlerAgentRuntimeArn);
+
     // Grant permissions
     backendTable.grantReadWriteData(typeDetection);
     this.ocrQueue.grantSendMessages(typeDetection);
@@ -307,6 +314,16 @@ export class EventStack extends Stack {
       new iam.PolicyStatement({
         actions: ['application-autoscaling:RegisterScalableTarget'],
         resources: ['*'],
+      }),
+    );
+
+    // Grant permission to invoke WebCrawler AgentCore Runtime
+    typeDetection.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['bedrock-agentcore:InvokeAgentRuntime'],
+        resources: [
+          `arn:aws:bedrock-agentcore:${this.region}:${this.account}:runtime/webcrawler_agent*`,
+        ],
       }),
     );
 

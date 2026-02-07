@@ -32,4 +32,6 @@ export const SSM_KEYS = {
   WEBSOCKET_MESSAGE_QUEUE_ARN: '/idp-v2/websocket/message-queue-arn',
   // External services
   UNSPLASH_ACCESS_KEY: '/idp-v2/external-service/unsplash/access-key',
+  // WebCrawler
+  WEBCRAWLER_AGENT_RUNTIME_ARN: '/idp-v2/webcrawler-agent/runtime-arn',
 } as const;

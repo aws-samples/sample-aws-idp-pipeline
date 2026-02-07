@@ -5,7 +5,7 @@ Returns status information for the polling loop.
 """
 import json
 
-from shared.ddb_client import is_preprocess_complete, is_analysis_busy
+from shared.ddb_client import is_preprocess_complete, is_analysis_busy, get_entity_prefix
 
 
 def handler(event, context):
@@ -13,6 +13,8 @@ def handler(event, context):
 
     workflow_id = event.get('workflow_id')
     document_id = event.get('document_id')
+    file_uri = event.get('file_uri', '')
+    file_type = event.get('file_type', '')
 
     if not workflow_id or not document_id:
         return {
@@ -24,7 +26,10 @@ def handler(event, context):
             }
         }
 
-    result = is_preprocess_complete(document_id, workflow_id)
+    # Determine entity type based on file type (WEB for webreq, DOC for others)
+    entity_type = get_entity_prefix(file_type)
+
+    result = is_preprocess_complete(document_id, workflow_id, entity_type)
     result['analysis_busy'] = False
 
     if result['all_completed'] and not result['any_failed']:

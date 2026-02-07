@@ -13,7 +13,8 @@ from shared.ddb_client import (
     record_step_complete,
     record_step_error,
     get_project_language,
-    StepName,
+    get_entity_prefix,
+        StepName,
     WorkflowStatus,
 )
 from shared.s3_analysis import get_all_segment_analyses, save_summary
@@ -176,6 +177,7 @@ def handler(event, context):
     document_id = event.get('document_id')
     project_id = event.get('project_id')
     file_uri = event.get('file_uri')
+    file_type = event.get('file_type', '')
     segment_count = event.get('segment_count', 0)
 
     summarizer_model_id = os.environ['SUMMARIZER_MODEL_ID']
@@ -247,10 +249,12 @@ def handler(event, context):
             segment_count=total_pages
         )
 
+        entity_type = get_entity_prefix(file_type)
         update_workflow_status(
             document_id,
             workflow_id,
             WorkflowStatus.COMPLETED,
+            entity_type=entity_type,
         )
 
         print(f'Completed workflow {workflow_id} with {total_pages} pages')
@@ -266,7 +270,8 @@ def handler(event, context):
         print(f'Error in document summarization: {e}')
         traceback.print_exc()
         record_step_error(workflow_id, StepName.DOCUMENT_SUMMARIZER, str(e))
-        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, error=str(e))
+        entity_type = get_entity_prefix(file_type)
+        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, entity_type=entity_type, error=str(e))
         return {
             'workflow_id': workflow_id,
             'status': 'failed',

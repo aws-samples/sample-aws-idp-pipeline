@@ -69,8 +69,9 @@ export class WorkflowStream extends Construct {
     );
 
     // Add DynamoDB Stream event source with filters
-    // Filter 1: DOC#/WF# records (workflow status changes)
-    // Filter 2: WF#/STEP records (step progress changes)
+    // Filter 1: DOC#/WF# records (workflow status changes for documents)
+    // Filter 2: WEB#/WF# records (workflow status changes for web crawls)
+    // Filter 3: WF#/STEP records (step progress changes)
     this.function.addEventSource(
       new DynamoEventSource(backendTable, {
         startingPosition: StartingPosition.LATEST,
@@ -81,6 +82,14 @@ export class WorkflowStream extends Construct {
             dynamodb: {
               Keys: {
                 PK: { S: FilterRule.beginsWith('DOC#') },
+                SK: { S: FilterRule.beginsWith('WF#') },
+              },
+            },
+          }),
+          FilterCriteria.filter({
+            dynamodb: {
+              Keys: {
+                PK: { S: FilterRule.beginsWith('WEB#') },
                 SK: { S: FilterRule.beginsWith('WF#') },
               },
             },

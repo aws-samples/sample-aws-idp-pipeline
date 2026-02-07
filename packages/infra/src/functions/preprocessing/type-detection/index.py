@@ -24,6 +24,7 @@ BDA_QUEUE_URL = os.environ.get('BDA_QUEUE_URL', '')
 TRANSCRIBE_QUEUE_URL = os.environ.get('TRANSCRIBE_QUEUE_URL', '')
 WORKFLOW_QUEUE_URL = os.environ.get('WORKFLOW_QUEUE_URL', '')
 SAGEMAKER_ENDPOINT_NAME = os.environ.get('SAGEMAKER_ENDPOINT_NAME', '')
+WEBCRAWLER_AGENT_RUNTIME_ARN = os.environ.get('WEBCRAWLER_AGENT_RUNTIME_ARN', '')
 
 MIME_TYPE_MAP = {
     # Documents
@@ -51,7 +52,21 @@ MIME_TYPE_MAP = {
     'wav': 'audio/wav',
     'flac': 'audio/flac',
     'm4a': 'audio/mp4',
+    # Web Request
+    'webreq': 'application/x-webreq',
 }
+
+agentcore_client = None
+
+
+def get_agentcore_client():
+    global agentcore_client
+    if agentcore_client is None:
+        agentcore_client = boto3.client(
+            'bedrock-agentcore',
+            region_name=os.environ.get('AWS_REGION', 'us-east-1')
+        )
+    return agentcore_client
 
 
 def get_sqs_client():
@@ -178,6 +193,22 @@ def send_to_queue(queue_url: str, message: dict) -> None:
     )
 
 
+def invoke_webcrawler_agent(message: dict) -> None:
+    """Invoke WebCrawler AgentCore Runtime asynchronously."""
+    if not WEBCRAWLER_AGENT_RUNTIME_ARN:
+        print('WEBCRAWLER_AGENT_RUNTIME_ARN not configured, skipping')
+        return
+
+    client = get_agentcore_client()
+    payload_bytes = json.dumps(message).encode('utf-8')
+    client.invoke_agent_runtime(
+        agentRuntimeArn=WEBCRAWLER_AGENT_RUNTIME_ARN,
+        payload=payload_bytes,
+        contentType='application/json',
+    )
+    print(f"Invoked WebCrawler Agent: {message.get('workflow_id')}")
+
+
 def distribute_to_queues(
     workflow_id: str,
     document_id: str,
@@ -193,6 +224,7 @@ def distribute_to_queues(
     is_image = file_type.startswith('image/')
     is_video = file_type.startswith('video/')
     is_audio = file_type.startswith('audio/')
+    is_webreq = file_type == 'application/x-webreq'
 
     base_message = {
         'workflow_id': workflow_id,
@@ -206,8 +238,17 @@ def distribute_to_queues(
 
     queues_sent = []
 
-    # OCR Queue (PDF or Image)
-    if is_pdf or is_image:
+    # WebCrawler Agent (for .webreq files)
+    if is_webreq:
+        invoke_webcrawler_agent({
+            **base_message,
+            'processor': PreprocessType.WEBCRAWLER,
+        })
+        queues_sent.append('webcrawler')
+        print(f'Invoked WebCrawler Agent: {workflow_id}')
+
+    # OCR Queue (PDF or Image, but not .webreq)
+    if (is_pdf or is_image) and not is_webreq:
         send_to_queue(OCR_QUEUE_URL, {
             **base_message,
             'processor': PreprocessType.OCR,
@@ -218,8 +259,8 @@ def distribute_to_queues(
         # Trigger immediate SageMaker scale-out (bypass CloudWatch metric delay)
         trigger_sagemaker_scale_out()
 
-    # BDA Queue (if use_bda is enabled)
-    if use_bda:
+    # BDA Queue (if use_bda is enabled, but not .webreq)
+    if use_bda and not is_webreq:
         send_to_queue(BDA_QUEUE_URL, {
             **base_message,
             'processor': PreprocessType.BDA,
@@ -227,8 +268,8 @@ def distribute_to_queues(
         queues_sent.append('bda')
         print(f'Sent to BDA queue: {workflow_id}')
 
-    # Transcribe Queue (Video or Audio)
-    if is_video or is_audio:
+    # Transcribe Queue (Video or Audio, but not .webreq)
+    if (is_video or is_audio) and not is_webreq:
         send_to_queue(TRANSCRIBE_QUEUE_URL, {
             **base_message,
             'processor': PreprocessType.TRANSCRIBE,
@@ -239,7 +280,7 @@ def distribute_to_queues(
     # Always send to Workflow Queue (Step Functions will poll for completion)
     send_to_queue(WORKFLOW_QUEUE_URL, {
         **base_message,
-        'processing_type': get_processing_type(file_type),
+        'processing_type': 'web' if is_webreq else get_processing_type(file_type),
         'use_bda': use_bda,
     })
     queues_sent.append('workflow')

@@ -3,5 +3,6 @@
   "summarizer": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
   "summarizerLite": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
   "embedding": "amazon.nova-2-multimodal-embeddings-v1:0",
-  "videoAnalysis": "us.twelvelabs.pegasus-1-2-v1:0"
+  "videoAnalysis": "us.twelvelabs.pegasus-1-2-v1:0",
+  "webcrawler": "anthropic.claude-sonnet-4-5-20250929-v1:0"
 }

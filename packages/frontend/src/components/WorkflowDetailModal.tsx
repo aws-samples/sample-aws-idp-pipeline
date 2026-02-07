@@ -290,6 +290,12 @@ export default function WorkflowDetailModal({
           title: `AI Analysis - Segment ${currentSegmentIndex + 1}`,
           qaItems,
         };
+      } else if (prev.type === 'web') {
+        return {
+          ...prev,
+          content: currentSegment.webcrawler_content || '',
+          title: `Web Crawler - Segment ${currentSegmentIndex + 1}`,
+        };
       } else {
         // Determine which content type is being viewed from the title
         const contentType = prev.title.split(' ')[0]; // 'BDA' or 'Parser'
@@ -401,8 +407,10 @@ export default function WorkflowDetailModal({
                     </svg>
                   </button>
                   <div className="flex gap-1 flex-1">
-                    {['BDA', 'OCR', 'Parser', 'STT', 'AI']
+                    {['Web', 'BDA', 'OCR', 'Parser', 'STT', 'AI']
                       .filter((type) => {
+                        if (type === 'Web')
+                          return !!currentSegment?.webcrawler_content;
                         if (type === 'BDA')
                           return !!currentSegment?.bda_indexer;
                         if (type === 'OCR')
@@ -449,6 +457,14 @@ export default function WorkflowDetailModal({
                                 title: `Transcribe - Segment ${currentSegmentIndex + 1}`,
                                 qaItems: [],
                               });
+                            } else if (type === 'Web') {
+                              setAnalysisPopup({
+                                type: 'web',
+                                content:
+                                  currentSegment?.webcrawler_content || '',
+                                title: `Web Crawler - Segment ${currentSegmentIndex + 1}`,
+                                qaItems: [],
+                              });
                             } else {
                               const contentMap: Record<string, string> = {
                                 BDA: currentSegment?.bda_indexer || '',
@@ -466,9 +482,11 @@ export default function WorkflowDetailModal({
                             (type === 'AI' && analysisPopup.type === 'ai') ||
                             (type === 'OCR' && analysisPopup.type === 'ocr') ||
                             (type === 'STT' && analysisPopup.type === 'stt') ||
+                            (type === 'Web' && analysisPopup.type === 'web') ||
                             (type !== 'AI' &&
                               type !== 'OCR' &&
                               type !== 'STT' &&
+                              type !== 'Web' &&
                               analysisPopup.title.includes(type))
                               ? 'bg-blue-500 text-white'
                               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -671,6 +689,47 @@ export default function WorkflowDetailModal({
                         </button>
                       ))}
                     </div>
+                  ) : analysisPopup.type === 'web' && analysisPopup.content ? (
+                    <div className="flex-1 overflow-y-auto">
+                      {(currentSegment?.source_url ||
+                        currentSegment?.page_title) && (
+                        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          {currentSegment?.page_title && (
+                            <p className="text-sm font-medium text-slate-800 mb-1">
+                              {currentSegment.page_title}
+                            </p>
+                          )}
+                          {currentSegment?.source_url && (
+                            <a
+                              href={currentSegment.source_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline break-all"
+                            >
+                              {currentSegment.source_url}
+                            </a>
+                          )}
+                        </div>
+                      )}
+                      <div className="prose prose-slate prose-sm max-w-none prose-table:border-collapse prose-th:border prose-th:border-slate-300 prose-th:bg-slate-100 prose-th:p-2 prose-td:border prose-td:border-slate-300 prose-td:p-2">
+                        <Markdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            img: ({ src, alt }) => (
+                              <img
+                                src={src}
+                                alt={alt || ''}
+                                className="max-w-full h-auto rounded-lg shadow-md my-4"
+                                loading="lazy"
+                              />
+                            ),
+                          }}
+                          urlTransform={(url) => url}
+                        >
+                          {analysisPopup.content}
+                        </Markdown>
+                      </div>
+                    </div>
                   ) : !analysisPopup.content ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
                       <svg
@@ -816,19 +875,26 @@ export default function WorkflowDetailModal({
                     </p>
                     {segmentLoading && !currentSegment ? (
                       <div className="flex gap-2">
-                        {['BDA', 'OCR', 'Parser', 'STT', 'AI'].map((label) => (
-                          <div
-                            key={label}
-                            className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-center animate-pulse"
-                          >
-                            <div className="h-3 w-8 bg-slate-200 rounded mx-auto mb-2" />
-                            <div className="h-6 w-6 bg-slate-200 rounded mx-auto" />
-                          </div>
-                        ))}
+                        {['Web', 'BDA', 'OCR', 'Parser', 'STT', 'AI'].map(
+                          (label) => (
+                            <div
+                              key={label}
+                              className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-center animate-pulse"
+                            >
+                              <div className="h-3 w-8 bg-slate-200 rounded mx-auto mb-2" />
+                              <div className="h-6 w-6 bg-slate-200 rounded mx-auto" />
+                            </div>
+                          ),
+                        )}
                       </div>
                     ) : (
                       <div className="flex gap-2">
                         {[
+                          {
+                            type: 'web',
+                            label: 'Web',
+                            content: currentSegment?.webcrawler_content,
+                          },
                           {
                             type: 'bda',
                             label: 'BDA',
@@ -902,6 +968,14 @@ export default function WorkflowDetailModal({
                                     type: 'stt',
                                     content: '',
                                     title: `Transcribe - Segment ${currentSegmentIndex + 1}`,
+                                    qaItems: [],
+                                  });
+                                } else if (type === 'web') {
+                                  setAnalysisPopup({
+                                    type: 'web',
+                                    content:
+                                      currentSegment?.webcrawler_content || '',
+                                    title: `Web Crawler - Segment ${currentSegmentIndex + 1}`,
                                     qaItems: [],
                                   });
                                 } else {

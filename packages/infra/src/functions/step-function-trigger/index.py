@@ -10,7 +10,7 @@ from datetime import datetime
 
 import boto3
 
-from shared.ddb_client import get_workflow, update_workflow_status, WorkflowStatus
+from shared.ddb_client import get_workflow, update_workflow_status, get_entity_prefix, WorkflowStatus
 
 sfn_client = None
 STEP_FUNCTION_ARN = os.environ.get('STEP_FUNCTION_ARN')
@@ -50,10 +50,13 @@ def handler(event, context):
                 print(f'Skipping: missing workflow_id or document_id')
                 continue
 
+            # Determine entity type based on file type (WEB# for webreq, DOC# for others)
+            entity_type = get_entity_prefix(file_type)
+
             # Verify workflow exists (created by type-detection)
-            workflow = get_workflow(document_id, workflow_id)
+            workflow = get_workflow(document_id, workflow_id, entity_type)
             if not workflow:
-                print(f'Workflow not found: {workflow_id}, document: {document_id}')
+                print(f'Workflow not found: {workflow_id}, document: {document_id}, entity_type: {entity_type}')
                 continue
 
             client = get_sfn_client()
@@ -87,6 +90,7 @@ def handler(event, context):
                 document_id=document_id,
                 workflow_id=workflow_id,
                 status=WorkflowStatus.IN_PROGRESS,
+                entity_type=entity_type,
                 execution_arn=execution_arn
             )
 

@@ -18,24 +18,44 @@ def _decimal_to_python(obj: Any) -> Any:
     return obj
 
 
-def make_workflow_key(document_id: str, workflow_id: str) -> DdbKey:
-    return {"PK": f"DOC#{document_id}", "SK": f"WF#{workflow_id}"}
+def make_workflow_key(document_id: str, workflow_id: str, entity_type: str = "DOC") -> DdbKey:
+    return {"PK": f"{entity_type}#{document_id}", "SK": f"WF#{workflow_id}"}
 
 
 def get_workflow_item(document_id: str, workflow_id: str) -> Workflow | None:
+    """Get workflow item (checks both DOC and WEB entities)."""
     table = get_table()
-    response = table.get_item(Key=make_workflow_key(document_id, workflow_id))
+
+    # Try DOC#{document_id} first
+    response = table.get_item(Key=make_workflow_key(document_id, workflow_id, "DOC"))
+    item = response.get("Item")
+    if item:
+        return Workflow(**item)
+
+    # Try WEB#{document_id}
+    response = table.get_item(Key=make_workflow_key(document_id, workflow_id, "WEB"))
     item = response.get("Item")
     return Workflow(**item) if item else None
 
 
 def query_workflows(document_id: str) -> list[Workflow]:
-    """Query all workflows for a document."""
+    """Query all workflows for a document (both DOC and WEB entities)."""
     table = get_table()
+    workflows = []
+
+    # Query DOC#{document_id}
     response = table.query(
         KeyConditionExpression=Key("PK").eq(f"DOC#{document_id}") & Key("SK").begins_with("WF#"),
     )
-    return [Workflow(**item) for item in response.get("Items", [])]
+    workflows.extend([Workflow(**item) for item in response.get("Items", [])])
+
+    # Query WEB#{document_id}
+    response = table.query(
+        KeyConditionExpression=Key("PK").eq(f"WEB#{document_id}") & Key("SK").begins_with("WF#"),
+    )
+    workflows.extend([Workflow(**item) for item in response.get("Items", [])])
+
+    return workflows
 
 
 def query_workflow_segments(workflow_id: str) -> list[Segment]:
@@ -119,9 +139,13 @@ def delete_workflow_item(document_id: str, workflow_id: str) -> int:
     table = get_table()
     deleted_count = 0
 
-    # Delete main workflow item under document
-    table.delete_item(Key=make_workflow_key(document_id, workflow_id))
-    deleted_count += 1
+    # Delete main workflow item under document (try both DOC and WEB)
+    for entity_type in ["DOC", "WEB"]:
+        try:
+            table.delete_item(Key=make_workflow_key(document_id, workflow_id, entity_type))
+            deleted_count += 1
+        except Exception:
+            pass
 
     # Delete all items under WF#{workflow_id} (STEP, SEG#*, CONN#*, etc.)
     response = table.query(KeyConditionExpression=Key("PK").eq(f"WF#{workflow_id}"))

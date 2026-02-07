@@ -76,6 +76,10 @@ def build_page_content(segment_data: dict) -> str:
     if format_parser:
         parts.append(f'[PDF Text]\n{format_parser}')
 
+    webcrawler_content = segment_data.get('webcrawler_content', '')
+    if webcrawler_content:
+        parts.append(f'[Web]\n{webcrawler_content}')
+
     ai_analysis = segment_data.get('ai_analysis', [])
     for analysis in ai_analysis:
         query = analysis.get('analysis_query', '')
@@ -132,6 +136,10 @@ def build_content_combined(segment_data: dict) -> str:
     format_parser = segment_data.get('format_parser', '')
     if format_parser:
         parts.append(f'## Format Parser\n{format_parser}')
+
+    webcrawler_content = segment_data.get('webcrawler_content', '')
+    if webcrawler_content:
+        parts.append(f'## Web Crawler\n{webcrawler_content}')
 
     transcribe_segments = segment_data.get('transcribe_segments', [])
     if transcribe_segments:
