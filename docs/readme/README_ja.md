@@ -60,7 +60,7 @@
   - Claude Haiku 4.5による文書要約生成
   - Nova Embedによる1024次元ベクトル埋め込み
 
-- **ハイブリッド検索**
+- **[ハイブリッド検索](../vectordb/VECTORDB_ja.md)**
   - LanceDBベクトル検索 + FTS（全文検索）
   - Kiwi韓国語形態素解析器によるキーワード抽出
   - Bedrock Cohere Rerank v3.5による結果再ランキング

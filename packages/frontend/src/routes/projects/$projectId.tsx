@@ -50,7 +50,10 @@ import DocumentUploadModal from '../../components/DocumentUploadModal';
 import ArtifactViewer from '../../components/ArtifactViewer';
 import SystemPromptModal from '../../components/SystemPromptModal';
 import { useSetSidebarSessions } from '../../contexts/SidebarSessionContext';
-import { useNovaSonic } from '../../hooks/useNovaSonic';
+import { useVoiceChat, BidiModelType } from '../../hooks/useVoiceChat';
+import VoiceModelSettingsModal, {
+  getStoredVoiceModelConfig,
+} from '../../components/VoiceModelSettingsModal';
 
 interface DocumentWorkflows {
   document_id: string;
@@ -101,7 +104,7 @@ function ProjectDetailPage() {
     setStreamingBlocks([]);
     setSelectedAgent(null);
     setSelectedArtifact(null);
-    setNovaSonicMode(false);
+    setVoiceChatMode(false);
     pendingMessagesRef.current = [];
     progressFetchedRef.current = false;
   }, [projectId]);
@@ -151,81 +154,157 @@ function ProjectDetailPage() {
   const progressFetchedRef = useRef(false);
   const sidePanelAutoExpandedRef = useRef(false);
   const chatScrollPositionRef = useRef(0);
-  const [novaSonicMode, setNovaSonicMode] = useState(false);
+  const [researchMode, setResearchMode] = useState(false);
+  const [voiceChatMode, setVoiceChatMode] = useState(false);
+  const [showVoiceModelSettings, setShowVoiceModelSettings] = useState(false);
+  const [selectedVoiceModel, setSelectedVoiceModel] = useState<BidiModelType>(
+    () => getStoredVoiceModelConfig().modelType,
+  );
 
-  // Nova Sonic voice chat
-  const novaSonic = useNovaSonic({
+  // Voice Chat voice chat
+  const voiceChat = useVoiceChat({
     sessionId: currentSessionId,
     projectId,
     userId: userId || '',
   });
 
-  // Keep ref to novaSonic.disconnect for stable callback
-  const novaSonicDisconnectRef = useRef(novaSonic.disconnect);
-  novaSonicDisconnectRef.current = novaSonic.disconnect;
+  // Keep ref to voiceChat.disconnect for stable callback
+  const voiceChatDisconnectRef = useRef(voiceChat.disconnect);
+  voiceChatDisconnectRef.current = voiceChat.disconnect;
 
-  // Handle Nova Sonic transcripts as chat messages
-  const novaSonicMsgIdRef = useRef<{ user?: string; assistant?: string }>({});
+  // Connect Voice Chat with stored voice model config
+  const handleVoiceChatConnect = useCallback(() => {
+    const config = getStoredVoiceModelConfig();
+    // Use the currently selected model from submenu
+    config.modelType = selectedVoiceModel;
+    // Set apiKey from the stored apiKeys for the selected model
+    if (config.apiKeys) {
+      config.apiKey = config.apiKeys[selectedVoiceModel as 'gemini' | 'openai'];
+    }
+    voiceChat.connect(config);
+  }, [voiceChat, selectedVoiceModel]);
+
+  // Handle voice model selection from submenu
+  const handleVoiceModelSelect = useCallback(
+    (modelType: BidiModelType) => {
+      setSelectedVoiceModel(modelType);
+      // If already connected with a different model, disconnect and reconnect
+      if (voiceChat.state.status === 'connected') {
+        voiceChat.disconnect();
+        setTimeout(() => {
+          const config = getStoredVoiceModelConfig();
+          config.modelType = modelType;
+          if (config.apiKeys) {
+            config.apiKey = config.apiKeys[modelType as 'gemini' | 'openai'];
+          }
+          voiceChat.connect(config);
+        }, 500);
+      }
+    },
+    [voiceChat],
+  );
+
+  // Handle Voice Chat transcripts as chat messages
+  // Track current message ID and last role for grouping
+  const voiceChatMsgIdRef = useRef<{ current?: string; lastRole?: string }>({});
 
   useEffect(() => {
-    const unsubscribe = novaSonic.onTranscript((text, role, isFinal) => {
+    const unsubscribe = voiceChat.onTranscript((text, role, isFinal) => {
       const chatRole = role === 'user' ? 'user' : 'assistant';
-      const existingId = novaSonicMsgIdRef.current[chatRole];
 
-      // User: only comes with is_final=true, so add directly
-      if (chatRole === 'user') {
-        if (isFinal) {
+      // Debug: log transcript details
+      console.log('[Transcript]', {
+        model: selectedVoiceModel,
+        role,
+        isFinal,
+        textLength: text.length,
+        textPreview: text.slice(0, 50),
+        lastRole: voiceChatMsgIdRef.current.lastRole,
+      });
+
+      // Model-specific transcript handling:
+      // - Nova Sonic: is_final=true is actual transcript
+      // - Gemini: is_final=false is actual, is_final=true is thinking (filter)
+      // - OpenAI: is_final=true is actual, is_final=false is broken text (ignore)
+
+      if (selectedVoiceModel === 'openai') {
+        // OpenAI: only show is_final=true, ignore is_final=false (broken text)
+        if (!isFinal) {
+          return;
+        }
+        // Show final transcript
+        const lastRole = voiceChatMsgIdRef.current.lastRole;
+        const currentId = voiceChatMsgIdRef.current.current;
+        if (lastRole === chatRole && currentId) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === currentId ? { ...m, content: m.content + text } : m,
+            ),
+          );
+        } else {
+          const newId = crypto.randomUUID();
+          voiceChatMsgIdRef.current = { current: newId, lastRole: chatRole };
           setMessages((prev) => [
             ...prev,
-            {
-              id: crypto.randomUUID(),
-              role: 'user',
-              content: text,
-              timestamp: new Date(),
-            },
+            { id: newId, role: chatRole, content: text, timestamp: new Date() },
           ]);
         }
         return;
       }
 
-      // Assistant: streams with is_final=false, final is duplicate
-      if (isFinal) {
-        novaSonicMsgIdRef.current.assistant = undefined;
+      if (selectedVoiceModel === 'gemini') {
+        // Gemini: is_final=true is thinking output (filter), is_final=false is actual
+        if (isFinal) {
+          console.log(
+            '[Transcript] Gemini: filtering out is_final=true (thinking)',
+          );
+          return;
+        }
+        // Show streaming transcript
+        const lastRole = voiceChatMsgIdRef.current.lastRole;
+        const currentId = voiceChatMsgIdRef.current.current;
+        if (lastRole === chatRole && currentId) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === currentId ? { ...m, content: m.content + text } : m,
+            ),
+          );
+        } else {
+          const newId = crypto.randomUUID();
+          voiceChatMsgIdRef.current = { current: newId, lastRole: chatRole };
+          setMessages((prev) => [
+            ...prev,
+            { id: newId, role: chatRole, content: text, timestamp: new Date() },
+          ]);
+        }
         return;
       }
 
-      if (existingId) {
-        // Append to existing message
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === existingId ? { ...m, content: m.content + text } : m,
-          ),
-        );
-      } else {
-        // Create new message
-        const newId = crypto.randomUUID();
-        novaSonicMsgIdRef.current.assistant = newId;
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: newId,
-            role: 'assistant',
-            content: text,
-            timestamp: new Date(),
-          },
-        ]);
+      // Nova Sonic (default): is_final=true is actual transcript
+      if (isFinal) {
+        if (voiceChatMsgIdRef.current.lastRole !== chatRole) {
+          const newId = crypto.randomUUID();
+          voiceChatMsgIdRef.current = { current: newId, lastRole: chatRole };
+          setMessages((prev) => [
+            ...prev,
+            { id: newId, role: chatRole, content: text, timestamp: new Date() },
+          ]);
+        }
       }
     });
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [novaSonic.onTranscript]);
+  }, [voiceChat.onTranscript, selectedVoiceModel]);
 
-  // Handle Nova Sonic tool use events - add to messages for correct ordering
+  // Handle Voice Chat tool use events - add to messages for correct ordering
   useEffect(() => {
-    const unsubscribe = novaSonic.onToolUse((toolName, toolUseId, status) => {
+    const unsubscribe = voiceChat.onToolUse((toolName, toolUseId, status) => {
       if (status === 'started') {
-        // Clear current assistant message ref so next transcript creates new message
-        novaSonicMsgIdRef.current.assistant = undefined;
+        // Tool use is always assistant role - update lastRole
+        voiceChatMsgIdRef.current = {
+          current: toolUseId,
+          lastRole: 'assistant',
+        };
         // Add tool_use as a message
         setMessages((prev) => [
           ...prev,
@@ -248,14 +327,19 @@ function ProjectDetailPage() {
               : m,
           ),
         );
+        // Clear ref so next assistant transcript creates a new bubble (not append to tool_use)
+        voiceChatMsgIdRef.current = {
+          current: undefined,
+          lastRole: 'assistant',
+        };
       }
     });
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [novaSonic.onToolUse]);
+  }, [voiceChat.onToolUse]);
 
-  // Handle Nova Sonic text input - add user message and send to WebSocket
-  const handleNovaSonicText = useCallback(
+  // Handle Voice Chat text input - add user message and send to WebSocket
+  const handleVoiceChatText = useCallback(
     (text: string) => {
       // Add user message to chat
       setMessages((prev) => [
@@ -267,41 +351,41 @@ function ProjectDetailPage() {
           timestamp: new Date(),
         },
       ]);
-      // Send to Nova Sonic
-      novaSonic.sendText(text);
+      // Send to Voice Chat
+      voiceChat.sendText(text);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [novaSonic.sendText],
+    [voiceChat.sendText],
   );
 
-  // Disconnect Nova Sonic on page leave
+  // Disconnect Voice Chat on page leave
   useEffect(() => {
     return () => {
-      novaSonic.disconnect();
+      voiceChat.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync novaSonicMode with connection status
+  // Sync voiceChatMode with connection status
   useEffect(() => {
     if (
-      novaSonic.state.status === 'connected' ||
-      novaSonic.state.status === 'connecting'
+      voiceChat.state.status === 'connected' ||
+      voiceChat.state.status === 'connecting'
     ) {
-      setNovaSonicMode(true);
+      setVoiceChatMode(true);
     }
-  }, [novaSonic.state.status]);
+  }, [voiceChat.state.status]);
 
-  // Clear streaming blocks when Nova Sonic connects or disconnects
+  // Clear streaming blocks when Voice Chat connects or disconnects
   useEffect(() => {
     if (
-      novaSonic.state.status === 'idle' ||
-      novaSonic.state.status === 'error' ||
-      novaSonic.state.status === 'connecting'
+      voiceChat.state.status === 'idle' ||
+      voiceChat.state.status === 'error' ||
+      voiceChat.state.status === 'connecting'
     ) {
       setStreamingBlocks([]);
     }
-  }, [novaSonic.state.status]);
+  }, [voiceChat.state.status]);
 
   // Persist panel sizes in localStorage
   const panelStorageKey = 'idp-panel-sizes-v2';
@@ -494,8 +578,10 @@ function ProjectDetailPage() {
     const newSessionId = nanoid(33);
     setCurrentSessionId(newSessionId);
     setMessages([]);
-    setNovaSonicMode(false);
-    novaSonicDisconnectRef.current();
+    setSelectedAgent(null);
+    setResearchMode(false);
+    setVoiceChatMode(false);
+    voiceChatDisconnectRef.current();
   }, []);
 
   const loadAgents = useCallback(async () => {
@@ -814,12 +900,35 @@ function ProjectDetailPage() {
       // Match agent from session
       const session = sessions.find((s) => s.session_id === sessionId);
 
-      // Check if this is a voice session
-      if (session?.agent_id === 'voice') {
-        setNovaSonicMode(true);
+      // Check if this is a voice session (voice_nova_sonic, voice_gemini, voice_openai)
+      // Also handle legacy 'voice' agent_id for backward compatibility
+      if (session?.agent_id?.startsWith('voice')) {
+        setResearchMode(false);
+        setVoiceChatMode(true);
+        setSelectedAgent(null);
+        // Extract model type from agent_id (e.g., "voice_gemini" -> "gemini")
+        const modelType = session.agent_id.replace(
+          'voice_',
+          '',
+        ) as BidiModelType;
+        if (
+          modelType === 'nova_sonic' ||
+          modelType === 'gemini' ||
+          modelType === 'openai'
+        ) {
+          setSelectedVoiceModel(modelType);
+        } else {
+          // Legacy 'voice' or unknown - default to nova_sonic
+          setSelectedVoiceModel('nova_sonic');
+        }
+      } else if (session?.agent_id === 'research') {
+        // Research mode session
+        setResearchMode(true);
+        setVoiceChatMode(false);
         setSelectedAgent(null);
       } else if (session?.agent_id && session.agent_id !== 'default') {
-        setNovaSonicMode(false);
+        setResearchMode(false);
+        setVoiceChatMode(false);
         const agent = agents.find(
           (a) => a.agent_id === session.agent_id || a.name === session.agent_id,
         );
@@ -839,7 +948,8 @@ function ProjectDetailPage() {
           setSelectedAgent(null);
         }
       } else {
-        setNovaSonicMode(false);
+        setResearchMode(false);
+        setVoiceChatMode(false);
         setSelectedAgent(null);
       }
 
@@ -1173,6 +1283,19 @@ function ProjectDetailPage() {
       return data;
     },
     [fetchApi],
+  );
+
+  // Memoized callback for WorkflowDetailModal to prevent infinite re-renders
+  const handleLoadSegment = useCallback(
+    (segmentIndex: number) => {
+      if (!selectedWorkflow) return Promise.reject('No workflow selected');
+      return loadSegment(
+        selectedWorkflow.document_id,
+        selectedWorkflow.workflow_id,
+        segmentIndex,
+      );
+    },
+    [loadSegment, selectedWorkflow],
   );
 
   const handleReanalyze = useCallback(
@@ -2129,18 +2252,23 @@ function ProjectDetailPage() {
                 onSourceClick={handleSourceClick}
                 loadingSourceKey={loadingSourceKey}
                 scrollPositionRef={chatScrollPositionRef}
-                novaSonicAvailable={!!bidiAgentRuntimeArn}
-                novaSonicState={novaSonic.state}
-                novaSonicAudioLevel={{
-                  input: novaSonic.inputAudioLevel,
-                  output: novaSonic.outputAudioLevel,
+                researchMode={researchMode}
+                onResearchModeChange={setResearchMode}
+                voiceChatAvailable={!!bidiAgentRuntimeArn}
+                voiceChatState={voiceChat.state}
+                voiceChatAudioLevel={{
+                  input: voiceChat.inputAudioLevel,
+                  output: voiceChat.outputAudioLevel,
                 }}
-                novaSonicMode={novaSonicMode}
-                onNovaSonicModeChange={setNovaSonicMode}
-                onNovaSonicConnect={novaSonic.connect}
-                onNovaSonicDisconnect={novaSonic.disconnect}
-                onNovaSonicText={handleNovaSonicText}
-                onNovaSonicToggleMic={novaSonic.toggleMic}
+                voiceChatMode={voiceChatMode}
+                selectedVoiceModel={selectedVoiceModel}
+                onVoiceChatModeChange={setVoiceChatMode}
+                onVoiceChatConnect={handleVoiceChatConnect}
+                onVoiceChatDisconnect={voiceChat.disconnect}
+                onVoiceChatText={handleVoiceChatText}
+                onVoiceChatToggleMic={voiceChat.toggleMic}
+                onVoiceChatSettings={() => setShowVoiceModelSettings(true)}
+                onVoiceModelSelect={handleVoiceModelSelect}
               />
             </div>
           </ResizablePanel>
@@ -2273,13 +2401,7 @@ function ProjectDetailPage() {
           onAddQa={handleAddQa}
           onDeleteQa={handleDeleteQa}
           initialSegmentIndex={initialSegmentIndex}
-          onLoadSegment={(segmentIndex) =>
-            loadSegment(
-              selectedWorkflow.document_id,
-              selectedWorkflow.workflow_id,
-              segmentIndex,
-            )
-          }
+          onLoadSegment={handleLoadSegment}
         />
       )}
 
@@ -2343,6 +2465,23 @@ function ProjectDetailPage() {
         isOpen={showSystemPrompt}
         onClose={() => setShowSystemPrompt(false)}
         tabs={systemPromptTabs}
+      />
+
+      {/* Voice Model Settings Modal - only shows settings for currently selected model */}
+      <VoiceModelSettingsModal
+        isOpen={showVoiceModelSettings}
+        onClose={() => setShowVoiceModelSettings(false)}
+        selectedModel={selectedVoiceModel}
+        onSave={() => {
+          // Config is saved in localStorage by the modal
+          // If connected, reconnect with new settings (voice change)
+          if (voiceChat.state.status === 'connected') {
+            voiceChat.disconnect();
+            setTimeout(() => {
+              handleVoiceChatConnect();
+            }, 500);
+          }
+        }}
       />
     </div>
   );

@@ -317,7 +317,8 @@
     "goToProject": "Go to Project",
     "unsupportedType": "Preview not available for this file type",
     "loadError": "Failed to load artifact",
-    "noPreview": "Preview not available"
+    "noPreview": "Preview not available",
+    "pptxNote": "Some fonts or elements may not display correctly. Download the file for the best experience."
   },
   "languages": {
     "ko": "Korean",
@@ -385,13 +386,13 @@
   "voiceSystemPrompt": {
     "saveSuccess": "Voice system prompt saved successfully"
   },
-  "novaSonic": {
-    "title": "Nova Sonic Voice",
+  "voiceChat": {
+    "title": "Voice Chat",
     "description": "Real-time voice conversation with AI",
     "connectionFailed": "Connection failed. Try again.",
     "startVoiceChat": "Start Voice Chat",
     "retryConnection": "Retry Connection",
-    "connecting": "Connecting to Nova Sonic...",
+    "connecting": "Connecting...",
     "live": "Live",
     "ai": "AI",
     "you": "You",
@@ -400,5 +401,12 @@
     "unmute": "Unmute",
     "connectFirst": "Start voice chat first",
     "sessionTimedOut": "Session ended due to 3 minutes of inactivity"
+  },
+  "voiceModel": {
+    "settings": "Voice Model Settings",
+    "model": "Model",
+    "apiKey": "API Key",
+    "apiKeyHint": "Stored locally in your browser only",
+    "voice": "Voice"
   }
 }

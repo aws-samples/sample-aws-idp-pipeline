@@ -61,7 +61,7 @@
   - Claude Haiku 4.5로 문서 요약 생성
   - Nova Embed로 1024차원 벡터 임베딩
 
-- **하이브리드 검색**
+- **[하이브리드 검색](../vectordb/VECTORDB_ko.md)**
   - LanceDB 벡터 검색 + FTS(Full-Text Search)
   - Kiwi 한국어 형태소 분석기 기반 키워드 추출
   - Bedrock Cohere Rerank v3.5로 결과 재순위화

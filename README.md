@@ -60,7 +60,7 @@ An AI-powered IDP prototype that transforms unstructured data into actionable in
   - Document summarization with Claude Haiku 4.5
   - 1024-dimensional vector embeddings with Nova Embed
 
-- **Hybrid Search**
+- **[Hybrid Search](docs/vectordb/VECTORDB_en.md)**
   - LanceDB vector search + Full-Text Search (FTS)
   - Kiwi Korean morphological analyzer for keyword extraction
   - Result reranking with Bedrock Cohere Rerank v3.5

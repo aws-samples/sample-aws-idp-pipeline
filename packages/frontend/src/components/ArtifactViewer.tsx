@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   X,
@@ -6,11 +6,13 @@ import {
   Loader2,
   FileText,
   Image as ImageIcon,
+  Presentation,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import mammoth from 'mammoth';
+import { init as initPptxPreview } from 'pptx-preview';
 import { Artifact } from '../types/project';
 
 interface ArtifactViewerProps {
@@ -53,6 +55,33 @@ export default function ArtifactViewer({
     artifact.content_type ===
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
     artifact.filename.toLowerCase().endsWith('.docx');
+  const isPptx =
+    artifact.content_type ===
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+    artifact.filename.toLowerCase().endsWith('.pptx');
+
+  const pptxContainerRef = useRef<HTMLDivElement>(null);
+  const pptxDataRef = useRef<ArrayBuffer | null>(null);
+
+  const renderPptx = useCallback((arrayBuffer: ArrayBuffer) => {
+    if (!pptxContainerRef.current) return;
+    pptxContainerRef.current.innerHTML = '';
+    const containerWidth = pptxContainerRef.current.clientWidth - 32;
+    const width = containerWidth;
+    const height = Math.round(width * 0.5625); // 16:9 aspect ratio
+    const previewer = initPptxPreview(pptxContainerRef.current, {
+      width,
+      height,
+    });
+    previewer.preview(arrayBuffer).then(() => {
+      const wrapper = pptxContainerRef.current
+        ?.firstElementChild as HTMLElement | null;
+      if (wrapper) {
+        wrapper.style.setProperty('height', 'auto', 'important');
+        wrapper.style.setProperty('overflow-y', 'visible', 'important');
+      }
+    });
+  }, []);
 
   const loadContent = useCallback(async () => {
     setLoading(true);
@@ -66,6 +95,14 @@ export default function ArtifactViewer({
 
       if (isImage || isPdf) {
         setImageUrl(presignedUrl);
+      } else if (isPptx) {
+        const response = await fetch(presignedUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to load: ${response.status}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        pptxDataRef.current = arrayBuffer;
+        renderPptx(arrayBuffer);
       } else if (isDocx) {
         const response = await fetch(presignedUrl);
         if (!response.ok) {
@@ -97,16 +134,32 @@ export default function ArtifactViewer({
     getPresignedUrl,
     isImage,
     isPdf,
+    isPptx,
     isDocx,
     isText,
     isMarkdown,
     isHtml,
+    renderPptx,
     t,
   ]);
 
   useEffect(() => {
     loadContent();
   }, [loadContent]);
+
+  // Resize PPTX on container resize
+  useEffect(() => {
+    if (!isPptx || !pptxContainerRef.current) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (pptxDataRef.current) {
+        renderPptx(pptxDataRef.current);
+      }
+    });
+
+    resizeObserver.observe(pptxContainerRef.current);
+    return () => resizeObserver.disconnect();
+  }, [isPptx, renderPptx]);
 
   // Close on Escape key
   useEffect(() => {
@@ -123,9 +176,13 @@ export default function ArtifactViewer({
     <div className="absolute inset-0 z-10 flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden animate-fade-in">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+        <div
+          className={`flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br ${isPptx ? 'from-orange-500 to-red-600' : 'from-blue-500 to-indigo-600'}`}
+        >
           {isImage ? (
             <ImageIcon className="w-4 h-4 text-white" />
+          ) : isPptx ? (
+            <Presentation className="w-4 h-4 text-white" />
           ) : (
             <FileText className="w-4 h-4 text-white" />
           )}
@@ -179,6 +236,16 @@ export default function ArtifactViewer({
             title={artifact.filename}
             className="w-full h-full rounded-lg border-0"
           />
+        ) : isPptx ? (
+          <div className="h-full flex flex-col">
+            <p className="text-xs text-slate-400 dark:text-slate-500 text-center mb-2">
+              {t('artifacts.pptxNote')}
+            </p>
+            <div
+              ref={pptxContainerRef}
+              className="flex-1 overflow-auto bg-slate-100 dark:bg-slate-800 rounded-lg p-4 [&_.pptx-wrapper]:flex [&_.pptx-wrapper]:flex-col [&_.pptx-wrapper]:items-center [&_.pptx-wrapper]:gap-6 [&_.pptx-slide]:shadow-xl [&_.pptx-slide]:rounded-lg [&_.pptx-slide]:overflow-hidden"
+            />
+          </div>
         ) : isImage && imageUrl ? (
           <div className="flex items-center justify-center h-full bg-slate-100 dark:bg-slate-800 rounded-lg">
             <img

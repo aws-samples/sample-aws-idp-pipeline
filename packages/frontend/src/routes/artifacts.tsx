@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation, getI18n } from 'react-i18next';
 import {
   FileText,
@@ -17,11 +17,13 @@ import {
   ChevronDown,
   X,
   ExternalLink,
+  Presentation,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import mammoth from 'mammoth';
+import { init as initPptxPreview } from 'pptx-preview';
 import { useAwsClient } from '../hooks/useAwsClient';
 import { useToast } from '../components/Toast';
 import { Artifact, ArtifactsResponse } from '../types/project';
@@ -41,6 +43,12 @@ function getArtifactIcon(contentType: string) {
     contentType === 'application/msword'
   )
     return FileText;
+  if (
+    contentType ===
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+    contentType === 'application/vnd.ms-powerpoint'
+  )
+    return Presentation;
   if (
     contentType === 'application/vnd.ms-excel' ||
     contentType ===
@@ -67,6 +75,12 @@ function getIconClass(contentType: string): string {
     contentType === 'application/msword'
   )
     return 'bg-indigo-500';
+  if (
+    contentType ===
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+    contentType === 'application/vnd.ms-powerpoint'
+  )
+    return 'bg-orange-500';
   if (
     contentType === 'application/vnd.ms-excel' ||
     contentType ===
@@ -112,6 +126,28 @@ function ArtifactsPage() {
   const [viewerImageUrl, setViewerImageUrl] = useState<string | null>(null);
   const [viewerLoading, setViewerLoading] = useState(false);
   const [viewerError, setViewerError] = useState<string | null>(null);
+  const pptxContainerRef = useRef<HTMLDivElement>(null);
+  const pptxDataRef = useRef<ArrayBuffer | null>(null);
+
+  const renderPptx = useCallback((arrayBuffer: ArrayBuffer) => {
+    if (!pptxContainerRef.current) return;
+    pptxContainerRef.current.innerHTML = '';
+    const containerWidth = pptxContainerRef.current.clientWidth - 32;
+    const width = containerWidth;
+    const height = Math.round(width * 0.5625); // 16:9 aspect ratio
+    const previewer = initPptxPreview(pptxContainerRef.current, {
+      width,
+      height,
+    });
+    previewer.preview(arrayBuffer).then(() => {
+      const wrapper = pptxContainerRef.current
+        ?.firstElementChild as HTMLElement | null;
+      if (wrapper) {
+        wrapper.style.setProperty('height', 'auto', 'important');
+        wrapper.style.setProperty('overflow-y', 'visible', 'important');
+      }
+    });
+  }, []);
 
   const handleCopyProjectId = async (
     projectId: string,
@@ -286,6 +322,10 @@ function ArtifactsPage() {
         artifact.content_type ===
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
         artifact.filename.toLowerCase().endsWith('.docx');
+      const isPptx =
+        artifact.content_type ===
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+        artifact.filename.toLowerCase().endsWith('.pptx');
 
       try {
         const presignedUrl = await getPresignedDownloadUrl(
@@ -295,6 +335,17 @@ function ArtifactsPage() {
 
         if (isImage || isPdf) {
           setViewerImageUrl(presignedUrl);
+        } else if (isPptx) {
+          const response = await fetch(presignedUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to load: ${response.status}`);
+          }
+          const arrayBuffer = await response.arrayBuffer();
+          pptxDataRef.current = arrayBuffer;
+          // Use setTimeout to ensure container is ready
+          setTimeout(() => {
+            renderPptx(arrayBuffer);
+          }, 100);
         } else if (isDocx) {
           const response = await fetch(presignedUrl);
           if (!response.ok) {
@@ -325,7 +376,7 @@ function ArtifactsPage() {
         setViewerLoading(false);
       }
     },
-    [getPresignedDownloadUrl, t],
+    [getPresignedDownloadUrl, renderPptx, t],
   );
 
   const handleCloseViewer = useCallback(() => {
@@ -333,7 +384,29 @@ function ArtifactsPage() {
     setViewerContent(null);
     setViewerImageUrl(null);
     setViewerError(null);
+    pptxDataRef.current = null;
   }, []);
+
+  // Resize PPTX on container resize
+  useEffect(() => {
+    if (!viewingArtifact || !pptxContainerRef.current) return;
+
+    const isPptx =
+      viewingArtifact.content_type ===
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+      viewingArtifact.filename.toLowerCase().endsWith('.pptx');
+
+    if (!isPptx) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (pptxDataRef.current) {
+        renderPptx(pptxDataRef.current);
+      }
+    });
+
+    resizeObserver.observe(pptxContainerRef.current);
+    return () => resizeObserver.disconnect();
+  }, [viewingArtifact, renderPptx]);
 
   const handleGoToProject = useCallback(
     (projectId: string) => {
@@ -648,6 +721,18 @@ function ArtifactsPage() {
                   title={viewingArtifact.filename}
                   className="w-full h-[70vh] rounded-lg border-0"
                 />
+              ) : viewingArtifact.content_type ===
+                  'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+                viewingArtifact.filename.toLowerCase().endsWith('.pptx') ? (
+                <div className="flex flex-col h-[70vh]">
+                  <p className="text-xs text-slate-400 dark:text-slate-500 text-center mb-2">
+                    {t('artifacts.pptxNote')}
+                  </p>
+                  <div
+                    ref={pptxContainerRef}
+                    className="flex-1 overflow-auto bg-slate-100 dark:bg-slate-800 rounded-lg p-4 [&_.pptx-wrapper]:flex [&_.pptx-wrapper]:flex-col [&_.pptx-wrapper]:items-center [&_.pptx-wrapper]:gap-6 [&_.pptx-slide]:shadow-xl [&_.pptx-slide]:rounded-lg [&_.pptx-slide]:overflow-hidden"
+                  />
+                </div>
               ) : (viewingArtifact.content_type ===
                   'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
                   viewingArtifact.filename.toLowerCase().endsWith('.docx')) &&

@@ -1,4 +1,4 @@
-"""Tool registry for Nova Sonic voice agent."""
+"""Tool registry for voice chat agent."""
 
 import json
 import logging
@@ -69,7 +69,11 @@ TOOL_REGISTRY: dict[str, dict[str, Any]] = {}
 
 
 def tool(name: str, description: str, input_schema: dict):
-    """Decorator to register a tool."""
+    """Decorator to register a tool.
+
+    Note: inputSchema uses {"json": schema} format for Gemini Live compatibility.
+    Nova Sonic also accepts this format.
+    """
 
     def decorator(
         func: Callable[[dict, dict], Coroutine[Any, Any, dict]],
@@ -79,7 +83,7 @@ def tool(name: str, description: str, input_schema: dict):
             "spec": {
                 "name": name,
                 "description": description,
-                "inputSchema": input_schema,
+                "inputSchema": {"json": input_schema},
             },
         }
 

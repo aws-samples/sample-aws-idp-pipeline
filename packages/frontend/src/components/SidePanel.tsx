@@ -30,6 +30,7 @@ import {
   FileX,
   Search,
   X,
+  Presentation,
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import {
@@ -44,6 +45,12 @@ function getArtifactIcon(contentType: string) {
   if (contentType.startsWith('image/')) return Image;
   if (contentType.startsWith('video/')) return Film;
   if (contentType === 'application/pdf') return FileText;
+  if (
+    contentType ===
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+    contentType === 'application/vnd.ms-powerpoint'
+  )
+    return Presentation;
   if (
     contentType === 'application/vnd.ms-excel' ||
     contentType ===
