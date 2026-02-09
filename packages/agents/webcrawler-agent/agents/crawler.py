@@ -29,11 +29,22 @@ DEFAULT_SYSTEM_PROMPT = """You are a web content extractor. Your task is to:
 1. Navigate to the given URL
 2. Extract the main content of the page
 3. IMPORTANT: Before closing the browser, call the save_screenshot tool to capture the final page
-4. Return the content as clean, well-structured Markdown
+4. Return the content as clean, well-structured Markdown WITH SOURCE ATTRIBUTION
 
 Focus on extracting informative content while ignoring navigation, ads, and other non-content elements.
 Preserve headings, lists, tables, and important formatting.
 Include image alt texts where relevant.
+
+SOURCE ATTRIBUTION REQUIREMENTS:
+- Include source URL after the title: Source: [domain.com](full_url)
+- Add inline links throughout content when referencing specific information
+- Format: "According to [Source](url), ..." or "... ([source](url))"
+- MANDATORY: End with a References section listing all source URLs
+
+Example References section:
+---
+## References
+- [Page Title](https://example.com/page) - Main source
 
 CRITICAL: You MUST call save_screenshot with the session_name before you close or cleanup the browser session."""
 
@@ -196,6 +207,32 @@ def create_save_screenshot_tool(file_uri: str, browser_tool: AgentCoreBrowser) -
             return f"Failed to save screenshot: {e}"
 
     return save_screenshot
+
+
+@tool
+def get_current_time() -> str:
+    """Get the current date and time in UTC and common timezones.
+
+    Returns:
+        Current datetime in UTC, US Eastern, US Pacific, and Asia/Seoul timezones
+    """
+    from zoneinfo import ZoneInfo
+
+    utc_now = datetime.now(timezone.utc)
+
+    timezones = {
+        "UTC": timezone.utc,
+        "US/Eastern": ZoneInfo("America/New_York"),
+        "US/Pacific": ZoneInfo("America/Los_Angeles"),
+        "Asia/Seoul": ZoneInfo("Asia/Seoul"),
+    }
+
+    result = []
+    for tz_name, tz in timezones.items():
+        local_time = utc_now.astimezone(tz)
+        result.append(f"{tz_name}: {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+
+    return "\n".join(result)
 
 
 def create_get_compressed_html_tool(browser_tool: AgentCoreBrowser) -> Callable:
@@ -404,7 +441,7 @@ async def crawl_and_process(
         logger.info(f"Creating agent with model={config.bedrock_model_id}")
         agent = Agent(
             model=config.bedrock_model_id,
-            tools=[browser_tool.browser, save_screenshot_tool, get_compressed_html_tool],
+            tools=[browser_tool.browser, save_screenshot_tool, get_compressed_html_tool, get_current_time],
             system_prompt=system_prompt,
         )
         logger.info("Agent created successfully")
@@ -418,6 +455,7 @@ You have access to the following tools:
 1. browser - for navigation, screenshot (you can SEE the page), and interaction
 2. get_compressed_html - get compressed HTML for efficient content analysis
 3. save_screenshot - saves screenshot to S3 for document pipeline
+4. get_current_time - get current date and time in multiple timezones
 
 Required workflow:
 1. Initialize browser session and navigate to the URL
@@ -432,7 +470,11 @@ HYBRID APPROACH:
 - get_compressed_html gives you the HTML structure (80-90% token savings)
 - Use BOTH to understand the page fully
 
-Return the extracted content in Markdown format."""
+OUTPUT FORMAT:
+- Return content in Markdown format
+- Include source URL after title: Source: [domain.com]({url})
+- Add inline links throughout content referencing the source
+- MANDATORY: End with References section containing all source URLs"""
 
         # Execute the agent in a separate thread to avoid event loop conflicts
         logger.warning(f"[TRACE] Executing agent with prompt: {prompt[:100]}...")

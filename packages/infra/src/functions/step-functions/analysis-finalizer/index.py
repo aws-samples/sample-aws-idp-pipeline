@@ -122,34 +122,42 @@ def generate_page_description(segment_data: dict, page_number: int, language: st
 
 
 def build_content_combined(segment_data: dict) -> str:
-    """Build combined content string for LanceDB."""
+    """Build combined content string for LanceDB.
+
+    Currently only includes AI analysis results. Raw extraction results are
+    used as context for AI analysis but not stored in LanceDB directly.
+    """
     parts = []
 
-    bda_indexer = segment_data.get('bda_indexer', '')
-    if bda_indexer:
-        parts.append(f'## BDA Indexer\n{bda_indexer}')
+    # NOTE: Raw extraction results are commented out.
+    # AI now extracts and verifies original text in Phase 1, so these are redundant.
+    # Uncomment if you need to include raw extraction results in LanceDB.
 
-    paddleocr = segment_data.get('paddleocr', '')
-    if paddleocr:
-        parts.append(f'## PaddleOCR\n{paddleocr}')
+    # bda_indexer = segment_data.get('bda_indexer', '')
+    # if bda_indexer:
+    #     parts.append(f'## BDA Indexer\n{bda_indexer}')
 
-    format_parser = segment_data.get('format_parser', '')
-    if format_parser:
-        parts.append(f'## Format Parser\n{format_parser}')
+    # paddleocr = segment_data.get('paddleocr', '')
+    # if paddleocr:
+    #     parts.append(f'## PaddleOCR\n{paddleocr}')
 
-    webcrawler_content = segment_data.get('webcrawler_content', '')
-    if webcrawler_content:
-        parts.append(f'## Web Crawler\n{webcrawler_content}')
+    # format_parser = segment_data.get('format_parser', '')
+    # if format_parser:
+    #     parts.append(f'## Format Parser\n{format_parser}')
 
-    transcribe_segments = segment_data.get('transcribe_segments', [])
-    if transcribe_segments:
-        segments_text = []
-        for seg in transcribe_segments:
-            start = seg.get('start_time', '')
-            end = seg.get('end_time', '')
-            transcript = seg.get('transcript', '')
-            segments_text.append(f'[{start}s - {end}s] {transcript}')
-        parts.append(f'## Transcribe Segments\n' + '\n'.join(segments_text))
+    # webcrawler_content = segment_data.get('webcrawler_content', '')
+    # if webcrawler_content:
+    #     parts.append(f'## Web Crawler\n{webcrawler_content}')
+
+    # transcribe_segments = segment_data.get('transcribe_segments', [])
+    # if transcribe_segments:
+    #     segments_text = []
+    #     for seg in transcribe_segments:
+    #         start = seg.get('start_time', '')
+    #         end = seg.get('end_time', '')
+    #         transcript = seg.get('transcript', '')
+    #         segments_text.append(f'[{start}s - {end}s] {transcript}')
+    #     parts.append(f'## Transcribe Segments\n' + '\n'.join(segments_text))
 
     ai_analysis = segment_data.get('ai_analysis', [])
     for analysis in ai_analysis:

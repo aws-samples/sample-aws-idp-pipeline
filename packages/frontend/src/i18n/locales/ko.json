@@ -185,7 +185,11 @@
     "inProgress": "처리 중...",
     "uploading": "업로드 중...",
     "preparing": "준비 중...",
-    "starting": "시작 중..."
+    "starting": "시작 중...",
+    "textPreview": "텍스트 미리보기",
+    "chunk": "청크",
+    "noTextContent": "텍스트 콘텐츠가 없습니다",
+    "loadingSegment": "세그먼트 로딩 중..."
   },
   "ocr": {
     "title": "OCR 설정",

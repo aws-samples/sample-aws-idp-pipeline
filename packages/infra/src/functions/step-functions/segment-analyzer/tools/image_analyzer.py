@@ -135,7 +135,8 @@ Provide detailed, professional analysis in {language}."""
                                 'type': 'base64',
                                 'media_type': 'image/png',
                                 'data': image_base64
-                            }
+                            },
+                            'cache_control': {'type': 'ephemeral'}
                         },
                         {
                             'type': 'text',

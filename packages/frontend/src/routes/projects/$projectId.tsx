@@ -885,14 +885,16 @@ function ProjectDetailPage() {
 
   const handleAgentSelect = useCallback(
     (agentName: string | null) => {
+      // Start new session first (this resets selectedAgent to null)
+      handleNewSession();
+
+      // Then set the agent after session reset
       if (agentName === null) {
         setSelectedAgent(null);
       } else {
         const agent = agents.find((a) => a.name === agentName);
         setSelectedAgent(agent || null);
       }
-      // Start new session when agent changes
-      handleNewSession();
     },
     [agents, handleNewSession],
   );

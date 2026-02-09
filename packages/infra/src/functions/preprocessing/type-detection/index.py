@@ -32,6 +32,7 @@ MIME_TYPE_MAP = {
     'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'doc': 'application/msword',
     'txt': 'text/plain',
+    'md': 'text/markdown',
     'csv': 'text/csv',
     # Images
     'png': 'image/png',
@@ -225,6 +226,13 @@ def distribute_to_queues(
     is_video = file_type.startswith('video/')
     is_audio = file_type.startswith('audio/')
     is_webreq = file_type == 'application/x-webreq'
+    is_text = file_type in (
+        'text/plain',
+        'text/markdown',
+        'text/csv',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/msword',
+    )
 
     base_message = {
         'workflow_id': workflow_id,
@@ -278,9 +286,10 @@ def distribute_to_queues(
         print(f'Sent to Transcribe queue: {workflow_id}')
 
     # Always send to Workflow Queue (Step Functions will poll for completion)
+    processing_type = 'web' if is_webreq else ('text' if is_text else get_processing_type(file_type))
     send_to_queue(WORKFLOW_QUEUE_URL, {
         **base_message,
-        'processing_type': 'web' if is_webreq else get_processing_type(file_type),
+        'processing_type': processing_type,
         'use_bda': use_bda,
     })
     queues_sent.append('workflow')

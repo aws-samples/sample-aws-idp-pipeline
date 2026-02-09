@@ -220,8 +220,12 @@ def parse_ocr_result(file_uri: str) -> dict:
     return ocr_results
 
 
-def parse_format_parser_result(file_uri: str) -> dict:
-    """Read format parser result and return indexed by page."""
+def parse_format_parser_result(file_uri: str, is_text: bool = False) -> dict:
+    """Read format parser result and return indexed by page/chunk.
+
+    For PDF: returns {'format_parser': text} per page
+    For text files: returns {'text_content': text} per chunk
+    """
     bucket, base_path = get_document_base_path(file_uri)
     parser_uri = f's3://{bucket}/{base_path}/format-parser/result.json'
 
@@ -230,8 +234,21 @@ def parse_format_parser_result(file_uri: str) -> dict:
         return {}
 
     parser_results = {}
-    pages = result.get('pages', [])
 
+    # Handle text files (chunks)
+    chunks = result.get('chunks', [])
+    if chunks:
+        for chunk in chunks:
+            chunk_index = chunk.get('chunk_index', 0)
+            text = chunk.get('text', '')
+            parser_results[chunk_index] = {
+                'text_content': text,
+                'format_parser': text  # Also set format_parser for consistency
+            }
+        return parser_results
+
+    # Handle PDF (pages)
+    pages = result.get('pages', [])
     for page in pages:
         page_index = page.get('page_index', 0)
         text = page.get('text', '')
@@ -433,6 +450,20 @@ def is_media_file(file_type: str) -> bool:
     return is_video_file(file_type) or is_audio_file(file_type)
 
 
+def is_text_file(file_type: str) -> bool:
+    """Check if file type is a text-based document (DOCX, Markdown, TXT, CSV)."""
+    if not file_type:
+        return False
+    text_types = (
+        'text/plain',
+        'text/markdown',
+        'text/csv',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/msword',
+    )
+    return file_type in text_types
+
+
 def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
@@ -449,6 +480,7 @@ def handler(event, _context):
     is_video = is_video_file(file_type)
     is_media = is_media_file(file_type)  # video or audio
     is_webreq = is_webreq_file(file_type)
+    is_text = is_text_file(file_type)
 
     try:
         # 1. Read preprocessor metadata (always required)
@@ -476,19 +508,23 @@ def handler(event, _context):
             else:
                 print('BDA output not found in S3')
 
-        # 3. Read OCR results
+        # 3. Read OCR results (skip for video and text files)
         ocr_results = {}
-        if not is_video:
+        if not is_video and not is_text:
             print('Reading OCR results...')
             ocr_results = parse_ocr_result(file_uri)
             print(f'OCR: {len(ocr_results)} pages')
 
-        # 4. Read format parser results
+        # 4. Read format parser results (skip for video)
+        # Text files also use format-parser for text extraction
         parser_results = {}
         if not is_video:
             print('Reading format parser results...')
-            parser_results = parse_format_parser_result(file_uri)
-            print(f'Parser: {len(parser_results)} pages')
+            parser_results = parse_format_parser_result(file_uri, is_text=is_text)
+            if is_text:
+                print(f'Parser: {len(parser_results)} chunks')
+            else:
+                print(f'Parser: {len(parser_results)} pages')
 
         # 5. Read transcribe results (for video/audio)
         transcribe_data = {}
@@ -511,9 +547,18 @@ def handler(event, _context):
                 print('WebCrawler: no result found')
 
         # 7. Merge preprocessing results into existing segment files
-        segment_count = len(preprocessor_segments)
-        for seg in preprocessor_segments:
-            i = seg['segment_index']
+        # For text files, use actual chunk count from format-parser (may differ from estimated)
+        if is_text and parser_results:
+            segment_count = len(parser_results)
+            segment_indices = list(range(segment_count))
+            print(f'Text file: using {segment_count} chunks from format-parser')
+        else:
+            segment_count = len(preprocessor_segments)
+            segment_indices = [seg['segment_index'] for seg in preprocessor_segments]
+
+        for i in segment_indices:
+            # For text files, get segment info from preprocessor if available
+            seg = next((s for s in preprocessor_segments if s['segment_index'] == i), None)
 
             # Read existing segment data (created by segment-prep)
             segment_data = get_segment_analysis(file_uri, i)
@@ -521,13 +566,13 @@ def handler(event, _context):
                 # Fallback: create new if not exists
                 segment_data = {
                     'segment_index': i,
-                    'segment_type': seg.get('segment_type', 'PAGE'),
-                    'image_uri': seg.get('image_uri', ''),
+                    'segment_type': seg.get('segment_type', 'TEXT' if is_text else 'PAGE') if seg else ('TEXT' if is_text else 'PAGE'),
+                    'image_uri': seg.get('image_uri', '') if seg else '',
                     'ai_analysis': [],
                 }
                 # Media-specific fields (video/audio)
                 if is_media:
-                    segment_data['file_uri'] = seg.get('file_uri', file_uri)
+                    segment_data['file_uri'] = seg.get('file_uri', file_uri) if seg else file_uri
 
             # Update status to ANALYZING
             segment_data['status'] = SegmentStatus.ANALYZING
@@ -559,6 +604,9 @@ def handler(event, _context):
             if i in parser_results:
                 parser_data = parser_results[i]
                 segment_data['format_parser'] = parser_data.get('format_parser', '')
+                # For text files, also merge text_content
+                if is_text and 'text_content' in parser_data:
+                    segment_data['text_content'] = parser_data['text_content']
             elif 'format_parser' not in segment_data:
                 segment_data['format_parser'] = ''
 

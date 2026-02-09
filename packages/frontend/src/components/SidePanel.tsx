@@ -92,6 +92,18 @@ const getFileIcon = (fileType: string) => {
   if (fileType.includes('webreq')) {
     return <Globe className="h-5 w-5 text-cyan-400" />;
   }
+  if (fileType === 'text/markdown') {
+    return <FileCode className="h-5 w-5 text-indigo-400" />;
+  }
+  if (fileType === 'text/csv') {
+    return <FileSpreadsheet className="h-5 w-5 text-green-400" />;
+  }
+  if (fileType.includes('wordprocessing')) {
+    return <FileText className="h-5 w-5 text-blue-500" />;
+  }
+  if (fileType === 'text/plain') {
+    return <FileText className="h-5 w-5 text-slate-500" />;
+  }
   return <File className="h-5 w-5 text-slate-400" />;
 };
 

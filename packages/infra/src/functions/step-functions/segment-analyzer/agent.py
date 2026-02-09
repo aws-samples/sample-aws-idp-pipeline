@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 import boto3
 import yaml
 from strands import Agent
-from strands.models import BedrockModel
+from strands.models import BedrockModel, CacheConfig
 
 from tools import create_image_analyzer_tool, create_image_rotator_tool, create_video_analyzer_tool
 
@@ -101,6 +101,7 @@ class VisionReactAgent:
         self.previous_context = context
 
         is_video = segment_type in ('VIDEO', 'CHAPTER')
+        is_text = segment_type == 'TEXT'
 
         if is_video:
             self.current_video_uri = video_uri
@@ -126,7 +127,9 @@ class VisionReactAgent:
 
         model = BedrockModel(
             model_id=self.model_id,
-            region_name=self.region
+            region_name=self.region,
+            cache_tools='default',
+            cache_config=CacheConfig(strategy='auto')
         )
 
         tools = []
@@ -141,6 +144,9 @@ class VisionReactAgent:
                 language=language_name
             )
             tools.append(analyze_video)
+        elif is_text:
+            # Text-only analysis: no tools needed, just analyze from context
+            pass
         else:
             analyze_image = create_image_analyzer_tool(
                 image_data_getter=self._get_image_data,
@@ -158,9 +164,26 @@ class VisionReactAgent:
             )
             tools.extend([analyze_image, rotate_image])
 
-        system_prompt = self._load_prompt('video_system_prompt' if is_video else 'system_prompt')
+        if is_video:
+            system_prompt = self._load_prompt('video_system_prompt')
+        elif is_text:
+            system_prompt = self._load_prompt('text_system_prompt')
+        else:
+            system_prompt = self._load_prompt('system_prompt')
+
         if not system_prompt:
-            system_prompt = """You are a Technical Document Analysis Expert. Analyze documents thoroughly using available tools.
+            if is_text:
+                system_prompt = """You are a Technical Document Analysis Expert. Analyze text documents thoroughly.
+
+When analyzing text content:
+1. Read and understand the provided text content carefully.
+2. Extract key information, main topics, and important details.
+3. Identify structure, sections, and organization.
+4. Provide comprehensive analysis.
+
+{user_instructions}"""
+            else:
+                system_prompt = """You are a Technical Document Analysis Expert. Analyze documents thoroughly using available tools.
 
 When analyzing:
 1. First verify image orientation. If text appears rotated or upside down, use rotate_image tool.
@@ -205,6 +228,35 @@ Use the analyze_video tool to systematically analyze the video content and provi
 ## Key Findings
 
 IMPORTANT: Provide all analysis in {language_name}."""
+        elif is_text:
+            user_query = self._load_prompt('text_user_query')
+            if user_query:
+                user_query = user_query.format(
+                    segment_index=segment_index + 1,
+                    context=context,
+                    language=language_name
+                )
+            else:
+                user_query = f"""Please analyze the following text document segment (chunk {segment_index + 1}).
+
+Text content:
+{context}
+
+Analyze the text content directly and provide results in the following format:
+
+## Original Text
+(Preserve the original text with proper formatting)
+
+## Content Summary
+(Brief summary of the main content)
+
+## Key Information
+(Important facts, data, and details extracted from the text)
+
+## Structure Analysis
+(Document structure, sections, formatting if applicable)
+
+IMPORTANT: Provide all analysis in {language_name}."""
         else:
             user_query = self._load_prompt('user_query')
             if user_query:
@@ -237,7 +289,7 @@ IMPORTANT: Provide all analysis in {language_name}."""
 
         try:
             print(f'Starting analysis for document {document_id}, segment {segment_index}')
-            print(f'Segment type: {segment_type}, Video: {is_video}')
+            print(f'Segment type: {segment_type}, Video: {is_video}, Text: {is_text}')
 
             result = agent(user_query)
             response_text = str(result)

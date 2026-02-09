@@ -185,7 +185,11 @@
     "inProgress": "Processing...",
     "uploading": "Uploading...",
     "preparing": "Preparing...",
-    "starting": "Starting..."
+    "starting": "Starting...",
+    "textPreview": "Text Preview",
+    "chunk": "Chunk",
+    "noTextContent": "No text content available",
+    "loadingSegment": "Loading segment..."
   },
   "ocr": {
     "title": "OCR Settings",

@@ -185,7 +185,11 @@
     "inProgress": "処理中...",
     "uploading": "アップロード中...",
     "preparing": "準備中...",
-    "starting": "開始中..."
+    "starting": "開始中...",
+    "textPreview": "テキストプレビュー",
+    "chunk": "チャンク",
+    "noTextContent": "テキストコンテンツがありません",
+    "loadingSegment": "セグメントを読み込み中..."
   },
   "ocr": {
     "title": "OCR設定",

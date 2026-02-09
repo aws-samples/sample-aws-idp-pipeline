@@ -73,11 +73,33 @@ If user provided specific instructions, prioritize accordingly:
 </user_instructions>
 
 <markdown_output>
-Generate clean Markdown:
+Generate clean Markdown with proper source attribution:
+
+**Header:**
 - Start with page title as H1
-- Include source URL as metadata
+- Include source URL immediately after title: `Source: [domain.com](full_url)`
+
+**Content Structure:**
 - Use ## for sections, ### for subsections
 - Preserve lists, tables, code blocks
-- Convert links to [text](url) format
 - No HTML tags in output
+
+**IMPORTANT - Inline Source Links:**
+- When referencing specific information, include inline links to the source
+- Format: "According to [Source Title](url), ..." or "... ([source](url))"
+- Link relevant terms, product names, or key concepts back to the source page
+- If content comes from specific sections, link to anchor if available
+
+**MANDATORY - References Section:**
+At the end of every document, include:
+```
+---
+
+## References
+
+- [Page Title](full_url) - Main source for this content
+- [Section Name](url#anchor) - If specific sections were referenced
+```
+
+Even for single-page crawls, always include the References section with the source URL.
 </markdown_output>

@@ -41,6 +41,9 @@ from shared.s3_analysis import (
 # Image quality settings for PDF rendering
 PDF_DPI = 150  # DPI for PDF page rendering
 
+# Supported PDF extensions
+PDF_EXTENSIONS = {'.pdf'}
+
 # Supported image extensions
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.tiff', '.tif', '.webp', '.bmp'}
 
@@ -52,6 +55,11 @@ AUDIO_EXTENSIONS = {'.mp3', '.wav', '.flac', '.aac', '.m4a', '.ogg', '.wma'}
 
 # Web request extension
 WEBREQ_EXTENSIONS = {'.webreq'}
+
+# Text-based document extensions (no image generation needed)
+DOCX_EXTENSIONS = {'.docx', '.doc'}
+MARKDOWN_EXTENSIONS = {'.md', '.markdown'}
+TEXT_EXTENSIONS = {'.txt', '.csv'}
 
 
 def get_file_extension(file_uri: str) -> str:
@@ -224,6 +232,57 @@ def process_webreq(file_uri: str, bucket: str, base_path: str) -> list[dict]:
     }]
 
 
+def prepare_text_segments(file_uri: str, file_type: str) -> list[dict]:
+    """Prepare placeholder segments for text files.
+
+    Estimates chunk count from file size. Actual text extraction
+    is done by format-parser, and text_content is merged by segment-builder.
+    """
+    client = get_s3_client()
+    bucket, key = parse_s3_uri(file_uri)
+
+    # Get file size to estimate chunk count
+    try:
+        response = client.head_object(Bucket=bucket, Key=key)
+        file_size = response['ContentLength']
+    except Exception as e:
+        print(f'Error getting file size: {e}')
+        file_size = 0
+
+    # Don't estimate - just create 1 placeholder segment
+    # format-parser will determine actual chunk count, segment-builder will use it
+    estimated_chunks = 1
+    print(f'Text file size: {file_size} bytes, creating 1 placeholder segment')
+
+    # Create placeholder segments (text_content will be filled by segment-builder)
+    segments = []
+    for i in range(estimated_chunks):
+        segments.append({
+            'segment_index': i,
+            'segment_type': 'TEXT',
+            'file_uri': file_uri,
+            # text_content will be populated by segment-builder from format-parser result
+        })
+
+    return segments
+
+
+# Keep for backward compatibility but mark as deprecated
+def process_docx(file_uri: str, bucket: str, base_path: str) -> list[dict]:
+    """DEPRECATED: Use prepare_text_segments instead."""
+    return prepare_text_segments(file_uri, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+
+
+def process_markdown(file_uri: str, bucket: str, base_path: str) -> list[dict]:
+    """DEPRECATED: Use prepare_text_segments instead."""
+    return prepare_text_segments(file_uri, 'text/markdown')
+
+
+def process_text_file(file_uri: str, bucket: str, base_path: str) -> list[dict]:
+    """DEPRECATED: Use prepare_text_segments instead."""
+    return prepare_text_segments(file_uri, 'text/plain')
+
+
 def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
@@ -242,7 +301,7 @@ def handler(event, _context):
         if ext in WEBREQ_EXTENSIONS or file_type == 'application/x-webreq':
             print('Processing as web request')
             segments = process_webreq(file_uri, bucket, base_path)
-        elif file_type == 'application/pdf' or ext == '.pdf':
+        elif ext in PDF_EXTENSIONS or file_type == 'application/pdf':
             print('Processing as PDF')
             segments = process_pdf(file_uri, bucket, base_path)
         elif ext in IMAGE_EXTENSIONS or file_type.startswith('image/'):
@@ -254,6 +313,18 @@ def handler(event, _context):
         elif ext in AUDIO_EXTENSIONS or file_type.startswith('audio/'):
             print('Processing as audio')
             segments = process_audio(file_uri)
+        elif ext in DOCX_EXTENSIONS or file_type in (
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/msword'
+        ):
+            print('Processing as DOCX')
+            segments = process_docx(file_uri, bucket, base_path)
+        elif ext in MARKDOWN_EXTENSIONS or file_type == 'text/markdown':
+            print('Processing as Markdown')
+            segments = process_markdown(file_uri, bucket, base_path)
+        elif ext in TEXT_EXTENSIONS or file_type in ('text/plain', 'text/csv'):
+            print('Processing as text file')
+            segments = process_text_file(file_uri, bucket, base_path)
         else:
             # Unknown type - treat as single segment
             print(f'Unknown file type: {file_type}, ext: {ext}. Treating as single segment.')
@@ -304,6 +375,14 @@ def handler(event, _context):
                 segment_data['webcrawler_content'] = ''
                 segment_data['source_url'] = ''
                 segment_data['web_title'] = ''
+
+            # Text-specific fields (DOCX, Markdown, TXT)
+            if segment_type == 'TEXT':
+                segment_data['file_uri'] = seg.get('file_uri', file_uri)
+                segment_data['text_content'] = seg.get('text_content', '')
+                segment_data['chunk_uri'] = seg.get('chunk_uri', '')
+                # Text files use format_parser field for analysis
+                segment_data['format_parser'] = seg.get('text_content', '')
 
             save_segment_analysis(file_uri, seg['segment_index'], segment_data)
             print(f'Created initial segment {seg["segment_index"]}')

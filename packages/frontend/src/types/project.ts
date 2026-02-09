@@ -65,7 +65,7 @@ export interface TranscribeSegment {
 
 export interface SegmentData {
   segment_index: number;
-  segment_type?: 'PAGE' | 'VIDEO' | 'CHAPTER';
+  segment_type?: 'PAGE' | 'VIDEO' | 'CHAPTER' | 'TEXT' | 'WEB' | 'AUDIO';
   image_uri: string;
   image_url: string | null;
   file_uri?: string;
@@ -80,6 +80,9 @@ export interface SegmentData {
   webcrawler_content?: string;
   source_url?: string;
   page_title?: string;
+  // Text-based document fields (DOCX, Markdown, TXT)
+  text_content?: string;
+  chunk_uri?: string;
 }
 
 export interface WorkflowDetail {

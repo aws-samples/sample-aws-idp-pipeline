@@ -141,18 +141,21 @@ export class WorkflowStack extends Stack {
 
     const coreLayer = new lambda.LayerVersion(this, 'CoreLibsLayer', {
       layerVersionName: 'idp-v2-core-libs',
-      description: 'boto3, pillow, pypdfium2, pypdf, pyyaml',
+      description: 'boto3, pillow, pypdfium2, pypdf, pyyaml, python-docx',
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_14],
       compatibleArchitectures: [lambda.Architecture.X86_64],
-      code: createLayerCode('boto3 pillow pypdfium2 pypdf pyyaml', 'core'),
+      code: createLayerCode(
+        'boto3 pillow pypdfium2 pypdf pyyaml python-docx',
+        'core',
+      ),
     });
 
     const strandsLayer = new lambda.LayerVersion(this, 'StrandsLayer', {
       layerVersionName: 'idp-v2-strands',
-      description: 'Strands Agents SDK with PyYAML',
+      description: 'Strands Agents SDK 1.25+ with PyYAML',
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_14],
       compatibleArchitectures: [lambda.Architecture.X86_64],
-      code: createLayerCode('strands-agents pyyaml', 'strands'),
+      code: createLayerCode('strands-agents>=1.25 pyyaml', 'strands'),
     });
 
     // Shared code layer (ddb_client, embeddings)

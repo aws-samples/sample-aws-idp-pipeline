@@ -94,12 +94,29 @@ def determine_preprocess_required(file_type: str, use_bda: bool = False) -> dict
     """Determine which preprocessors are required based on file type and options.
 
     Note: Parser is handled in Step Functions workflow, not as async preprocessing.
+    Text files (DOCX, MD, TXT, CSV) don't need any preprocessing - they go directly to segment-prep.
     """
     is_pdf = file_type == 'application/pdf'
     is_image = file_type.startswith('image/')
     is_video = file_type.startswith('video/')
     is_audio = file_type.startswith('audio/')
     is_webreq = file_type == 'application/x-webreq'
+    is_text = file_type in (
+        'text/plain',
+        'text/markdown',
+        'text/csv',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/msword',
+    )
+
+    # Text files skip all preprocessing
+    if is_text:
+        return {
+            PreprocessType.OCR: {'required': False, 'status': PreprocessStatus.SKIPPED},
+            PreprocessType.BDA: {'required': False, 'status': PreprocessStatus.SKIPPED},
+            PreprocessType.TRANSCRIBE: {'required': False, 'status': PreprocessStatus.SKIPPED},
+            PreprocessType.WEBCRAWLER: {'required': False, 'status': PreprocessStatus.SKIPPED},
+        }
 
     return {
         PreprocessType.OCR: {

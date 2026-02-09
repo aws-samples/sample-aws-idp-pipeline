@@ -2,11 +2,51 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { RefreshCw, Sparkles, Loader2, Plus, Trash2 } from 'lucide-react';
+import {
+  RefreshCw,
+  Sparkles,
+  Loader2,
+  Plus,
+  Trash2,
+  FileText,
+} from 'lucide-react';
 import { WorkflowDetail, SegmentData, AnalysisPopup } from '../types/project';
 import ConfirmModal from './ConfirmModal';
 import { LANGUAGES, CARD_COLORS } from './ProjectSettingsModal';
 import OcrDocumentView from './OcrDocumentView';
+import PdfPageViewer from './PdfPageViewer';
+import { useAwsClient } from '../hooks/useAwsClient';
+
+// File type detection helpers
+const TEXT_MIME_TYPES = [
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+];
+
+const isTextFileType = (fileType: string | undefined): boolean => {
+  if (!fileType) return false;
+  return TEXT_MIME_TYPES.includes(fileType);
+};
+
+const isMarkdownFileType = (fileType: string | undefined): boolean => {
+  return fileType === 'text/markdown';
+};
+
+const isPdfFileType = (fileType: string | undefined): boolean => {
+  return fileType === 'application/pdf';
+};
+
+// Parse S3 URI to bucket and key
+const parseS3Uri = (uri: string): { bucket: string; key: string } | null => {
+  if (!uri?.startsWith('s3://')) return null;
+  const parts = uri.slice(5).split('/');
+  const bucket = parts[0];
+  const key = parts.slice(1).join('/');
+  return { bucket, key };
+};
 
 interface WorkflowDetailModalProps {
   workflow: WorkflowDetail;
@@ -48,9 +88,12 @@ export default function WorkflowDetailModal({
   onLoadSegment,
 }: WorkflowDetailModalProps) {
   const { t } = useTranslation();
+  const { getPresignedDownloadUrl } = useAwsClient();
   const [currentSegmentIndex, setCurrentSegmentIndex] =
     useState(initialSegmentIndex);
   const [imageLoading, setImageLoading] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfUrlLoading, setPdfUrlLoading] = useState(false);
   const [analysisPopup, setAnalysisPopup] = useState<AnalysisPopup>({
     type: null,
     content: '',
@@ -77,6 +120,43 @@ export default function WorkflowDetailModal({
     null,
   );
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Load PDF presigned URL for PDF files
+  const isPdf = isPdfFileType(workflow.file_type);
+  useEffect(() => {
+    if (!isPdf || !workflow.file_uri) {
+      setPdfUrl(null);
+      return;
+    }
+
+    const s3Info = parseS3Uri(workflow.file_uri);
+    if (!s3Info) {
+      setPdfUrl(null);
+      return;
+    }
+
+    let cancelled = false;
+    setPdfUrlLoading(true);
+
+    getPresignedDownloadUrl(s3Info.bucket, s3Info.key)
+      .then((url) => {
+        if (!cancelled) {
+          setPdfUrl(url);
+          setPdfUrlLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to get PDF presigned URL:', err);
+        if (!cancelled) {
+          setPdfUrl(null);
+          setPdfUrlLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isPdf, workflow.file_uri, getPresignedDownloadUrl]);
 
   // On-demand segment loading
   const [segmentCache, setSegmentCache] = useState<Map<number, SegmentData>>(
@@ -1116,6 +1196,9 @@ export default function WorkflowDetailModal({
                 const isVideoSegment =
                   currentSegment?.segment_type === 'VIDEO' ||
                   currentSegment?.segment_type === 'CHAPTER';
+                const isTextSegment = currentSegment?.segment_type === 'TEXT';
+                const isTextFile = isTextFileType(workflow.file_type);
+                const isMarkdownFile = isMarkdownFileType(workflow.file_type);
 
                 if (isVideoSegment && currentSegment?.video_url) {
                   return (
@@ -1130,6 +1213,73 @@ export default function WorkflowDetailModal({
                       >
                         Your browser does not support video playback.
                       </video>
+                    </div>
+                  );
+                }
+
+                // Text-based document preview (DOCX, Markdown, TXT, CSV)
+                if (
+                  isTextSegment ||
+                  (isTextFile && !currentSegment?.image_url)
+                ) {
+                  const textContent =
+                    currentSegment?.text_content ||
+                    currentSegment?.format_parser ||
+                    '';
+                  return (
+                    <div className="w-full h-full overflow-auto bg-white rounded-lg shadow-lg p-6">
+                      <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-200">
+                        <FileText className="h-5 w-5 text-slate-500" />
+                        <span className="text-sm font-medium text-slate-600">
+                          {t('workflow.textPreview', 'Text Preview')} -{' '}
+                          {t('workflow.chunk', 'Chunk')}{' '}
+                          {currentSegmentIndex + 1}
+                        </span>
+                      </div>
+                      {textContent ? (
+                        isMarkdownFile ? (
+                          <div className="prose prose-slate prose-sm max-w-none">
+                            <Markdown remarkPlugins={[remarkGfm]}>
+                              {textContent}
+                            </Markdown>
+                          </div>
+                        ) : (
+                          <pre className="whitespace-pre-wrap text-sm text-slate-700 font-mono leading-relaxed">
+                            {textContent}
+                          </pre>
+                        )
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                          <FileText className="h-12 w-12 mb-3" />
+                          <p className="text-sm">
+                            {t(
+                              'workflow.noTextContent',
+                              'No text content available',
+                            )}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                // PDF document preview using PDF.js
+                if (isPdf && pdfUrl) {
+                  return (
+                    <PdfPageViewer
+                      pdfUrl={pdfUrl}
+                      pageNumber={currentSegmentIndex + 1}
+                      className="w-full h-full"
+                    />
+                  );
+                }
+
+                // PDF loading state
+                if (isPdf && pdfUrlLoading) {
+                  return (
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="h-8 w-8 text-slate-400 animate-spin" />
+                      <p className="text-sm text-slate-500">Loading PDF...</p>
                     </div>
                   );
                 }
