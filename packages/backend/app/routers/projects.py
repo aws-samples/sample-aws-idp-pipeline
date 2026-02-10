@@ -253,14 +253,25 @@ async def delete_project(project_id: str, user_id: str = Header(alias="x-user-id
 
     deleted_info.workflow_count = len(workflow_ids)
 
-    # 2. Delete from LanceDB (per-project S3 Express bucket)
-    if config.lancedb_express_bucket_name:
-        try:
-            lancedb_prefix = f"{project_id}.lance/"
-            lancedb_deleted = delete_s3_prefix(config.lancedb_express_bucket_name, lancedb_prefix)
-            deleted_info.lancedb_objects_deleted = lancedb_deleted
-        except Exception as e:
-            deleted_info.lancedb_error = str(e)
+    # 2. Delete from LanceDB via Lambda
+    try:
+        import json
+        import os
+
+        import boto3
+
+        lancedb_fn = os.environ.get("LANCEDB_FUNCTION_NAME", "idp-v2-lancedb-service")
+        lambda_client = boto3.client("lambda", region_name=config.aws_region)
+        resp = lambda_client.invoke(
+            FunctionName=lancedb_fn,
+            InvocationType="RequestResponse",
+            Payload=json.dumps({"action": "drop_table", "params": {"project_id": project_id}}),
+        )
+        payload = json.loads(resp["Payload"].read().decode("utf-8"))
+        if payload.get("statusCode") == 200:
+            deleted_info.lancedb_objects_deleted = 1
+    except Exception as e:
+        deleted_info.lancedb_error = str(e)
 
     # 3. Delete workflow items from DynamoDB (including STEP, SEG#*, etc.)
     total_wf_deleted = 0

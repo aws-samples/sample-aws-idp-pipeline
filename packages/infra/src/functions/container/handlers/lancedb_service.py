@@ -255,32 +255,41 @@ def action_count(params: dict) -> dict:
     return {'success': True, 'project_id': project_id, 'count': count, 'exists': True}
 
 
-def action_search(params: dict) -> dict:
+def action_hybrid_search(params: dict) -> dict:
     project_id = params.get('project_id', 'default')
-    table = get_or_create_table(project_id)
     query = params.get('query', '')
     limit = params.get('limit', 10)
+    document_id = params.get('document_id')
 
+    db = get_lancedb_connection()
+    if project_id not in db.table_names():
+        return {'success': True, 'results': []}
+
+    table = db.open_table(project_id)
     keywords = extract_keywords(query)
+    search_query = table.search(query=keywords, query_type='hybrid').limit(limit)
 
-    vector_results = table.search(query=query, query_type='vector').limit(limit).to_list()
-    fts_results = table.search(query=keywords, query_type='fts').limit(limit).to_list()
+    if document_id:
+        search_query = search_query.where(f"document_id = '{document_id}'")
 
-    seen_ids = set()
-    combined = []
-    for r in vector_results + fts_results:
-        key = (r['workflow_id'], r['segment_id'])
-        if key not in seen_ids:
-            seen_ids.add(key)
-            combined.append({
+    results = search_query.to_list()
+
+    return {
+        'success': True,
+        'results': [
+            {
                 'workflow_id': r['workflow_id'],
+                'document_id': r.get('document_id', ''),
                 'segment_id': r['segment_id'],
                 'segment_index': r['segment_index'],
                 'content': r.get('content', ''),
+                'keywords': r.get('keywords', ''),
                 'file_uri': r.get('file_uri', ''),
-            })
-
-    return {'success': True, 'results': combined[:limit]}
+                'score': r.get('_relevance_score', 0.0),
+            }
+            for r in results
+        ],
+    }
 
 
 def action_delete_record(params: dict) -> dict:
@@ -307,6 +316,32 @@ def action_delete_record(params: dict) -> dict:
         return {'success': False, 'error': str(e)}
 
 
+def action_delete_by_workflow(params: dict) -> dict:
+    """Delete all records for a workflow from a project table."""
+    project_id = params.get('project_id', 'default')
+    workflow_id = params.get('workflow_id', '')
+
+    db = get_lancedb_connection()
+    if project_id not in db.table_names():
+        return {'success': True, 'deleted': 0}
+
+    table = db.open_table(project_id)
+    table.delete(f"workflow_id = '{workflow_id}'")
+    return {'success': True}
+
+
+def action_drop_table(params: dict) -> dict:
+    """Drop an entire project table from LanceDB."""
+    project_id = params.get('project_id', 'default')
+
+    db = get_lancedb_connection()
+    if project_id not in db.table_names():
+        return {'success': True, 'message': 'Table not found'}
+
+    db.drop_table(project_id)
+    return {'success': True}
+
+
 def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
@@ -318,9 +353,11 @@ def handler(event, _context):
         'add_record': action_add_record,
         'delete_record': action_delete_record,
         'get_segments': action_get_segments,
-        'search': action_search,
+        'hybrid_search': action_hybrid_search,
         'list_tables': action_list_tables,
         'count': action_count,
+        'delete_by_workflow': action_delete_by_workflow,
+        'drop_table': action_drop_table,
     }
 
     if action not in actions:

@@ -1,4 +1,4 @@
-import { Duration, Stack } from 'aws-cdk-lib';
+import { Duration } from 'aws-cdk-lib';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Runtime, Architecture } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -24,6 +24,11 @@ export class SearchMcp extends Construct {
       documentStorageBucketName,
     );
 
+    const lancedbFunctionArn = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.LANCEDB_FUNCTION_ARN,
+    );
+
     this.function = new NodejsFunction(this, 'Function', {
       entry: path.resolve(
         process.cwd(),
@@ -34,20 +39,17 @@ export class SearchMcp extends Construct {
       architecture: Architecture.ARM_64,
       timeout: Duration.seconds(30),
       environment: {
-        BACKEND_URL_SSM_KEY: SSM_KEYS.BACKEND_URL,
+        LANCEDB_FUNCTION_ARN: lancedbFunctionArn,
         DOCUMENT_STORAGE_BUCKET: documentStorageBucketName,
       },
     });
 
     documentStorageBucket.grantRead(this.function);
 
-    const stack = Stack.of(this);
     this.function.addToRolePolicy(
       new PolicyStatement({
-        actions: ['ssm:GetParameter'],
-        resources: [
-          `arn:aws:ssm:${stack.region}:${stack.account}:parameter/idp-v2/*`,
-        ],
+        actions: ['lambda:InvokeFunction'],
+        resources: [lancedbFunctionArn],
       }),
     );
 
