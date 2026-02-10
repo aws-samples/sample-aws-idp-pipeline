@@ -101,7 +101,7 @@ class VisionReactAgent:
         self.previous_context = context
 
         is_video = segment_type in ('VIDEO', 'CHAPTER')
-        is_text = segment_type == 'TEXT'
+        is_text = segment_type in ('TEXT', 'WEB')
 
         if is_video:
             self.current_video_uri = video_uri

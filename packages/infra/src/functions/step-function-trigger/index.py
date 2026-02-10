@@ -45,6 +45,7 @@ def handler(event, context):
             language = body.get('language', 'en')
             use_bda = body.get('use_bda', False)
             processing_type = body.get('processing_type', 'document')
+            document_prompt = body.get('document_prompt', '')
 
             if not workflow_id or not document_id:
                 print(f'Skipping: missing workflow_id or document_id')
@@ -73,6 +74,7 @@ def handler(event, context):
                 'processing_type': processing_type,
                 'language': language,
                 'use_bda': use_bda,
+                'document_prompt': document_prompt,
                 'is_reanalysis': False,
                 'triggered_at': datetime.utcnow().isoformat()
             }

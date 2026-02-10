@@ -46,7 +46,9 @@ import {
   ArtifactsResponse,
 } from '../../types/project';
 import AgentSelectModal from '../../components/AgentSelectModal';
-import DocumentUploadModal from '../../components/DocumentUploadModal';
+import DocumentUploadModal, {
+  type DocumentProcessingOptions,
+} from '../../components/DocumentUploadModal';
 import ArtifactViewer from '../../components/ArtifactViewer';
 import SystemPromptModal from '../../components/SystemPromptModal';
 import { useSetSidebarSessions } from '../../contexts/SidebarSessionContext';
@@ -1544,7 +1546,10 @@ function ProjectDetailPage() {
     return () => clearTimeout(timeout);
   }, [workflowProgressMap]);
 
-  const processFiles = async (files: File[], useBda = false) => {
+  const processFiles = async (
+    files: File[],
+    options: DocumentProcessingOptions,
+  ) => {
     if (files.length === 0) return;
 
     const maxSize = 500 * 1024 * 1024; // 500MB
@@ -1570,7 +1575,11 @@ function ProjectDetailPage() {
               file_name: file.name,
               content_type: file.type || 'application/octet-stream',
               file_size: file.size,
-              use_bda: useBda,
+              use_bda: options.use_bda,
+              use_ocr: options.use_ocr,
+              ocr_model: options.ocr_model,
+              ocr_options: options.ocr_options,
+              document_prompt: options.document_prompt,
             }),
           },
         );
@@ -1589,7 +1598,7 @@ function ProjectDetailPage() {
             file_type: file.type || 'application/octet-stream',
             file_size: file.size,
             status: 'uploading',
-            use_bda: useBda,
+            use_bda: options.use_bda,
             started_at: new Date().toISOString(),
             ended_at: null,
           },
@@ -2439,7 +2448,9 @@ function ProjectDetailPage() {
       <DocumentUploadModal
         isOpen={showUploadModal}
         uploading={uploading}
-        documentPrompt={project?.document_prompt || undefined}
+        projectOcrModel={project?.ocr_model || undefined}
+        projectOcrOptions={project?.ocr_options || undefined}
+        projectDocumentPrompt={project?.document_prompt || undefined}
         onClose={() => setShowUploadModal(false)}
         onUpload={processFiles}
       />

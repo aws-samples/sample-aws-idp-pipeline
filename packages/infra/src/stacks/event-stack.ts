@@ -30,6 +30,7 @@ export class EventStack extends Stack {
   public readonly ocrQueue: sqs.Queue;
   public readonly bdaQueue: sqs.Queue;
   public readonly transcribeQueue: sqs.Queue;
+  public readonly webcrawlerQueue: sqs.Queue;
   public readonly workflowQueue: sqs.Queue;
 
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -105,6 +106,20 @@ export class EventStack extends Stack {
       },
     });
 
+    // WebCrawler Queue (for AgentCore invocation)
+    const webcrawlerDlq = new sqs.Queue(this, 'WebcrawlerDLQ', {
+      queueName: 'idp-v2-webcrawler-dlq',
+      retentionPeriod: Duration.days(14),
+    });
+    this.webcrawlerQueue = new sqs.Queue(this, 'WebcrawlerQueue', {
+      queueName: 'idp-v2-webcrawler-queue',
+      visibilityTimeout: Duration.minutes(5),
+      deadLetterQueue: {
+        queue: webcrawlerDlq,
+        maxReceiveCount: 3,
+      },
+    });
+
     // Workflow Queue (for Step Functions to consume)
     const workflowDlq = new sqs.Queue(this, 'WorkflowDLQ', {
       queueName: 'idp-v2-workflow-dlq',
@@ -151,6 +166,16 @@ export class EventStack extends Stack {
     new ssm.StringParameter(this, 'TranscribeQueueArnParam', {
       parameterName: '/idp-v2/preprocess/transcribe/queue-arn',
       stringValue: this.transcribeQueue.queueArn,
+    });
+
+    new ssm.StringParameter(this, 'WebcrawlerQueueUrlParam', {
+      parameterName: SSM_KEYS.PREPROCESS_WEBCRAWLER_QUEUE_URL,
+      stringValue: this.webcrawlerQueue.queueUrl,
+    });
+
+    new ssm.StringParameter(this, 'WebcrawlerQueueArnParam', {
+      parameterName: '/idp-v2/preprocess/webcrawler/queue-arn',
+      stringValue: this.webcrawlerQueue.queueArn,
     });
 
     new ssm.StringParameter(this, 'WorkflowQueueUrlParam', {
@@ -295,18 +320,18 @@ export class EventStack extends Stack {
       },
     });
 
-    // Get WebCrawler Agent Runtime ARN from SSM
-    const webcrawlerAgentRuntimeArn = ssm.StringParameter.valueForStringParameter(
-      this,
-      SSM_KEYS.WEBCRAWLER_AGENT_RUNTIME_ARN,
+    typeDetection.addEnvironment(
+      'WEBCRAWLER_QUEUE_URL',
+      this.webcrawlerQueue.queueUrl,
     );
-    typeDetection.addEnvironment('WEBCRAWLER_AGENT_RUNTIME_ARN', webcrawlerAgentRuntimeArn);
 
     // Grant permissions
     backendTable.grantReadWriteData(typeDetection);
+    documentBucket.grantRead(typeDetection);
     this.ocrQueue.grantSendMessages(typeDetection);
     this.bdaQueue.grantSendMessages(typeDetection);
     this.transcribeQueue.grantSendMessages(typeDetection);
+    this.webcrawlerQueue.grantSendMessages(typeDetection);
     this.workflowQueue.grantSendMessages(typeDetection);
 
     // Grant permission to trigger SageMaker scale-out
@@ -317,8 +342,49 @@ export class EventStack extends Stack {
       }),
     );
 
-    // Grant permission to invoke WebCrawler AgentCore Runtime
-    typeDetection.addToRolePolicy(
+    // Trigger from SQS
+    typeDetection.addEventSource(
+      new lambdaEventSources.SqsEventSource(triggerQueue, {
+        batchSize: 1,
+      }),
+    );
+
+    // ========================================
+    // WebCrawler Consumer Lambda
+    // ========================================
+
+    const webcrawlerAgentRuntimeArn =
+      ssm.StringParameter.valueForStringParameter(
+        this,
+        SSM_KEYS.WEBCRAWLER_AGENT_RUNTIME_ARN,
+      );
+
+    const webcrawlerConsumer = new lambda.Function(
+      this,
+      'WebcrawlerConsumer',
+      {
+        functionName: 'idp-v2-webcrawler-consumer',
+        runtime: lambda.Runtime.PYTHON_3_14,
+        handler: 'index.handler',
+        timeout: Duration.minutes(1),
+        memorySize: 256,
+        code: lambda.Code.fromAsset(
+          path.join(
+            __dirname,
+            '../functions/preprocessing/webcrawler-consumer',
+          ),
+        ),
+        layers: [sharedLayer],
+        environment: {
+          BACKEND_TABLE_NAME: backendTableName,
+          WEBCRAWLER_AGENT_RUNTIME_ARN: webcrawlerAgentRuntimeArn,
+        },
+      },
+    );
+
+    backendTable.grantReadWriteData(webcrawlerConsumer);
+
+    webcrawlerConsumer.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['bedrock-agentcore:InvokeAgentRuntime'],
         resources: [
@@ -327,9 +393,8 @@ export class EventStack extends Stack {
       }),
     );
 
-    // Trigger from SQS
-    typeDetection.addEventSource(
-      new lambdaEventSources.SqsEventSource(triggerQueue, {
+    webcrawlerConsumer.addEventSource(
+      new lambdaEventSources.SqsEventSource(this.webcrawlerQueue, {
         batchSize: 1,
       }),
     );

@@ -9,6 +9,7 @@ import {
   Plus,
   Trash2,
   FileText,
+  Globe,
 } from 'lucide-react';
 import { WorkflowDetail, SegmentData, AnalysisPopup } from '../types/project';
 import ConfirmModal from './ConfirmModal';
@@ -939,6 +940,41 @@ export default function WorkflowDetailModal({
                       {new Date(workflow.created_at).toLocaleString('ko-KR')}
                     </p>
                   </div>
+
+                  {workflow.file_type === 'application/x-webreq' &&
+                    (workflow.source_url || workflow.crawl_instruction) && (
+                      <div className="space-y-3">
+                        {workflow.source_url && (
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">
+                              {t('workflow.sourceUrl', 'Source URL')}
+                            </p>
+                            <a
+                              href={workflow.source_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:underline break-all"
+                            >
+                              <Globe className="h-3.5 w-3.5 flex-shrink-0" />
+                              {workflow.source_url}
+                            </a>
+                          </div>
+                        )}
+                        {workflow.crawl_instruction && (
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">
+                              {t(
+                                'workflow.crawlInstruction',
+                                'Crawl Instruction',
+                              )}
+                            </p>
+                            <p className="text-sm text-slate-800">
+                              {workflow.crawl_instruction}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                 </div>
 
                 <hr className="border-slate-200" />
@@ -1196,6 +1232,7 @@ export default function WorkflowDetailModal({
                   currentSegment?.segment_type === 'VIDEO' ||
                   currentSegment?.segment_type === 'CHAPTER';
                 const isTextSegment = currentSegment?.segment_type === 'TEXT';
+                const isWebSegment = currentSegment?.segment_type === 'WEB';
                 const isTextFile = isTextFileType(workflow.file_type);
                 const isMarkdownFile = isMarkdownFileType(workflow.file_type);
 
@@ -1254,6 +1291,64 @@ export default function WorkflowDetailModal({
                             {t(
                               'workflow.noTextContent',
                               'No text content available',
+                            )}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Web segment preview
+                if (isWebSegment) {
+                  const webContent = currentSegment?.webcrawler_content || '';
+                  return (
+                    <div className="w-full h-full overflow-auto bg-white rounded-lg shadow-lg p-6">
+                      <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-200">
+                        <Globe className="h-5 w-5 text-blue-500" />
+                        <span className="text-sm font-medium text-slate-600">
+                          {currentSegment?.page_title ||
+                            `${t('workflow.segment')} ${currentSegmentIndex + 1}`}
+                        </span>
+                      </div>
+                      {currentSegment?.source_url && (
+                        <div className="mb-4">
+                          <a
+                            href={currentSegment.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:text-blue-800 hover:underline break-all"
+                          >
+                            {currentSegment.source_url}
+                          </a>
+                        </div>
+                      )}
+                      {webContent ? (
+                        <div className="prose prose-slate prose-sm max-w-none prose-table:border-collapse prose-th:border prose-th:border-slate-300 prose-th:bg-slate-100 prose-th:p-2 prose-td:border prose-td:border-slate-300 prose-td:p-2">
+                          <Markdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              img: ({ src, alt }) => (
+                                <img
+                                  src={src}
+                                  alt={alt || ''}
+                                  className="max-w-full h-auto rounded-lg shadow-md my-4"
+                                  loading="lazy"
+                                />
+                              ),
+                            }}
+                            urlTransform={(url) => url}
+                          >
+                            {webContent}
+                          </Markdown>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                          <Globe className="h-12 w-12 mb-3" />
+                          <p className="text-sm">
+                            {t(
+                              'workflow.noWebContent',
+                              'No web content available',
                             )}
                           </p>
                         </div>

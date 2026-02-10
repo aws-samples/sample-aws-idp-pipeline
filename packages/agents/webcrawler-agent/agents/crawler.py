@@ -1,7 +1,6 @@
 """Web crawler logic using AgentCore Browser."""
 
 import asyncio
-import base64
 import json
 import logging
 import os
@@ -25,28 +24,44 @@ s3_client = boto3.client("s3", region_name=config.aws_region)
 dynamodb = boto3.resource("dynamodb", region_name=config.aws_region)
 
 # Default system prompt (fallback if S3 load fails)
-DEFAULT_SYSTEM_PROMPT = """You are a web content extractor. Your task is to:
-1. Navigate to the given URL
-2. Extract the main content of the page
-3. IMPORTANT: Before closing the browser, call the save_screenshot tool to capture the final page
-4. Return the content as clean, well-structured Markdown WITH SOURCE ATTRIBUTION
+DEFAULT_SYSTEM_PROMPT = """You are a multi-page web content extraction agent using AgentCore Browser.
 
-Focus on extracting informative content while ignoring navigation, ads, and other non-content elements.
-Preserve headings, lists, tables, and important formatting.
-Include image alt texts where relevant.
+<available_tools>
+1. **browser** - Navigate, take screenshots (you can SEE the page), click, type, scroll
+2. **get_compressed_html** - Get compressed HTML for efficient content analysis (80-90% token savings)
+3. **save_page** - Save extracted page content for the document pipeline. Call once per page.
+4. **get_current_time** - Get current date and time
+</available_tools>
 
-SOURCE ATTRIBUTION REQUIREMENTS:
-- Include source URL after the title: Source: [domain.com](full_url)
-- Add inline links throughout content when referencing specific information
-- Format: "According to [Source](url), ..." or "... ([source](url))"
-- MANDATORY: End with a References section listing all source URLs
+<workflow>
+1. Initialize browser and navigate to the start URL
+2. Analyze the page visually (screenshot) and structurally (get_compressed_html)
+3. Extract the main content as Markdown
+4. Call save_page(url, title, content) to store this page
+5. Evaluate the page: does it contain links to detailed content (articles, docs, results)?
+   - If YES: follow those links and repeat steps 2-4 for each
+   - Use your judgment based on the page type and user instructions
+6. Close the browser when done
 
-Example References section:
----
-## References
-- [Page Title](https://example.com/page) - Main source
+IMPORTANT:
+- Call save_page for EVERY page you want to include in the results
+- Use your judgment to decide which links are worth following:
+  - News list page -> follow article links to get full articles
+  - Search results -> follow result links to get detailed pages
+  - Documentation index -> follow doc links
+  - Single article/page with no meaningful sub-links -> just extract that page
+- Maximum ~20 pages to avoid excessive crawling
+- Each saved page should contain substantive content, not just navigation
+</workflow>
 
-CRITICAL: You MUST call save_screenshot with the session_name before you close or cleanup the browser session."""
+<content_format>
+For each page, extract clean Markdown:
+- Page title as H1
+- Use ## for sections, ### for subsections
+- Preserve lists, tables, code blocks
+- No HTML tags in output
+- Include source attribution with inline links
+</content_format>"""
 
 # Cached system prompt
 _system_prompt_cache = None
@@ -100,113 +115,56 @@ def get_document_base_path(file_uri: str) -> tuple[str, str]:
     return bucket, base_path
 
 
-# Global storage for screenshot data (set by save_screenshot tool, read after agent completes)
-_screenshot_result = {"uri": None, "data": None}
+def create_save_page_tool(file_uri: str) -> tuple[Callable, dict]:
+    """Create a save_page tool that stores each crawled page as a JSON file in S3.
 
-
-def create_save_screenshot_tool(file_uri: str, browser_tool: AgentCoreBrowser) -> Callable:
-    """Create a save_screenshot tool with context baked in."""
+    Returns (tool_function, state_dict) where state_dict tracks page_counter.
+    """
+    state = {"page_counter": 0}
 
     @tool
-    def save_screenshot(session_name: str) -> str:
-        """Take a screenshot of the current browser page and save it.
+    def save_page(url: str, title: str, content: str) -> str:
+        """Save extracted page content to S3 for the document pipeline.
+
+        Call this tool once for each page you have fully extracted.
+        Pages are automatically numbered in order.
 
         Args:
-            session_name: The browser session name to screenshot
+            url: The URL of the page
+            title: The page title
+            content: The extracted content in Markdown format
 
         Returns:
-            A message confirming the screenshot was saved
+            A message confirming the page was saved
         """
-        global _screenshot_result
-
         try:
-            logger.info(f"save_screenshot called with session_name={session_name}")
-
-            # Take screenshot using browser tool (full_page not supported by strands_tools)
-            screenshot_result = browser_tool.browser(
-                browser_input={
-                    "action": {
-                        "type": "screenshot",
-                        "session_name": session_name,
-                    }
-                }
-            )
-            logger.info(f"Screenshot taken, result type: {type(screenshot_result)}")
-            logger.info(f"Screenshot result: {screenshot_result}")
-
-            # Extract image data
-            image_data = None
-            local_file_path = None
-
-            if isinstance(screenshot_result, dict):
-                # Case 1: Direct image data in response
-                if "image" in screenshot_result:
-                    img_data = screenshot_result["image"]
-                    if isinstance(img_data, str):
-                        image_data = img_data
-                    elif isinstance(img_data, dict) and "data" in img_data:
-                        image_data = img_data["data"]
-                elif "screenshot" in screenshot_result:
-                    image_data = screenshot_result["screenshot"]
-                # Case 2: Local file path in content
-                elif "content" in screenshot_result:
-                    content = screenshot_result["content"]
-                    if isinstance(content, list):
-                        for item in content:
-                            if isinstance(item, dict) and "text" in item:
-                                text = item["text"]
-                                # Parse file path from text like "Screenshot saved as screenshots/screenshot_xxx.png"
-                                if "Screenshot saved as" in text:
-                                    local_file_path = text.replace("Screenshot saved as ", "").strip()
-                                    logger.info(f"Found local screenshot path: {local_file_path}")
-
-            # Read from local file if path was found
-            if local_file_path and not image_data:
-                try:
-                    with open(local_file_path, "rb") as f:
-                        image_data = f.read()
-                    logger.info(f"Read {len(image_data)} bytes from local file")
-                    # Delete local file after reading
-                    os.remove(local_file_path)
-                    logger.info(f"Deleted local screenshot file: {local_file_path}")
-                except Exception as read_error:
-                    logger.warning(f"Failed to read/delete local screenshot file: {read_error}")
-
-            if not image_data:
-                logger.warning(f"No image data found in screenshot result")
-                return "Screenshot captured but no image data found"
-
-            # Save to S3 (preprocessed folder for consistency with other document types)
+            idx = state["page_counter"]
             bucket, base_path = get_document_base_path(file_uri)
-            screenshot_key = f"{base_path}/preprocessed/page_0000.png"
+            page_key = f"{base_path}/webcrawler/pages/page_{idx:04d}.json"
 
-            # Decode base64 if needed (only if it's a string, not bytes)
-            if isinstance(image_data, str):
-                image_bytes = base64.b64decode(image_data)
-            else:
-                image_bytes = image_data
+            page_data = {
+                "url": url,
+                "title": title,
+                "content": content,
+                "crawled_at": datetime.now(timezone.utc).isoformat(),
+            }
 
             s3_client.put_object(
                 Bucket=bucket,
-                Key=screenshot_key,
-                Body=image_bytes,
-                ContentType="image/png",
+                Key=page_key,
+                Body=json.dumps(page_data, ensure_ascii=False, indent=2),
+                ContentType="application/json",
             )
 
-            screenshot_uri = f"s3://{bucket}/{screenshot_key}"
-            logger.info(f"Screenshot saved to {screenshot_uri}")
-
-            # Store result for later retrieval
-            _screenshot_result["uri"] = screenshot_uri
-            _screenshot_result["data"] = base64.b64encode(image_bytes).decode() if isinstance(image_bytes, bytes) else image_data
-
-            return f"Screenshot saved successfully to {screenshot_uri}"
+            state["page_counter"] = idx + 1
+            logger.info(f"Saved page {idx}: {title} ({len(content)} chars) -> s3://{bucket}/{page_key}")
+            return f"Page {idx} saved: {title} ({len(content)} chars)"
 
         except Exception as e:
-            logger.exception(f"Failed to save screenshot: {e}")
-            return f"Failed to save screenshot: {e}"
+            logger.exception(f"Failed to save page: {e}")
+            return f"Failed to save page: {e}"
 
-    return save_screenshot
+    return save_page, state
 
 
 @tool
@@ -308,15 +266,6 @@ def create_get_compressed_html_tool(browser_tool: AgentCoreBrowser) -> Callable:
             return f"Error getting compressed HTML: {e}"
 
     return get_compressed_html
-
-
-def get_screenshot_result() -> dict:
-    """Get the screenshot result captured by the tool."""
-    global _screenshot_result
-    result = _screenshot_result.copy()
-    # Reset for next use
-    _screenshot_result = {"uri": None, "data": None}
-    return result
 
 
 def update_preprocess_status(
@@ -434,47 +383,34 @@ async def crawl_and_process(
         logger.info("AgentCoreBrowser initialized")
 
         # Create custom tools with context
-        save_screenshot_tool = create_save_screenshot_tool(file_uri, browser_tool)
+        save_page_tool, page_state = create_save_page_tool(file_uri)
         get_compressed_html_tool = create_get_compressed_html_tool(browser_tool)
 
         # Create agent with browser tool and custom tools
         logger.info(f"Creating agent with model={config.bedrock_model_id}")
         agent = Agent(
             model=config.bedrock_model_id,
-            tools=[browser_tool.browser, save_screenshot_tool, get_compressed_html_tool, get_current_time],
+            tools=[browser_tool.browser, save_page_tool, get_compressed_html_tool, get_current_time],
             system_prompt=system_prompt,
         )
         logger.info("Agent created successfully")
 
-        # Build the prompt with hybrid approach (Vision + HTML)
-        prompt = f"""Navigate to this URL and extract its content: {url}
+        # Build the prompt for multi-page crawling
+        prompt = f"""Start URL: {url}
 
-{f'Additional instructions: {instruction}' if instruction else ''}
+{f'Instructions: {instruction}' if instruction else ''}
 
-You have access to the following tools:
-1. browser - for navigation, screenshot (you can SEE the page), and interaction
-2. get_compressed_html - get compressed HTML for efficient content analysis
-3. save_screenshot - saves screenshot to S3 for document pipeline
-4. get_current_time - get current date and time in multiple timezones
-
-Required workflow:
+Workflow:
 1. Initialize browser session and navigate to the URL
-2. Use browser screenshot action to SEE the page visually
-3. Call get_compressed_html(session_name) to get the page structure
-4. Combine visual understanding + HTML structure to extract content as Markdown
-5. MANDATORY: Call save_screenshot(session_name) to save the screenshot to S3
-6. Close the browser
+2. Use browser screenshot to SEE the page, then get_compressed_html for structure
+3. Extract content as clean Markdown
+4. Call save_page(url, title, content) to store this page
+5. Look at the page - if it contains links to detailed content (articles, docs, results), follow them and repeat steps 2-4
+6. Close the browser when done
 
-HYBRID APPROACH:
-- browser.screenshot lets you SEE the page (visual understanding)
-- get_compressed_html gives you the HTML structure (80-90% token savings)
-- Use BOTH to understand the page fully
-
-OUTPUT FORMAT:
-- Return content in Markdown format
-- Include source URL after title: Source: [domain.com]({url})
-- Add inline links throughout content referencing the source
-- MANDATORY: End with References section containing all source URLs"""
+IMPORTANT:
+- Call save_page for EVERY page you extract
+- Use your judgment to decide which links are worth following based on the page type and instructions"""
 
         # Execute the agent in a separate thread to avoid event loop conflicts
         logger.warning(f"[TRACE] Executing agent with prompt: {prompt[:100]}...")
@@ -482,79 +418,21 @@ OUTPUT FORMAT:
             # Run synchronous agent call in thread pool
             response = await asyncio.to_thread(agent, prompt)
             logger.warning(f"[TRACE] Agent returned! Response type: {type(response)}")
-            logger.warning(f"[TRACE] Response message: {response.message if hasattr(response, 'message') else 'no message'}")
         except Exception as agent_error:
             logger.warning(f"[TRACE] Agent exception: {agent_error}")
             logger.exception(f"Agent execution failed: {agent_error}")
             raise
-        logger.warning("[TRACE] Proceeding to extract content...")
+        logger.warning("[TRACE] Proceeding to save metadata...")
 
-        # Extract content from response
-        content = ""
+        total_pages = page_state["page_counter"]
+        logger.info(f"Agent saved {total_pages} pages")
 
-        logger.info(f"Processing agent response...")
-        logger.info(f"Response attributes: {dir(response)}")
-
-        # Try to get content from response message
-        if hasattr(response, 'message') and response.message:
-            logger.info(f"Response message type: {type(response.message)}")
-            logger.info(f"Response message keys: {response.message.keys() if isinstance(response.message, dict) else 'not a dict'}")
-
-            if isinstance(response.message, dict) and "content" in response.message:
-                for block in response.message["content"]:
-                    if "text" in block:
-                        content = block["text"]
-                        logger.info(f"Extracted text content: {len(content)} chars")
-
-        # Fallback: try to get text from response directly
-        if not content and hasattr(response, 'text'):
-            content = response.text
-            logger.info(f"Using response.text: {len(content)} chars")
-
-        # Fallback: convert response to string
-        if not content:
-            content = str(response)
-            logger.info(f"Using str(response): {len(content)} chars")
-
-        logger.info(f"Final content length: {len(content)}")
-
-        # Get page title from content (first heading)
-        title = url
-        lines = content.split("\n")
-        for line in lines:
-            if line.startswith("# "):
-                title = line[2:].strip()
-                break
-
-        # Save outputs to S3
+        # Save metadata.json for webcrawler
         bucket, base_path = get_document_base_path(file_uri)
-        logger.info(f"Saving outputs to s3://{bucket}/{base_path}")
-
-        # Get screenshot result from the save_screenshot tool (agent should have called it)
-        screenshot_result = get_screenshot_result()
-        screenshot_uri = screenshot_result.get("uri")
-        if screenshot_uri:
-            logger.info(f"Screenshot was saved by agent tool: {screenshot_uri}")
-        else:
-            logger.warning("Agent did not call save_screenshot tool or it failed")
-
-        # Save markdown content to webcrawler/ folder
-        logger.info(f"Saving markdown content ({len(content)} chars)...")
-        content_key = f"{base_path}/webcrawler/content.md"
-        s3_client.put_object(
-            Bucket=bucket,
-            Key=content_key,
-            Body=content.encode("utf-8"),
-            ContentType="text/markdown",
-        )
-        content_uri = f"s3://{bucket}/{content_key}"
-        logger.info(f"Saved content: {content_uri}")
-
-        # Save metadata.json for webcrawler (source_url, title, instruction)
         metadata = {
-            "url": url,
-            "title": title,
+            "start_url": url,
             "instruction": instruction,
+            "total_pages": total_pages,
             "crawled_at": datetime.now(timezone.utc).isoformat(),
         }
         metadata_key = f"{base_path}/webcrawler/metadata.json"
@@ -574,9 +452,8 @@ OUTPUT FORMAT:
         return {
             "status": "completed",
             "workflow_id": workflow_id,
-            "screenshot_uri": screenshot_uri,
+            "total_pages": total_pages,
             "url": url,
-            "title": title,
         }
 
     except Exception as e:

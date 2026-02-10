@@ -27,6 +27,7 @@ export const SSM_KEYS = {
   PREPROCESS_OCR_QUEUE_URL: '/idp-v2/preprocess/ocr/queue-url',
   PREPROCESS_BDA_QUEUE_URL: '/idp-v2/preprocess/bda/queue-url',
   PREPROCESS_TRANSCRIBE_QUEUE_URL: '/idp-v2/preprocess/transcribe/queue-url',
+  PREPROCESS_WEBCRAWLER_QUEUE_URL: '/idp-v2/preprocess/webcrawler/queue-url',
   PREPROCESS_WORKFLOW_QUEUE_URL: '/idp-v2/preprocess/workflow/queue-url',
   QA_REGENERATOR_FUNCTION_ARN: '/idp-v2/qa-regenerator/function-arn',
   LANCEDB_FUNCTION_ARN: '/idp-v2/lancedb/function-arn',

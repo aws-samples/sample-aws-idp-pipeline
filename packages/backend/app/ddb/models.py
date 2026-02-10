@@ -36,6 +36,10 @@ class DocumentData(BaseModel):
     status: str
     s3_key: str
     use_bda: bool = False
+    use_ocr: bool | None = None
+    ocr_model: str | None = None
+    ocr_options: dict[str, Any] | None = None
+    document_prompt: str | None = None
 
 
 class Document(BaseModel):
@@ -54,6 +58,7 @@ class WorkflowData(BaseModel):
     language: str | None = None
     summary: str | None = None
     total_segments: int | None = None
+    preprocess: dict[str, Any] | None = None
 
 
 class Workflow(BaseModel):
