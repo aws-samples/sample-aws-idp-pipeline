@@ -3,6 +3,7 @@ import {
   PostToConnectionCommand,
   GoneException,
 } from '@aws-sdk/client-apigatewaymanagementapi';
+import { removeStaleConnection } from './valkey.js';
 
 export interface WorkflowMessage {
   action: 'workflow';
@@ -39,6 +40,7 @@ const client = new ApiGatewayManagementApiClient({
 export async function sendToConnection(
   connectionId: string,
   data: string,
+  projectId?: string,
 ): Promise<boolean> {
   try {
     await client.send(
@@ -50,7 +52,10 @@ export async function sendToConnection(
     return true;
   } catch (error) {
     if (error instanceof GoneException) {
-      console.log(`Connection ${connectionId} is gone, skipping`);
+      console.log(`Connection ${connectionId} is gone, cleaning up`);
+      if (projectId) {
+        await removeStaleConnection(connectionId, projectId);
+      }
       return false;
     }
     throw error;

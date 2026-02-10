@@ -156,7 +156,9 @@ async function processWorkflowRecord(record: DynamoDBRecord): Promise<void> {
   console.log(`Sending workflow message to ${connectionIds.length} connections`);
 
   await Promise.all(
-    connectionIds.map((connectionId) => sendToConnection(connectionId, messageStr)),
+    connectionIds.map((connectionId) =>
+      sendToConnection(connectionId, messageStr, newInfo.projectId),
+    ),
   );
 }
 
@@ -212,7 +214,9 @@ async function processStepRecord(record: DynamoDBRecord): Promise<void> {
     console.log(`Sending step message: ${change.stepName} -> ${change.newStatus}`);
 
     await Promise.all(
-      connectionIds.map((connectionId) => sendToConnection(connectionId, messageStr)),
+      connectionIds.map((connectionId) =>
+        sendToConnection(connectionId, messageStr, newInfo.projectId),
+      ),
     );
   }
 }

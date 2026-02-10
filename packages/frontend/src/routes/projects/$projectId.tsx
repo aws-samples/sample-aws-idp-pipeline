@@ -792,6 +792,30 @@ function ProjectDetailPage() {
     }
   }, [fetchApi, projectId, documents, stepLabels]);
 
+  // Sync state on WebSocket reconnect to catch missed messages
+  const fetchProgressRef = useRef(fetchDocumentProgress);
+  const loadWorkflowsRef = useRef(loadWorkflows);
+  const loadDocumentsRef = useRef(loadDocuments);
+  fetchProgressRef.current = fetchDocumentProgress;
+  loadWorkflowsRef.current = loadWorkflows;
+  loadDocumentsRef.current = loadDocuments;
+
+  const prevWsStatusRef = useRef(wsStatus);
+  const wsConnectedOnceRef = useRef(false);
+  useEffect(() => {
+    const wasDisconnected = prevWsStatusRef.current !== 'connected';
+    prevWsStatusRef.current = wsStatus;
+
+    if (wsStatus === 'connected') {
+      if (wasDisconnected && wsConnectedOnceRef.current) {
+        // Actual reconnect - sync state
+        fetchProgressRef.current();
+        loadWorkflowsRef.current();
+      }
+      wsConnectedOnceRef.current = true;
+    }
+  }, [wsStatus]);
+
   // WebSocket step progress handler - refetch progress on any step change
   const handleStepMessage = useCallback(
     (data: {
@@ -1492,8 +1516,8 @@ function ProjectDetailPage() {
     if (inProgressWorkflows.length === 0) return;
 
     progressFetchedRef.current = true;
-    fetchDocumentProgress();
-  }, [loading, workflows, fetchDocumentProgress]);
+    fetchProgressRef.current();
+  }, [loading, workflows]);
 
   // Handle workflow completion/failure - clear completed/failed after delay
   useEffect(() => {
@@ -1506,8 +1530,8 @@ function ProjectDetailPage() {
 
     if (completedDocIds.length === 0) return;
 
-    loadDocuments();
-    loadWorkflows();
+    loadDocumentsRef.current();
+    loadWorkflowsRef.current();
     const timeout = setTimeout(() => {
       setWorkflowProgressMap((prev) => {
         const newMap = { ...prev };
@@ -1518,7 +1542,7 @@ function ProjectDetailPage() {
       });
     }, 5000);
     return () => clearTimeout(timeout);
-  }, [workflowProgressMap, loadDocuments, loadWorkflows]);
+  }, [workflowProgressMap]);
 
   const processFiles = async (files: File[], useBda = false) => {
     if (files.length === 0) return;

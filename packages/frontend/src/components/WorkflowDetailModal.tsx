@@ -204,11 +204,12 @@ export default function WorkflowDetailModal({
       return;
     }
 
-    let cancelled = false;
+    if (prefetchingRef.current.has(currentSegmentIndex)) return;
+    prefetchingRef.current.add(currentSegmentIndex);
+
     setSegmentLoading(true);
     onLoadSegment(currentSegmentIndex)
       .then((data) => {
-        if (cancelled) return;
         setSegmentCache((prev) => {
           const next = new Map(prev);
           next.set(currentSegmentIndex, data);
@@ -221,14 +222,12 @@ export default function WorkflowDetailModal({
           fetchSegment(currentSegmentIndex + 1);
       })
       .catch((e) => {
-        if (cancelled) return;
         console.error(`Failed to load segment ${currentSegmentIndex}:`, e);
         setSegmentLoading(false);
+      })
+      .finally(() => {
+        prefetchingRef.current.delete(currentSegmentIndex);
       });
-
-    return () => {
-      cancelled = true;
-    };
   }, [
     currentSegmentIndex,
     onLoadSegment,

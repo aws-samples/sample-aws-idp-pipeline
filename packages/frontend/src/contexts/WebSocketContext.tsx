@@ -22,6 +22,7 @@ const CREDENTIAL_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 const DEFAULT_RECONNECT_INTERVAL = 3000;
 const DEFAULT_MAX_RECONNECT_ATTEMPTS = 5;
 const DEFAULT_BACKOFF_MULTIPLIER = 1.5;
+const HEARTBEAT_INTERVAL = 30000; // 30 seconds
 
 interface Credentials {
   accessKeyId: string;
@@ -48,6 +49,7 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
   const credentialsRef = useRef<Credentials | null>(null);
   const pendingCredentialsRef = useRef<Promise<Credentials> | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const isManualDisconnectRef = useRef(false);
   const isConnectingRef = useRef(false);
@@ -94,6 +96,11 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
+    }
+
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
     }
 
     if (wsRef.current) {
@@ -147,6 +154,16 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
       isConnectingRef.current = false;
       setStatus('connected');
       reconnectAttemptsRef.current = 0;
+
+      // Start heartbeat to detect stale connections
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+      }
+      heartbeatIntervalRef.current = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ action: 'ping' }));
+        }
+      }, HEARTBEAT_INTERVAL);
     };
 
     ws.onmessage = (event) => {
@@ -218,6 +235,31 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
       disconnect();
     };
   }, [user?.id_token, websocketUrl, connect, disconnect]);
+
+  /** 탭 가시성 변경 시 재연결 */
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Reset reconnect attempts when tab becomes visible
+        reconnectAttemptsRef.current = 0;
+
+        // Reconnect if disconnected or in error state
+        if (
+          status === 'disconnected' ||
+          status === 'error' ||
+          wsRef.current?.readyState !== WebSocket.OPEN
+        ) {
+          console.log('Tab visible, reconnecting WebSocket...');
+          connect();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [status, connect]);
 
   const value: WebSocketContextValue = {
     status,
