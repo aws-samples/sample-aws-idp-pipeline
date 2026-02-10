@@ -21,7 +21,7 @@
 
 This project uses [LanceDB](https://lancedb.com/) as the vector database instead of Amazon OpenSearch Service. LanceDB is an open-source, serverless vector database that stores data directly on S3, eliminating the need for dedicated cluster infrastructure. Combined with [Kiwi](https://github.com/bab2min/Kiwi), a Korean morphological analyzer, it enables hybrid search (vector + full-text) with Korean language support.
 
-### Why LanceDB over OpenSearch?
+### Why LanceDB for PoC?
 
 This project is a **PoC/prototype**, and cost efficiency is a key factor.
 
@@ -47,14 +47,14 @@ Write Path:
         ├─ Bedrock Nova: vector embedding (1024d)
         └─ LanceDB: store to S3 Express One Zone
 
-Read Path (Backend):
-  Search API (FastAPI on ECS)
-    ├─ Kiwi: query keyword extraction
-    ├─ LanceDB: hybrid search (vector + FTS)
-    └─ Bedrock Cohere Rerank v3.5: result reranking
+Read Path:
+  MCP Search Tool Lambda
+    → LanceDB Service Lambda (Container): hybrid search (vector + FTS)
+    → Bedrock Claude Haiku: summarize search results
 
-Read Path (Agent):
-  MCP Search Tool → Backend Search API → (same as above)
+Delete Path:
+  Backend API (project deletion)
+    → LanceDB Service Lambda: drop_table
 ```
 
 ### Storage Architecture
@@ -98,9 +98,11 @@ The core vector DB service. Uses a Docker container image because `lancedb` and 
 | `add_record` | Add a document segment (keyword extraction + embedding + store) |
 | `delete_record` | Delete a segment by ID |
 | `get_segments` | Retrieve all segments for a workflow |
-| `search` | Hybrid search (vector + FTS) |
+| `hybrid_search` | Hybrid search (vector + FTS, `query_type='hybrid'`) |
 | `list_tables` | List all project tables |
 | `count` | Count records in a project table |
+| `delete_by_workflow` | Delete all records for a workflow |
+| `drop_table` | Drop an entire project table |
 
 **Why Container Lambda:**
 
@@ -121,24 +123,22 @@ An SQS consumer that receives write requests from the analysis pipeline and dele
 
 Concurrency is set to 1 to prevent concurrent write conflicts on LanceDB tables.
 
-### 3. Backend Search API (FastAPI)
+### 3. MCP Search Tool
 
-The FastAPI backend exposes search endpoints that query LanceDB directly.
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /projects/{id}/search/segments` | List all segments in a project |
-| `GET /projects/{id}/search/hybrid` | Hybrid search (vector + FTS) |
-| `GET /projects/{id}/search/rerank` | Hybrid search + Cohere Rerank |
-
-### 4. MCP Search Tool
-
-The Agent's MCP tool calls the backend search API to perform document retrieval during AI chat.
+The Agent's MCP tool invokes the LanceDB Service Lambda directly to perform document retrieval during AI chat.
 
 ```
 User Query → Bedrock Agent Core → MCP Gateway
-  → Search Tool Lambda → Backend /search/hybrid → LanceDB
+  → Search Tool Lambda → LanceDB Service Lambda (hybrid_search)
+    → Bedrock Claude Haiku: summarize search results → Response
 ```
+
+| Item | Value |
+|------|-------|
+| Stack | McpStack |
+| Runtime | Node.js 22.x (ARM64) |
+| Timeout | 30s |
+| Environment | `LANCEDB_FUNCTION_ARN` (via SSM) |
 
 ---
 
@@ -204,26 +204,21 @@ Without morphological analysis, searching for "시스템" would miss documents c
 
 ## Hybrid Search Flow
 
+All searches are processed by the LanceDB Service Lambda. It uses LanceDB's native `query_type='hybrid'` to combine vector search and full-text search.
+
 ```
 Search Query: "문서 분석 결과 조회"
   │
-  ├─ [1] Kiwi keyword extraction
+  ├─ [1] Kiwi keyword extraction (LanceDB Service Lambda)
   │     → "문서 분석 결과 조회"
   │
-  ├─ [2] Vector search (semantic)
-  │     → Bedrock Nova embedding → cosine similarity
-  │     → Top-K results with _distance score
+  ├─ [2] LanceDB native hybrid search
+  │     → table.search(query=keywords, query_type='hybrid')
+  │     → Vector search (Nova embedding) + FTS auto-merged
+  │     → Top-K results with _relevance_score
   │
-  ├─ [3] Full-Text Search (lexical)
-  │     → Keywords matched against FTS index
-  │     → Top-K results with _score
-  │
-  ├─ [4] Merge & deduplicate
-  │     → Union of vector + FTS results
-  │
-  └─ [5] Rerank (optional)
-        → Bedrock Cohere Rerank v3.5
-        → Final top-N results with rerank_score
+  └─ [3] Result summarization (MCP Search Tool Lambda)
+        → Bedrock Claude Haiku generates answer from search results
 ```
 
 ---
@@ -263,6 +258,7 @@ Manages distributed locking when multiple Lambda functions access the same datas
 | `/idp-v2/lancedb/lock/table-name` | DynamoDB lock table name |
 | `/idp-v2/lancedb/express/bucket-name` | S3 Express bucket name |
 | `/idp-v2/lancedb/express/az-id` | S3 Express availability zone ID |
+| `/idp-v2/lancedb/function-arn` | LanceDB Service Lambda function ARN |
 
 ---
 
@@ -278,13 +274,15 @@ graph TB
     end
 
     subgraph Read["Read Path"]
-        SearchRouter["Search Router<br/>(FastAPI)"]
         MCP["MCP Search Tool<br/>(Agent)"]
     end
 
-    subgraph Core["Core Services"]
+    subgraph Delete["Delete Path"]
+        Backend["Backend API<br/>(Project Deletion)"]
+    end
+
+    subgraph Core["Core Service"]
         Service["LanceDB Service<br/>(Container Lambda)"]
-        Backend["Backend Search API<br/>(ECS Fargate)"]
     end
 
     subgraph Storage["Storage Layer"]
@@ -294,17 +292,16 @@ graph TB
 
     Writer -->|invoke| Service
     QA -->|invoke| Service
-
-    SearchRouter --> Backend
-    MCP --> Backend
+    MCP -->|invoke<br/>hybrid_search| Service
+    Backend -->|invoke<br/>drop_table| Service
 
     Service --> S3 & DDB
-    Backend --> S3 & DDB
 
     style Storage fill:#fff3e0,stroke:#ff9900
     style Core fill:#e8f5e9,stroke:#2ea043
     style Write fill:#fce4ec,stroke:#e91e63
     style Read fill:#e3f2fd,stroke:#1976d2
+    style Delete fill:#f3e5f5,stroke:#7b1fa2
 ```
 
 | Component | Stack | Access Type | Description |
@@ -313,8 +310,8 @@ graph TB
 | **LanceDB Writer** | WorkflowStack | Write (via Service) | SQS consumer, delegates to Service |
 | **Analysis Finalizer** | WorkflowStack | Write (via SQS/Service) | Sends segments to write queue, deletes on reanalysis |
 | **QA Regenerator** | WorkflowStack | Write (via Service) | Updates Q&A segments |
-| **Backend Search API** | ApplicationStack | Read | FastAPI hybrid search endpoints |
-| **MCP Search Tool** | McpStack | Read (via Backend) | Agent tool for document retrieval |
+| **MCP Search Tool** | McpStack | Read (direct Service invoke) | Agent tool for document retrieval |
+| **Backend API** | ApplicationStack | Delete (via Service) | Invokes `drop_table` on project deletion |
 
 ---
 
@@ -328,10 +325,7 @@ If migrating to Amazon OpenSearch Service for production, the following componen
 |-----------|-------------------|---------------------|-------|
 | **LanceDB Service Lambda** | Container Lambda + LanceDB | OpenSearch client (CRUD + search) | Replace entirely |
 | **LanceDB Writer Lambda** | SQS → invoke LanceDB Service | SQS → write to OpenSearch index | Replace invoke target |
-| **Backend `lancedb.py`** | `lancedb.connect(s3+ddb://...)` | OpenSearch client connection | Replace |
-| **Backend `search.py`** | LanceDB hybrid search API | OpenSearch k-NN + full-text query | Replace search logic |
-| **Backend `keywords.py`** | Kiwi keyword extraction | OpenSearch Nori analyzer (built-in) | May remove |
-| **Backend `embedding.py`** | LanceDB embedding function | OpenSearch neural search / ingest pipeline | Replace |
+| **MCP Search Tool** | Lambda invoke → LanceDB Service | Lambda invoke → OpenSearch search | Replace invoke target |
 | **StorageStack** | S3 Express + DDB lock table | OpenSearch domain (VPC) | Replace resources |
 
 ### Components Unchanged
@@ -339,8 +333,7 @@ If migrating to Amazon OpenSearch Service for production, the following componen
 | Component | Reason |
 |-----------|--------|
 | **Analysis Finalizer** | Only sends messages to SQS (queue interface unchanged) |
-| **MCP Search Tool** | Calls backend HTTP API (API contract unchanged) |
-| **Frontend** | Uses backend search API (no direct DB access) |
+| **Frontend** | No direct DB access |
 | **Step Functions Workflow** | No direct LanceDB dependency |
 
 ### Migration Strategy
@@ -357,9 +350,8 @@ Phase 2: Replace Write Path
   - Add OpenSearch neural ingest pipeline for embeddings
 
 Phase 3: Replace Read Path
-  - Update Backend search.py → OpenSearch k-NN + full-text queries
+  - Update MCP Search Tool Lambda invoke target to OpenSearch search service
   - Remove Kiwi dependency (Nori handles Korean tokenization)
-  - Update reranking integration
 
 Phase 4: Remove LanceDB Dependencies
   - Remove lancedb, kiwipiepy from requirements

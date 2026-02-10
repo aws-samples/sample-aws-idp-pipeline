@@ -1,37 +1,39 @@
-import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import {
+  LambdaClient,
+  InvokeCommand,
+} from '@aws-sdk/client-lambda';
 import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime';
-import { AwsClient } from 'aws4fetch';
 
-export const ssmClient = new SSMClient();
 export const bedrockClient = new BedrockRuntimeClient();
 
-let cachedBackendUrl: string | null = null;
-let cachedAwsClient: AwsClient | null = null;
+const lambdaClient = new LambdaClient();
 
-export async function getBackendUrl(): Promise<string> {
-  if (cachedBackendUrl) {
-    return cachedBackendUrl;
+export async function invokeLanceDB(
+  action: string,
+  params: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const command = new InvokeCommand({
+    FunctionName: process.env.LANCEDB_FUNCTION_ARN,
+    InvocationType: 'RequestResponse',
+    Payload: JSON.stringify({ action, params }),
+  });
+
+  const response = await lambdaClient.send(command);
+
+  if (response.FunctionError) {
+    const errorPayload = response.Payload
+      ? new TextDecoder().decode(response.Payload)
+      : 'Unknown error';
+    throw new Error(`LanceDB Lambda error: ${errorPayload}`);
   }
 
-  const command = new GetParameterCommand({
-    Name: process.env.BACKEND_URL_SSM_KEY,
-  });
-  const response = await ssmClient.send(command);
-  cachedBackendUrl = response.Parameter?.Value ?? '';
-  return cachedBackendUrl;
-}
+  const payload = response.Payload
+    ? JSON.parse(new TextDecoder().decode(response.Payload))
+    : {};
 
-export function getAwsClient(): AwsClient {
-  if (cachedAwsClient) {
-    return cachedAwsClient;
+  if (payload.statusCode !== 200) {
+    throw new Error(payload.error ?? 'LanceDB Lambda error');
   }
 
-  cachedAwsClient = new AwsClient({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? '',
-    sessionToken: process.env.AWS_SESSION_TOKEN ?? '',
-    region: process.env.AWS_REGION,
-    service: 'execute-api',
-  });
-  return cachedAwsClient;
+  return payload;
 }

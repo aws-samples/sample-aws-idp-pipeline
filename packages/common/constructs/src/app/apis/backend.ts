@@ -111,6 +111,10 @@ export class Backend extends Construct {
       this,
       SSM_KEYS.QA_REGENERATOR_FUNCTION_ARN,
     );
+    const lancedbFunctionArn = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.LANCEDB_FUNCTION_ARN,
+    );
 
     this.service = new ApplicationLoadBalancedFargateService(this, 'Service', {
       cluster,
@@ -133,6 +137,7 @@ export class Backend extends Construct {
           ELASTICACHE_ENDPOINT: elasticacheEndpoint,
           STEP_FUNCTION_ARN: stepFunctionArn,
           QA_REGENERATOR_FUNCTION_ARN: qaRegeneratorFunctionArn,
+          LANCEDB_FUNCTION_NAME: lancedbFunctionArn,
         },
       },
       runtimePlatform: {
@@ -190,11 +195,11 @@ export class Backend extends Construct {
       }),
     );
 
-    // Grant Lambda invoke permission for QA regenerator
+    // Grant Lambda invoke permission for QA regenerator and LanceDB service
     taskRole.addToPrincipalPolicy(
       new PolicyStatement({
         actions: ['lambda:InvokeFunction'],
-        resources: [qaRegeneratorFunctionArn],
+        resources: [qaRegeneratorFunctionArn, lancedbFunctionArn],
       }),
     );
 

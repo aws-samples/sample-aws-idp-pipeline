@@ -21,7 +21,7 @@
 
 このプロジェクトでは、Amazon OpenSearch Serviceの代わりに[LanceDB](https://lancedb.com/)をベクトルデータベースとして使用しています。LanceDBはオープンソースのサーバーレスベクトルデータベースで、データをS3に直接保存し、専用クラスターインフラが不要です。韓国語形態素解析器[Kiwi](https://github.com/bab2min/Kiwi)と組み合わせることで、韓国語対応のハイブリッド検索（ベクトル＋全文検索）を実現しています。
 
-### OpenSearchではなくLanceDBを選んだ理由
+### PoCにLanceDBを選んだ理由
 
 このプロジェクトは**PoC/プロトタイプ**であり、コスト効率が重要な要素です。
 
@@ -47,14 +47,14 @@
         ├─ Bedrock Nova: ベクトル埋め込み (1024d)
         └─ LanceDB: S3 Express One Zoneに保存
 
-読み取りパス（バックエンド）:
-  Search API (FastAPI on ECS)
-    ├─ Kiwi: クエリキーワード抽出
-    ├─ LanceDB: ハイブリッド検索 (ベクトル + FTS)
-    └─ Bedrock Cohere Rerank v3.5: 結果再ランキング
+読み取りパス:
+  MCP Search Tool Lambda
+    → LanceDB Service Lambda (Container): ハイブリッド検索 (ベクトル + FTS)
+    → Bedrock Claude Haiku: 検索結果の要約
 
-読み取りパス（エージェント）:
-  MCP Search Tool → Backend Search API →（上記と同じ）
+削除パス:
+  Backend API（プロジェクト削除）
+    → LanceDB Service Lambda: drop_table
 ```
 
 ### ストレージ構造
@@ -98,9 +98,11 @@ DynamoDB (Lock Table)
 | `add_record` | 文書セグメント追加（キーワード抽出 + 埋め込み + 保存） |
 | `delete_record` | セグメントIDで削除 |
 | `get_segments` | ワークフローの全セグメント取得 |
-| `search` | ハイブリッド検索（ベクトル + FTS） |
+| `hybrid_search` | ハイブリッド検索（ベクトル + FTS、`query_type='hybrid'`） |
 | `list_tables` | 全プロジェクトテーブル一覧 |
 | `count` | プロジェクトテーブルのレコード数取得 |
+| `delete_by_workflow` | ワークフローIDで全レコード削除 |
+| `drop_table` | プロジェクトテーブル全体を削除 |
 
 **Container Lambdaを使用する理由:**
 
@@ -121,24 +123,22 @@ Kiwiの韓国語言語モデルファイルとLanceDBのネイティブバイナ
 
 同時実行数を1に設定し、LanceDBテーブルへの同時書き込み競合を防止しています。
 
-### 3. Backend Search API（FastAPI）
+### 3. MCP Search Tool
 
-FastAPIバックエンドでLanceDBを直接クエリする検索エンドポイントを提供します。
-
-| エンドポイント | 説明 |
-|---------------|------|
-| `GET /projects/{id}/search/segments` | プロジェクトの全セグメント一覧 |
-| `GET /projects/{id}/search/hybrid` | ハイブリッド検索（ベクトル + FTS） |
-| `GET /projects/{id}/search/rerank` | ハイブリッド検索 + Cohere Rerank |
-
-### 4. MCP Search Tool
-
-AIチャット中にエージェントが文書を検索する際、バックエンド検索APIを呼び出すMCPツールです。
+AIチャット中にエージェントが文書を検索する際、LanceDB Service Lambdaを直接呼び出すMCPツールです。
 
 ```
 ユーザークエリ → Bedrock Agent Core → MCP Gateway
-  → Search Tool Lambda → Backend /search/hybrid → LanceDB
+  → Search Tool Lambda → LanceDB Service Lambda (hybrid_search)
+    → Bedrock Claude Haiku: 検索結果の要約 → レスポンス
 ```
+
+| 項目 | 値 |
+|------|-----|
+| スタック | McpStack |
+| ランタイム | Node.js 22.x (ARM64) |
+| タイムアウト | 30秒 |
+| 環境変数 | `LANCEDB_FUNCTION_ARN`（SSM経由） |
 
 ---
 
@@ -204,26 +204,21 @@ Kiwi:  "인공 지능 기반 문서 분석 시스템 구축"（名詞のみ抽�
 
 ## ハイブリッド検索フロー
 
+すべての検索はLanceDB Service Lambdaで処理されます。LanceDBのネイティブ`query_type='hybrid'`を使用してベクトル検索と全文検索を統合します。
+
 ```
 検索クエリ: "문서 분석 결과 조회"
   │
-  ├─ [1] Kiwiキーワード抽出
+  ├─ [1] Kiwiキーワード抽出（LanceDB Service Lambda）
   │     → "문서 분석 결과 조회"
   │
-  ├─ [2] ベクトル検索（意味ベース）
-  │     → Bedrock Nova埋め込み → コサイン類似度
-  │     → Top-K結果（_distanceスコア）
+  ├─ [2] LanceDBネイティブハイブリッド検索
+  │     → table.search(query=keywords, query_type='hybrid')
+  │     → ベクトル検索（Nova埋め込み）+ FTS自動マージ
+  │     → Top-K結果（_relevance_score）
   │
-  ├─ [3] 全文検索（キーワードベース）
-  │     → FTSインデックスでキーワードマッチング
-  │     → Top-K結果（_score）
-  │
-  ├─ [4] マージおよび重複排除
-  │     → ベクトル + FTS結果の和集合
-  │
-  └─ [5] リランキング（オプション）
-        → Bedrock Cohere Rerank v3.5
-        → 最終Top-N結果（rerank_score）
+  └─ [3] 結果の要約（MCP Search Tool Lambda）
+        → Bedrock Claude Haikuで検索結果に基づく回答を生成
 ```
 
 ---
@@ -263,6 +258,7 @@ const lockTable = new Table(this, 'LanceDbLockTable', {
 | `/idp-v2/lancedb/lock/table-name` | DynamoDBロックテーブル名 |
 | `/idp-v2/lancedb/express/bucket-name` | S3 Expressバケット名 |
 | `/idp-v2/lancedb/express/az-id` | S3 Express可用性ゾーンID |
+| `/idp-v2/lancedb/function-arn` | LanceDB Service Lambda関数ARN |
 
 ---
 
@@ -278,13 +274,15 @@ graph TB
     end
 
     subgraph Read["Read Path"]
-        SearchRouter["Search Router<br/>(FastAPI)"]
         MCP["MCP Search Tool<br/>(Agent)"]
     end
 
-    subgraph Core["Core Services"]
+    subgraph Delete["Delete Path"]
+        Backend["Backend API<br/>（プロジェクト削除）"]
+    end
+
+    subgraph Core["Core Service"]
         Service["LanceDB Service<br/>(Container Lambda)"]
-        Backend["Backend Search API<br/>(ECS Fargate)"]
     end
 
     subgraph Storage["Storage Layer"]
@@ -294,17 +292,16 @@ graph TB
 
     Writer -->|invoke| Service
     QA -->|invoke| Service
-
-    SearchRouter --> Backend
-    MCP --> Backend
+    MCP -->|invoke<br/>hybrid_search| Service
+    Backend -->|invoke<br/>drop_table| Service
 
     Service --> S3 & DDB
-    Backend --> S3 & DDB
 
     style Storage fill:#fff3e0,stroke:#ff9900
     style Core fill:#e8f5e9,stroke:#2ea043
     style Write fill:#fce4ec,stroke:#e91e63
     style Read fill:#e3f2fd,stroke:#1976d2
+    style Delete fill:#f3e5f5,stroke:#7b1fa2
 ```
 
 | コンポーネント | スタック | アクセスタイプ | 説明 |
@@ -313,8 +310,8 @@ graph TB
 | **LanceDB Writer** | WorkflowStack | 書き込み（Service経由） | SQSコンシューマー、Serviceに委任 |
 | **Analysis Finalizer** | WorkflowStack | 書き込み（SQS/Service経由） | セグメントを書き込みキューに送信、再分析時に削除 |
 | **QA Regenerator** | WorkflowStack | 書き込み（Service経由） | Q&Aセグメント更新 |
-| **Backend Search API** | ApplicationStack | 読み取り | FastAPIハイブリッド検索エンドポイント |
-| **MCP Search Tool** | McpStack | 読み取り（Backend経由） | エージェント文書検索ツール |
+| **MCP Search Tool** | McpStack | 読み取り（Service直接呼び出し） | エージェント文書検索ツール |
+| **Backend API** | ApplicationStack | 削除（Service経由） | プロジェクト削除時に`drop_table`を呼び出し |
 
 ---
 
@@ -328,10 +325,7 @@ graph TB
 |--------------|----------------|---------------------|------|
 | **LanceDB Service Lambda** | Container Lambda + LanceDB | OpenSearchクライアント（CRUD + 検索） | 全面交換 |
 | **LanceDB Writer Lambda** | SQS → LanceDB Service呼び出し | SQS → OpenSearchインデックス書き込み | 呼び出し先交換 |
-| **Backend `lancedb.py`** | `lancedb.connect(s3+ddb://...)` | OpenSearchクライアント接続 | 交換 |
-| **Backend `search.py`** | LanceDBハイブリッド検索API | OpenSearch k-NN + 全文検索クエリ | 検索ロジック交換 |
-| **Backend `keywords.py`** | Kiwiキーワード抽出 | OpenSearch Nori分析器（内蔵） | 削除可能 |
-| **Backend `embedding.py`** | LanceDB埋め込み関数 | OpenSearch neural search / ingest pipeline | 交換 |
+| **MCP Search Tool** | Lambda invoke → LanceDB Service | Lambda invoke → OpenSearch検索 | 呼び出し先交換 |
 | **StorageStack** | S3 Express + DDBロックテーブル | OpenSearchドメイン（VPC） | リソース交換 |
 
 ### 変更不要コンポーネント
@@ -339,8 +333,7 @@ graph TB
 | コンポーネント | 理由 |
 |--------------|------|
 | **Analysis Finalizer** | SQSにメッセージ送信のみ（キューインターフェース不変） |
-| **MCP Search Tool** | バックエンドHTTP API呼び出し（API契約不変） |
-| **Frontend** | バックエンド検索API使用（DB直接アクセスなし） |
+| **Frontend** | DB直接アクセスなし |
 | **Step Functions Workflow** | LanceDB直接依存なし |
 
 ### マイグレーション戦略
@@ -357,9 +350,8 @@ Phase 2: 書き込みパスの交換
   - 埋め込み用OpenSearch neural ingest pipeline追加
 
 Phase 3: 読み取りパスの交換
-  - Backend search.py → OpenSearch k-NN + 全文検索クエリに変更
+  - MCP Search Tool LambdaのinvokeターゲットをOpenSearch検索サービスに変更
   - Kiwi依存関係削除（Noriが韓国語トークン化を処理）
-  - リランキング統合の更新
 
 Phase 4: LanceDB依存関係の削除
   - requirementsからlancedb, kiwipiepyを削除

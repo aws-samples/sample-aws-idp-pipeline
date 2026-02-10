@@ -1,7 +1,7 @@
 declare global {
   namespace NodeJS {
     interface ProcessEnv {
-      BACKEND_URL_SSM_KEY: string;
+      LANCEDB_FUNCTION_ARN: string;
       DOCUMENT_STORAGE_BUCKET: string;
     }
   }

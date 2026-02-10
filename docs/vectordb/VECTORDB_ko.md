@@ -21,7 +21,7 @@
 
 이 프로젝트는 Amazon OpenSearch Service 대신 [LanceDB](https://lancedb.com/)를 벡터 데이터베이스로 사용합니다. LanceDB는 오픈소스 서버리스 벡터 데이터베이스로, 데이터를 S3에 직접 저장하며 별도의 클러스터 인프라가 필요 없습니다. 여기에 한국어 형태소 분석기 [Kiwi](https://github.com/bab2min/Kiwi)를 결합하여 한국어를 지원하는 하이브리드 검색(벡터 + 전문 검색)을 구현합니다.
 
-### OpenSearch 대신 LanceDB를 선택한 이유
+### PoC에 LanceDB를 선택한 이유
 
 이 프로젝트는 **PoC/프로토타입**이며, 비용 효율성이 핵심 요소입니다.
 
@@ -47,14 +47,14 @@
         ├─ Bedrock Nova: 벡터 임베딩 (1024d)
         └─ LanceDB: S3 Express One Zone에 저장
 
-읽기 경로 (백엔드):
-  Search API (FastAPI on ECS)
-    ├─ Kiwi: 쿼리 키워드 추출
-    ├─ LanceDB: 하이브리드 검색 (벡터 + FTS)
-    └─ Bedrock Cohere Rerank v3.5: 결과 재순위화
+읽기 경로:
+  MCP Search Tool Lambda
+    → LanceDB Service Lambda (Container): 하이브리드 검색 (벡터 + FTS)
+    → Bedrock Claude Haiku: 검색 결과 요약
 
-읽기 경로 (에이전트):
-  MCP Search Tool → Backend Search API → (위와 동일)
+삭제 경로:
+  Backend API (프로젝트 삭제)
+    → LanceDB Service Lambda: drop_table
 ```
 
 ### 스토리지 구조
@@ -98,9 +98,11 @@ DynamoDB (Lock Table)
 | `add_record` | 문서 세그먼트 추가 (키워드 추출 + 임베딩 + 저장) |
 | `delete_record` | 세그먼트 ID로 삭제 |
 | `get_segments` | 워크플로우의 모든 세그먼트 조회 |
-| `search` | 하이브리드 검색 (벡터 + FTS) |
+| `hybrid_search` | 하이브리드 검색 (벡터 + FTS, `query_type='hybrid'`) |
 | `list_tables` | 전체 프로젝트 테이블 목록 |
 | `count` | 프로젝트 테이블의 레코드 수 조회 |
+| `delete_by_workflow` | 워크플로우 ID로 전체 레코드 삭제 |
+| `drop_table` | 프로젝트 테이블 전체 삭제 |
 
 **Container Lambda를 사용하는 이유:**
 
@@ -121,24 +123,22 @@ Kiwi의 한국어 언어 모델 파일과 LanceDB의 네이티브 바이너리�
 
 동시성을 1로 설정하여 LanceDB 테이블에 대한 동시 쓰기 충돌을 방지합니다.
 
-### 3. Backend Search API (FastAPI)
+### 3. MCP Search Tool
 
-FastAPI 백엔드에서 LanceDB를 직접 조회하는 검색 엔드포인트를 제공합니다.
-
-| 엔드포인트 | 설명 |
-|------------|------|
-| `GET /projects/{id}/search/segments` | 프로젝트의 전체 세그먼트 목록 |
-| `GET /projects/{id}/search/hybrid` | 하이브리드 검색 (벡터 + FTS) |
-| `GET /projects/{id}/search/rerank` | 하이브리드 검색 + Cohere Rerank |
-
-### 4. MCP Search Tool
-
-AI 채팅 중 에이전트가 문서를 검색할 때 백엔드 검색 API를 호출하는 MCP 도구입니다.
+AI 채팅 중 에이전트가 문서를 검색할 때 LanceDB Service Lambda를 직접 호출하는 MCP 도구입니다.
 
 ```
 사용자 질의 → Bedrock Agent Core → MCP Gateway
-  → Search Tool Lambda → Backend /search/hybrid → LanceDB
+  → Search Tool Lambda → LanceDB Service Lambda (hybrid_search)
+    → Bedrock Claude Haiku: 검색 결과 요약 → 응답
 ```
+
+| 항목 | 값 |
+|------|-----|
+| 스택 | McpStack |
+| 런타임 | Node.js 22.x (ARM64) |
+| 타임아웃 | 30초 |
+| 환경변수 | `LANCEDB_FUNCTION_ARN` (SSM 경유) |
 
 ---
 
@@ -204,26 +204,21 @@ Kiwi:  "인공 지능 기반 문서 분석 시스템 구축"  (명사만 추출)
 
 ## 하이브리드 검색 흐름
 
+모든 검색은 LanceDB Service Lambda에서 처리됩니다. LanceDB의 네이티브 `query_type='hybrid'`를 사용하여 벡터 검색과 전문 검색을 통합합니다.
+
 ```
 검색 쿼리: "문서 분석 결과 조회"
   │
-  ├─ [1] Kiwi 키워드 추출
+  ├─ [1] Kiwi 키워드 추출 (LanceDB Service Lambda)
   │     → "문서 분석 결과 조회"
   │
-  ├─ [2] 벡터 검색 (의미 기반)
-  │     → Bedrock Nova 임베딩 → 코사인 유사도
-  │     → Top-K 결과 (_distance 점수)
+  ├─ [2] LanceDB 네이티브 하이브리드 검색
+  │     → table.search(query=keywords, query_type='hybrid')
+  │     → 벡터 검색 (Nova 임베딩) + 전문 검색 (FTS) 자동 병합
+  │     → Top-K 결과 (_relevance_score)
   │
-  ├─ [3] 전문 검색 (키워드 기반)
-  │     → FTS 인덱스에서 키워드 매칭
-  │     → Top-K 결과 (_score)
-  │
-  ├─ [4] 병합 및 중복 제거
-  │     → 벡터 + FTS 결과 합집합
-  │
-  └─ [5] 리랭킹 (선택)
-        → Bedrock Cohere Rerank v3.5
-        → 최종 Top-N 결과 (rerank_score)
+  └─ [3] 결과 요약 (MCP Search Tool Lambda)
+        → Bedrock Claude Haiku로 검색 결과 기반 답변 생성
 ```
 
 ---
@@ -263,6 +258,7 @@ const lockTable = new Table(this, 'LanceDbLockTable', {
 | `/idp-v2/lancedb/lock/table-name` | DynamoDB 잠금 테이블 이름 |
 | `/idp-v2/lancedb/express/bucket-name` | S3 Express 버킷 이름 |
 | `/idp-v2/lancedb/express/az-id` | S3 Express 가용 영역 ID |
+| `/idp-v2/lancedb/function-arn` | LanceDB Service Lambda 함수 ARN |
 
 ---
 
@@ -278,13 +274,15 @@ graph TB
     end
 
     subgraph Read["Read Path"]
-        SearchRouter["Search Router<br/>(FastAPI)"]
         MCP["MCP Search Tool<br/>(Agent)"]
     end
 
-    subgraph Core["Core Services"]
+    subgraph Delete["Delete Path"]
+        Backend["Backend API<br/>(프로젝트 삭제)"]
+    end
+
+    subgraph Core["Core Service"]
         Service["LanceDB Service<br/>(Container Lambda)"]
-        Backend["Backend Search API<br/>(ECS Fargate)"]
     end
 
     subgraph Storage["Storage Layer"]
@@ -294,17 +292,16 @@ graph TB
 
     Writer -->|invoke| Service
     QA -->|invoke| Service
-
-    SearchRouter --> Backend
-    MCP --> Backend
+    MCP -->|invoke<br/>hybrid_search| Service
+    Backend -->|invoke<br/>drop_table| Service
 
     Service --> S3 & DDB
-    Backend --> S3 & DDB
 
     style Storage fill:#fff3e0,stroke:#ff9900
     style Core fill:#e8f5e9,stroke:#2ea043
     style Write fill:#fce4ec,stroke:#e91e63
     style Read fill:#e3f2fd,stroke:#1976d2
+    style Delete fill:#f3e5f5,stroke:#7b1fa2
 ```
 
 | 컴포넌트 | 스택 | 접근 유형 | 설명 |
@@ -313,8 +310,8 @@ graph TB
 | **LanceDB Writer** | WorkflowStack | 쓰기 (Service 경유) | SQS 소비자, Service에 위임 |
 | **Analysis Finalizer** | WorkflowStack | 쓰기 (SQS/Service 경유) | 세그먼트를 쓰기 큐로 전송, 재분석 시 삭제 |
 | **QA Regenerator** | WorkflowStack | 쓰기 (Service 경유) | Q&A 세그먼트 업데이트 |
-| **Backend Search API** | ApplicationStack | 읽기 | FastAPI 하이브리드 검색 엔드포인트 |
-| **MCP Search Tool** | McpStack | 읽기 (Backend 경유) | 에이전트 문서 검색 도구 |
+| **MCP Search Tool** | McpStack | 읽기 (Service 직접 호출) | 에이전트 문서 검색 도구 |
+| **Backend API** | ApplicationStack | 삭제 (Service 경유) | 프로젝트 삭제 시 `drop_table` 호출 |
 
 ---
 
@@ -328,10 +325,7 @@ graph TB
 |----------|----------------|---------------------|------|
 | **LanceDB Service Lambda** | Container Lambda + LanceDB | OpenSearch 클라이언트 (CRUD + 검색) | 전체 교체 |
 | **LanceDB Writer Lambda** | SQS → LanceDB Service 호출 | SQS → OpenSearch 인덱스 쓰기 | 호출 대상 교체 |
-| **Backend `lancedb.py`** | `lancedb.connect(s3+ddb://...)` | OpenSearch 클라이언트 연결 | 교체 |
-| **Backend `search.py`** | LanceDB 하이브리드 검색 API | OpenSearch k-NN + 전문 검색 쿼리 | 검색 로직 교체 |
-| **Backend `keywords.py`** | Kiwi 키워드 추출 | OpenSearch Nori 분석기 (내장) | 제거 가능 |
-| **Backend `embedding.py`** | LanceDB 임베딩 함수 | OpenSearch neural search / ingest pipeline | 교체 |
+| **MCP Search Tool** | Lambda invoke → LanceDB Service | Lambda invoke → OpenSearch 검색 | 호출 대상 교체 |
 | **StorageStack** | S3 Express + DDB 잠금 테이블 | OpenSearch 도메인 (VPC) | 리소스 교체 |
 
 ### 변경 불필요 컴포넌트
@@ -339,8 +333,7 @@ graph TB
 | 컴포넌트 | 이유 |
 |----------|------|
 | **Analysis Finalizer** | SQS에 메시지만 전송 (큐 인터페이스 불변) |
-| **MCP Search Tool** | 백엔드 HTTP API 호출 (API 계약 불변) |
-| **Frontend** | 백엔드 검색 API 사용 (DB 직접 접근 없음) |
+| **Frontend** | DB 직접 접근 없음 |
 | **Step Functions Workflow** | LanceDB 직접 의존성 없음 |
 
 ### 마이그레이션 전략
@@ -357,9 +350,8 @@ Phase 2: 쓰기 경로 교체
   - 임베딩을 위한 OpenSearch neural ingest pipeline 추가
 
 Phase 3: 읽기 경로 교체
-  - Backend search.py → OpenSearch k-NN + 전문 검색 쿼리로 변경
+  - MCP Search Tool의 Lambda invoke 대상을 OpenSearch 검색 서비스로 변경
   - Kiwi 의존성 제거 (Nori가 한국어 토큰화 처리)
-  - 리랭킹 통합 업데이트
 
 Phase 4: LanceDB 의존성 제거
   - requirements에서 lancedb, kiwipiepy 제거

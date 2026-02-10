@@ -751,5 +751,10 @@ export class WorkflowStack extends Stack {
       parameterName: SSM_KEYS.QA_REGENERATOR_FUNCTION_ARN,
       stringValue: qaRegenerator.functionArn,
     });
+
+    new ssm.StringParameter(this, 'LanceDBFunctionArn', {
+      parameterName: SSM_KEYS.LANCEDB_FUNCTION_ARN,
+      stringValue: lancedbService.functionArn,
+    });
   }
 }
