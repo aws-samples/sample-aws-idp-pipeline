@@ -2,6 +2,7 @@ import { Duration, Stack } from 'aws-cdk-lib';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Runtime, Architecture } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import * as path from 'path';
@@ -13,10 +14,20 @@ export class SearchMcp extends Construct {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
+    const documentStorageBucketName = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.DOCUMENT_STORAGE_BUCKET_NAME,
+    );
+    const documentStorageBucket = Bucket.fromBucketName(
+      this,
+      'DocumentStorageBucket',
+      documentStorageBucketName,
+    );
+
     this.function = new NodejsFunction(this, 'Function', {
       entry: path.resolve(
         process.cwd(),
-        '../../packages/lambda/search-mcp/src/index.ts',
+        '../../packages/lambda/search-mcp/src/handler.ts',
       ),
       handler: 'handler',
       runtime: Runtime.NODEJS_22_X,
@@ -24,8 +35,15 @@ export class SearchMcp extends Construct {
       timeout: Duration.seconds(30),
       environment: {
         BACKEND_URL_SSM_KEY: SSM_KEYS.BACKEND_URL,
+        DOCUMENT_STORAGE_BUCKET: documentStorageBucketName,
+      },
+      bundling: {
+        externalModules: ['duckdb'],
+        nodeModules: ['duckdb'],
       },
     });
+
+    documentStorageBucket.grantRead(this.function);
 
     const stack = Stack.of(this);
     this.function.addToRolePolicy(

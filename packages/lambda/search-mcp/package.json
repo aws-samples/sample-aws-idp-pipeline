@@ -2,8 +2,8 @@
   "name": "@idp-v2/search-mcp",
   "version": "1.0.0",
   "description": "Search MCP Lambda handler for AgentCore Gateway",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/handler.js",
+  "types": "dist/handler.d.ts",
   "type": "module",
   "scripts": {
     "build": "tsc",
@@ -16,6 +16,7 @@
     "@aws-sdk/client-bedrock-runtime": "^3.958.0",
     "@aws-sdk/client-ssm": "^3.958.0",
     "aws4fetch": "^1.0.20",
+    "duckdb": "^1.4.4",
     "iovalkey": "^0.3.3"
   },
   "devDependencies": {

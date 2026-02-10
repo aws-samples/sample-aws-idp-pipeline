@@ -22,3 +22,18 @@ export interface SearchAnswer {
     segment_id: string;
   }>;
 }
+
+export interface OverviewInput {
+  project_id: string;
+}
+
+export interface DocumentOverview {
+  document_id: string;
+  language: string;
+  document_summary: string;
+  total_pages: number;
+}
+
+export interface OverviewOutput {
+  documents: DocumentOverview[];
+}

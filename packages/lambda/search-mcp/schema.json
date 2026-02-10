@@ -1,56 +1,61 @@
-[
-  {
-    "name": "summarize",
-    "description": "Search documents in a project to find relevant information. Use this tool when the user asks questions about documents, wants to find specific information, or needs context from their uploaded files.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project_id": {
-          "type": "string",
-          "description": "The unique identifier of the project to search in"
+{
+  "tools": [
+    {
+      "name": "summarize",
+      "description": "Search for relevant information in documents and provide a summarized answer.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "description": "The unique identifier of the project"
+          },
+          "query": {
+            "type": "string",
+            "description": "The search query"
+          },
+          "document_id": {
+            "type": "string",
+            "description": "Optional document ID to limit search scope"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of results to return (default: 10)"
+          }
         },
-        "query": {
-          "type": "string",
-          "description": "Natural language search query. Be specific and include key terms for better results."
-        },
-        "document_id": {
-          "type": "string",
-          "description": "Optional. Restrict search to a specific document by its ID. Omit to search across all documents in the project."
-        },
-        "limit": {
-          "type": "integer",
-          "description": "Number of search results to return. Use smaller values (1-3) for precise answers, larger values (5-10) for broader context.",
-          "default": 10
-        }
-      },
-      "required": ["project_id", "query"]
+        "required": ["project_id", "query"]
+      }
     },
-    "outputSchema": {
-      "type": "object",
-      "description": "Search result with summarized answer and source references",
-      "properties": {
-        "answer": {
-          "type": "string",
-          "description": "Summarized answer based on the search results"
+    {
+      "name": "overview",
+      "description": "Get an overview of all documents in a project with their summaries.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "description": "The unique identifier of the project"
+          }
         },
-        "sources": {
-          "type": "array",
-          "description": "List of source documents referenced in the answer",
-          "items": {
-            "type": "object",
-            "properties": {
-              "document_id": {
-                "type": "string",
-                "description": "Unique identifier of the source document"
-              },
-              "segment_id": {
-                "type": "string",
-                "description": "Unique identifier of the document segment"
+        "required": ["project_id"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "documents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "document_id": { "type": "string" },
+                "language": { "type": "string" },
+                "document_summary": { "type": "string" },
+                "total_pages": { "type": "integer" }
               }
             }
           }
         }
       }
     }
-  }
-]
+  ]
+}
