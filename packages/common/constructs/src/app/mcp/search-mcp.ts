@@ -37,10 +37,6 @@ export class SearchMcp extends Construct {
         BACKEND_URL_SSM_KEY: SSM_KEYS.BACKEND_URL,
         DOCUMENT_STORAGE_BUCKET: documentStorageBucketName,
       },
-      bundling: {
-        externalModules: ['duckdb'],
-        nodeModules: ['duckdb'],
-      },
     });
 
     documentStorageBucket.grantRead(this.function);

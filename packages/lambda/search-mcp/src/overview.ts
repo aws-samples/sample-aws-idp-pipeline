@@ -1,51 +1,60 @@
-import * as duckdb from 'duckdb';
+import {
+  S3Client,
+  ListObjectsV2Command,
+  GetObjectCommand,
+} from '@aws-sdk/client-s3';
 import type { OverviewInput, OverviewOutput, DocumentOverview } from './types';
 
-const runQuery = (
-  conn: duckdb.Connection,
-  sql: string,
-): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    conn.run(sql, (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-};
+const s3Client = new S3Client({});
 
-const allQuery = <T>(
-  conn: duckdb.Connection,
-  sql: string,
-): Promise<T[]> => {
-  return new Promise((resolve, reject) => {
-    conn.all(sql, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows as T[]);
-    });
-  });
-};
+interface SummaryJson {
+  language: string;
+  document_summary: string;
+  total_pages: number;
+}
 
-export const handler = async (event: OverviewInput): Promise<OverviewOutput> => {
+export const handler = async (
+  event: OverviewInput,
+): Promise<OverviewOutput> => {
   const bucket = process.env.DOCUMENT_STORAGE_BUCKET;
-  const db = new duckdb.Database(':memory:');
-  const conn = db.connect();
+  const prefix = `projects/${event.project_id}/documents/`;
 
-  // S3 httpfs 설정 (Lambda 환경에서는 AWS credentials 자동 사용)
-  await runQuery(conn, 'INSTALL httpfs; LOAD httpfs;');
-  await runQuery(conn, "SET s3_region='ap-northeast-2';");
+  // List all objects under the project's documents folder
+  const listCommand = new ListObjectsV2Command({
+    Bucket: bucket,
+    Prefix: prefix,
+  });
 
-  const query = `
-    SELECT
-      split_part(filename, '/documents/', 2).split('/')[1] AS document_id,
-      language,
-      document_summary,
-      total_pages
-    FROM read_json('s3://${bucket}/projects/${event.project_id}/documents/**/summary.json')
-  `;
+  const listResponse = await s3Client.send(listCommand);
+  // Key format: projects/{project_id}/documents/{document_id}/analysis/summary.json
+  const summaryKeys =
+    listResponse.Contents?.flatMap((obj) =>
+      obj.Key?.endsWith('/analysis/summary.json') ? [obj.Key] : [],
+    ) ?? [];
 
-  const result = await allQuery<DocumentOverview>(conn, query);
-  conn.close();
-  db.close();
+  // Fetch all summary.json files in parallel
+  const documents: DocumentOverview[] = await Promise.all(
+    summaryKeys.map(async (key) => {
+      const getCommand = new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+      });
+      const response = await s3Client.send(getCommand);
+      const body = await response.Body?.transformToString();
+      const summary: SummaryJson = JSON.parse(body ?? '{}');
 
-  return { documents: result };
+      // Extract document_id from key: projects/{project_id}/documents/{document_id}/analysis/summary.json
+      const parts = key.split('/');
+      const documentId = parts[parts.length - 3];
+
+      return {
+        document_id: documentId,
+        language: summary.language,
+        document_summary: summary.document_summary,
+        total_pages: summary.total_pages,
+      };
+    }),
+  );
+
+  return { documents };
 };

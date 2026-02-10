@@ -15,7 +15,7 @@
     "@aws-sdk/client-s3": "^3.975.0",
     "@aws-sdk/client-ssm": "^3.958.0",
     "@aws-sdk/credential-providers": "^3.965.0",
-    "@aws-sdk/s3-request-presigner": "^3.974.0",
+    "@aws-sdk/s3-request-presigner": "^3.975.0",
     "@aws-sdk/signature-v4": "^3.374.0",
     "@aws-sdk/util-format-url": "^3.972.1",
     "@aws/nx-plugin": "0.64.1",
@@ -113,6 +113,12 @@
       "@modelcontextprotocol/sdk": ">=1.25.2",
       "lodash": ">=4.17.23",
       "diff": ">=8.0.3"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "duckdb"
+    ],
+    "ignoredBuiltDependencies": [
+      "duckdb"
+    ]
   }
 }

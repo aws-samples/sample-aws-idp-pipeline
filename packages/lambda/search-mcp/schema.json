@@ -1,61 +1,59 @@
-{
-  "tools": [
-    {
-      "name": "summarize",
-      "description": "Search for relevant information in documents and provide a summarized answer.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "project_id": {
-            "type": "string",
-            "description": "The unique identifier of the project"
-          },
-          "query": {
-            "type": "string",
-            "description": "The search query"
-          },
-          "document_id": {
-            "type": "string",
-            "description": "Optional document ID to limit search scope"
-          },
-          "limit": {
-            "type": "integer",
-            "description": "Maximum number of results to return (default: 10)"
-          }
+[
+  {
+    "name": "summarize",
+    "description": "Search for relevant information in documents and provide a summarized answer.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "The unique identifier of the project"
         },
-        "required": ["project_id", "query"]
-      }
-    },
-    {
-      "name": "overview",
-      "description": "Get an overview of all documents in a project with their summaries.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "project_id": {
-            "type": "string",
-            "description": "The unique identifier of the project"
-          }
+        "query": {
+          "type": "string",
+          "description": "The search query"
         },
-        "required": ["project_id"]
+        "document_id": {
+          "type": "string",
+          "description": "Optional document ID to limit search scope"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of results to return (default: 10)"
+        }
       },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "documents": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "document_id": { "type": "string" },
-                "language": { "type": "string" },
-                "document_summary": { "type": "string" },
-                "total_pages": { "type": "integer" }
-              }
+      "required": ["project_id", "query"]
+    }
+  },
+  {
+    "name": "overview",
+    "description": "Get an overview of all documents in a project with their summaries.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "The unique identifier of the project"
+        }
+      },
+      "required": ["project_id"]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "documents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "document_id": { "type": "string" },
+              "language": { "type": "string" },
+              "document_summary": { "type": "string" },
+              "total_pages": { "type": "integer" }
             }
           }
         }
       }
     }
-  ]
-}
+  }
+]

@@ -368,7 +368,8 @@ export function useAwsClient() {
         Key: key,
       });
 
-      return getSignedUrl(s3Client, command, { expiresIn });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return getSignedUrl(s3Client as any, command, { expiresIn });
     },
     [cognitoProps, getCredentials],
   );
