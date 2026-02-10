@@ -99,6 +99,8 @@ def invoke_async_inference(
     workflow_id: str,
     document_id: str,
     project_id: str,
+    ocr_model: str = 'paddleocr-vl',
+    ocr_options: dict | None = None,
 ) -> str:
     """Invoke SageMaker async inference and return immediately."""
     client = get_sagemaker_runtime()
@@ -111,8 +113,8 @@ def invoke_async_inference(
     # Prepare inference request with metadata for SNS callback
     inference_request = {
         's3_uri': file_uri,
-        'model': 'paddleocr-vl',
-        'model_options': {},
+        'model': ocr_model,
+        'model_options': ocr_options or {},
         'metadata': {
             'workflow_id': workflow_id,
             'document_id': document_id,
@@ -155,8 +157,10 @@ def process_message(message: dict) -> dict:
     project_id = message.get('project_id')
     file_uri = message.get('file_uri')
     file_type = message.get('file_type')
+    ocr_model = message.get('ocr_model', 'paddleocr-vl')
+    ocr_options = message.get('ocr_options', {})
 
-    print(f'Processing OCR job: workflow={workflow_id}, file={file_uri}')
+    print(f'Processing OCR job: workflow={workflow_id}, file={file_uri}, model={ocr_model}')
 
     # Request scale-out immediately (idempotent - safe if already running)
     ensure_endpoint_running()
@@ -191,7 +195,9 @@ def process_message(message: dict) -> dict:
             file_uri=file_uri,
             workflow_id=workflow_id,
             document_id=document_id,
-            project_id=project_id
+            project_id=project_id,
+            ocr_model=ocr_model,
+            ocr_options=ocr_options,
         )
 
         # Return immediately - SNS callback will handle completion

@@ -90,7 +90,7 @@ class PreprocessType:
     ALL = ['ocr', 'bda', 'transcribe', 'webcrawler']
 
 
-def determine_preprocess_required(file_type: str, use_bda: bool = False) -> dict:
+def determine_preprocess_required(file_type: str, use_bda: bool = False, use_ocr: bool = True) -> dict:
     """Determine which preprocessors are required based on file type and options.
 
     Note: Parser is handled in Step Functions workflow, not as async preprocessing.
@@ -120,8 +120,8 @@ def determine_preprocess_required(file_type: str, use_bda: bool = False) -> dict
 
     return {
         PreprocessType.OCR: {
-            'required': (is_pdf or is_image) and not is_webreq,
-            'status': PreprocessStatus.PENDING if ((is_pdf or is_image) and not is_webreq) else PreprocessStatus.SKIPPED
+            'required': (is_pdf or is_image) and not is_webreq and use_ocr,
+            'status': PreprocessStatus.PENDING if ((is_pdf or is_image) and not is_webreq and use_ocr) else PreprocessStatus.SKIPPED
         },
         PreprocessType.BDA: {
             'required': use_bda and not is_webreq,
@@ -183,7 +183,11 @@ def create_workflow(
     file_type: str,
     execution_arn: str,
     language: str = 'en',
-    use_bda: bool = False
+    use_bda: bool = False,
+    use_ocr: bool = True,
+    document_prompt: str = '',
+    source_url: str = '',
+    crawl_instruction: str = '',
 ) -> dict:
     table = get_table()
     now = now_iso()
@@ -192,23 +196,33 @@ def create_workflow(
     entity_prefix = get_entity_prefix(file_type)
 
     # Determine required preprocessors based on file type and options
-    preprocess = determine_preprocess_required(file_type, use_bda)
+    preprocess = determine_preprocess_required(file_type, use_bda, use_ocr)
+
+    # Add webcrawler metadata if provided
+    if source_url:
+        preprocess[PreprocessType.WEBCRAWLER]['source_url'] = source_url
+    if crawl_instruction:
+        preprocess[PreprocessType.WEBCRAWLER]['instruction'] = crawl_instruction
 
     # Main workflow item under document/web entity
+    workflow_data = {
+        'project_id': project_id,
+        'file_uri': file_uri,
+        'file_name': file_name,
+        'file_type': file_type,
+        'execution_arn': execution_arn,
+        'status': WorkflowStatus.PENDING,
+        'language': language,
+        'total_segments': 0,
+        'preprocess': preprocess,
+    }
+    if document_prompt:
+        workflow_data['document_prompt'] = document_prompt
+
     workflow_item = {
         'PK': f'{entity_prefix}#{document_id}',
         'SK': f'WF#{workflow_id}',
-        'data': {
-            'project_id': project_id,
-            'file_uri': file_uri,
-            'file_name': file_name,
-            'file_type': file_type,
-            'execution_arn': execution_arn,
-            'status': WorkflowStatus.PENDING,
-            'language': language,
-            'total_segments': 0,
-            'preprocess': preprocess
-        },
+        'data': workflow_data,
         'created_at': now,
         'updated_at': now
     }
@@ -222,11 +236,11 @@ def create_workflow(
 
     skip_conditions = {
         StepName.BDA_PROCESSOR: not use_bda or is_webreq,
-        StepName.PADDLEOCR_PROCESSOR: not (is_pdf or is_image) or is_webreq,
+        StepName.PADDLEOCR_PROCESSOR: not (is_pdf or is_image) or is_webreq or not use_ocr,
         StepName.TRANSCRIBE: not (is_video or is_audio) or is_webreq,
         StepName.FORMAT_PARSER: not is_pdf or is_webreq,
         StepName.WEBCRAWLER: not is_webreq,
-        StepName.SEGMENT_ANALYZER: is_webreq,
+        StepName.SEGMENT_ANALYZER: False,
     }
 
     # Initialize STEP row with appropriate statuses

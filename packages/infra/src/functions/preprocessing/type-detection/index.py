@@ -12,6 +12,8 @@ from shared.ddb_client import (
     generate_workflow_id,
     create_workflow,
     get_project_language,
+    get_project_ocr_settings,
+    get_project_document_prompt,
     get_document,
     PreprocessType,
 )
@@ -24,7 +26,7 @@ BDA_QUEUE_URL = os.environ.get('BDA_QUEUE_URL', '')
 TRANSCRIBE_QUEUE_URL = os.environ.get('TRANSCRIBE_QUEUE_URL', '')
 WORKFLOW_QUEUE_URL = os.environ.get('WORKFLOW_QUEUE_URL', '')
 SAGEMAKER_ENDPOINT_NAME = os.environ.get('SAGEMAKER_ENDPOINT_NAME', '')
-WEBCRAWLER_AGENT_RUNTIME_ARN = os.environ.get('WEBCRAWLER_AGENT_RUNTIME_ARN', '')
+WEBCRAWLER_QUEUE_URL = os.environ.get('WEBCRAWLER_QUEUE_URL', '')
 
 MIME_TYPE_MAP = {
     # Documents
@@ -56,19 +58,6 @@ MIME_TYPE_MAP = {
     # Web Request
     'webreq': 'application/x-webreq',
 }
-
-agentcore_client = None
-
-
-def get_agentcore_client():
-    global agentcore_client
-    if agentcore_client is None:
-        agentcore_client = boto3.client(
-            'bedrock-agentcore',
-            region_name=os.environ.get('AWS_REGION', 'us-east-1')
-        )
-    return agentcore_client
-
 
 def get_sqs_client():
     global sqs_client
@@ -194,22 +183,6 @@ def send_to_queue(queue_url: str, message: dict) -> None:
     )
 
 
-def invoke_webcrawler_agent(message: dict) -> None:
-    """Invoke WebCrawler AgentCore Runtime asynchronously."""
-    if not WEBCRAWLER_AGENT_RUNTIME_ARN:
-        print('WEBCRAWLER_AGENT_RUNTIME_ARN not configured, skipping')
-        return
-
-    client = get_agentcore_client()
-    payload_bytes = json.dumps(message).encode('utf-8')
-    client.invoke_agent_runtime(
-        agentRuntimeArn=WEBCRAWLER_AGENT_RUNTIME_ARN,
-        payload=payload_bytes,
-        contentType='application/json',
-    )
-    print(f"Invoked WebCrawler Agent: {message.get('workflow_id')}")
-
-
 def distribute_to_queues(
     workflow_id: str,
     document_id: str,
@@ -218,7 +191,11 @@ def distribute_to_queues(
     file_name: str,
     file_type: str,
     language: str,
-    use_bda: bool
+    use_bda: bool,
+    use_ocr: bool = True,
+    ocr_model: str = 'paddleocr-vl',
+    ocr_options: dict | None = None,
+    document_prompt: str = '',
 ) -> dict:
     """Distribute preprocessing tasks to appropriate queues based on file type."""
     is_pdf = file_type == 'application/pdf'
@@ -246,23 +223,25 @@ def distribute_to_queues(
 
     queues_sent = []
 
-    # WebCrawler Agent (for .webreq files)
+    # WebCrawler Queue (for .webreq files)
     if is_webreq:
-        invoke_webcrawler_agent({
+        send_to_queue(WEBCRAWLER_QUEUE_URL, {
             **base_message,
             'processor': PreprocessType.WEBCRAWLER,
         })
         queues_sent.append('webcrawler')
-        print(f'Invoked WebCrawler Agent: {workflow_id}')
+        print(f'Sent to WebCrawler queue: {workflow_id}')
 
-    # OCR Queue (PDF or Image, but not .webreq)
-    if (is_pdf or is_image) and not is_webreq:
+    # OCR Queue (PDF or Image, but not .webreq, and OCR enabled)
+    if (is_pdf or is_image) and not is_webreq and use_ocr:
         send_to_queue(OCR_QUEUE_URL, {
             **base_message,
             'processor': PreprocessType.OCR,
+            'ocr_model': ocr_model,
+            'ocr_options': ocr_options or {},
         })
         queues_sent.append('ocr')
-        print(f'Sent to OCR queue: {workflow_id}')
+        print(f'Sent to OCR queue: {workflow_id} (model={ocr_model})')
 
         # Trigger immediate SageMaker scale-out (bypass CloudWatch metric delay)
         trigger_sagemaker_scale_out()
@@ -291,6 +270,7 @@ def distribute_to_queues(
         **base_message,
         'processing_type': processing_type,
         'use_bda': use_bda,
+        'document_prompt': document_prompt,
     })
     queues_sent.append('workflow')
     print(f'Sent to Workflow queue: {workflow_id}')
@@ -328,9 +308,34 @@ def handler(event, context):
             language = get_project_language(project_id)
             print(f'Project {project_id} language: {language}')
 
-            # Get document settings (use_bda)
+            # Get document settings
             document = get_document(project_id, document_id)
             use_bda = document.get('use_bda', False) if document else False
+            use_ocr = document.get('use_ocr', True) if document else True
+
+            # Resolve OCR settings: document override > project default
+            project_ocr = get_project_ocr_settings(project_id)
+            ocr_model = (document.get('ocr_model') if document else None) or project_ocr.get('ocr_model') or 'paddleocr-vl'
+            ocr_options = (document.get('ocr_options') if document else None) or project_ocr.get('ocr_options') or {}
+            print(f'Resolved OCR: enabled={use_ocr}, model={ocr_model}, options={ocr_options}')
+
+            # Resolve document prompt: document override > project default
+            doc_prompt = (document.get('document_prompt') if document else None)
+            document_prompt = doc_prompt if doc_prompt is not None else get_project_document_prompt(project_id)
+
+            # Parse .webreq file to extract source URL and instruction
+            source_url = ''
+            crawl_instruction = ''
+            if file_type == 'application/x-webreq':
+                try:
+                    s3 = boto3.client('s3', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
+                    parts = file_uri.replace('s3://', '').split('/', 1)
+                    resp = s3.get_object(Bucket=parts[0], Key=parts[1])
+                    webreq = json.loads(resp['Body'].read().decode('utf-8'))
+                    source_url = webreq.get('url', '')
+                    crawl_instruction = webreq.get('instruction', '')
+                except Exception as e:
+                    print(f'Failed to parse .webreq file: {e}')
 
             # Create workflow record with preprocess field
             # execution_arn will be empty initially, updated by Step Functions trigger
@@ -344,6 +349,10 @@ def handler(event, context):
                 execution_arn='',
                 language=language,
                 use_bda=use_bda,
+                use_ocr=use_ocr,
+                document_prompt=document_prompt,
+                source_url=source_url,
+                crawl_instruction=crawl_instruction,
             )
             print(f'Created workflow record: {workflow_id}')
 
@@ -357,6 +366,10 @@ def handler(event, context):
                 file_type=file_type,
                 language=language,
                 use_bda=use_bda,
+                use_ocr=use_ocr,
+                ocr_model=ocr_model,
+                ocr_options=ocr_options,
+                document_prompt=document_prompt,
             )
 
             results.append({

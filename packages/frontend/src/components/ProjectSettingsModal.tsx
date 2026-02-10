@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Info, Hash, Type, AlignLeft, Globe, Palette } from 'lucide-react';
+import OcrSettingsForm, { type OcrSettings } from './OcrSettingsForm';
 
 export interface Project {
   project_id: string;
@@ -18,79 +19,6 @@ export interface Project {
   updated_at?: string | null;
   ended_at?: string | null;
 }
-
-const OCR_MODELS = [
-  {
-    value: 'paddleocr-vl',
-    hasLangOption: false,
-    hasOptions: false,
-  },
-  {
-    value: 'pp-ocrv5',
-    hasLangOption: true,
-    hasOptions: true,
-  },
-  {
-    value: 'pp-structurev3',
-    hasLangOption: true,
-    hasOptions: true,
-  },
-];
-
-const OCR_LANGUAGES = [
-  { code: '', name: 'Default (Not specified)' },
-  { code: 'ch', name: 'Chinese & English' },
-  { code: 'en', name: 'English' },
-  { code: 'korean', name: 'Korean' },
-  { code: 'japan', name: 'Japanese' },
-  { code: 'chinese_cht', name: 'Chinese Traditional' },
-  { code: 'french', name: 'French' },
-  { code: 'german', name: 'German' },
-  { code: 'it', name: 'Italian' },
-  { code: 'es', name: 'Spanish' },
-  { code: 'pt', name: 'Portuguese' },
-  { code: 'ru', name: 'Russian' },
-  { code: 'ar', name: 'Arabic' },
-  { code: 'hi', name: 'Hindi' },
-  { code: 'vi', name: 'Vietnamese' },
-  { code: 'th', name: 'Thai' },
-  { code: 'ms', name: 'Malay' },
-  { code: 'id', name: 'Indonesian' },
-  { code: 'tr', name: 'Turkish' },
-  { code: 'pl', name: 'Polish' },
-  { code: 'nl', name: 'Dutch' },
-  { code: 'latin', name: 'Latin (Multi-language)' },
-  { code: 'arabic', name: 'Arabic Script (Multi-language)' },
-  { code: 'cyrillic', name: 'Cyrillic Script (Multi-language)' },
-  { code: 'devanagari', name: 'Devanagari Script (Multi-language)' },
-  { code: 'ta', name: 'Tamil' },
-  { code: 'te', name: 'Telugu' },
-  { code: 'ml', name: 'Malayalam' },
-  { code: 'mr', name: 'Marathi' },
-  { code: 'ne', name: 'Nepali' },
-  { code: 'bn', name: 'Bengali' },
-  { code: 'gu', name: 'Gujarati' },
-  { code: 'pa', name: 'Punjabi' },
-  { code: 'fa', name: 'Persian' },
-  { code: 'ur', name: 'Urdu' },
-  { code: 'he', name: 'Hebrew' },
-  { code: 'az', name: 'Azerbaijani' },
-  { code: 'uz', name: 'Uzbek' },
-  { code: 'uk', name: 'Ukrainian' },
-  { code: 'bg', name: 'Bulgarian' },
-  { code: 'sr', name: 'Serbian' },
-  { code: 'hr', name: 'Croatian' },
-  { code: 'cs', name: 'Czech' },
-  { code: 'hu', name: 'Hungarian' },
-  { code: 'ro', name: 'Romanian' },
-  { code: 'fi', name: 'Finnish' },
-  { code: 'sv', name: 'Swedish' },
-  { code: 'no', name: 'Norwegian' },
-  { code: 'da', name: 'Danish' },
-  { code: 'tl', name: 'Tagalog' },
-  { code: 'mn', name: 'Mongolian' },
-  { code: 'sw', name: 'Swahili' },
-];
 
 export const LANGUAGES = [
   { code: 'ko', name: 'Korean', flag: 'KR' },
@@ -197,12 +125,7 @@ interface FormData {
   color: number;
 }
 
-interface AdvancedSettings {
-  ocr_model: string;
-  ocr_lang: string;
-  use_doc_orientation_classify: boolean;
-  use_doc_unwarping: boolean;
-  use_textline_orientation: boolean;
+interface AdvancedSettings extends OcrSettings {
   document_prompt: string;
 }
 
@@ -528,158 +451,16 @@ export default function ProjectSettingsModal({
 
             {activeSection === 'ocr' && (
               <div className="bento-modal-form">
-                <div className="bento-form-group">
-                  <label className="bento-form-label">{t('ocr.model')}</label>
-                  <div className="bento-radio-group">
-                    {OCR_MODELS.map((model) => (
-                      <label
-                        key={model.value}
-                        className={`bento-radio-option ${
-                          advancedSettings.ocr_model === model.value
-                            ? 'active'
-                            : ''
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="ocr_model"
-                          value={model.value}
-                          checked={advancedSettings.ocr_model === model.value}
-                          onChange={(e) =>
-                            setAdvancedSettings({
-                              ...advancedSettings,
-                              ocr_model: e.target.value,
-                              ...(e.target.value === 'paddleocr-vl'
-                                ? {
-                                    ocr_lang: '',
-                                    use_doc_orientation_classify: false,
-                                    use_doc_unwarping: false,
-                                    use_textline_orientation: false,
-                                  }
-                                : {}),
-                            })
-                          }
-                        />
-                        <div>
-                          <div className="bento-radio-label">
-                            {t(`ocr.models.${model.value}.name`)}
-                          </div>
-                          <div className="bento-radio-desc">
-                            {t(`ocr.models.${model.value}.description`)}
-                          </div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {OCR_MODELS.find((m) => m.value === advancedSettings.ocr_model)
-                  ?.hasLangOption && (
-                  <div className="bento-form-group">
-                    <label className="bento-form-label">
-                      {t('ocr.language')}
-                      <span className="bento-tooltip-wrapper">
-                        <Info className="bento-tooltip-icon" size={14} />
-                        <span className="bento-tooltip">
-                          {t('ocr.languageTooltip')}
-                        </span>
-                      </span>
-                    </label>
-                    <select
-                      value={advancedSettings.ocr_lang}
-                      onChange={(e) =>
-                        setAdvancedSettings({
-                          ...advancedSettings,
-                          ocr_lang: e.target.value,
-                        })
-                      }
-                      className="bento-form-select"
-                    >
-                      {OCR_LANGUAGES.map((lang) => (
-                        <option key={lang.code} value={lang.code}>
-                          {lang.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {OCR_MODELS.find((m) => m.value === advancedSettings.ocr_model)
-                  ?.hasOptions && (
-                  <div className="bento-form-group">
-                    <label className="bento-form-label">
-                      {t('ocr.processingOptions')}
-                    </label>
-                    <div className="bento-checkbox-group">
-                      <label className="bento-checkbox-option">
-                        <input
-                          type="checkbox"
-                          checked={
-                            advancedSettings.use_doc_orientation_classify
-                          }
-                          onChange={(e) =>
-                            setAdvancedSettings({
-                              ...advancedSettings,
-                              use_doc_orientation_classify: e.target.checked,
-                            })
-                          }
-                        />
-                        <div>
-                          <div className="bento-checkbox-label">
-                            {t('ocr.documentOrientation')}
-                          </div>
-                          <div className="bento-checkbox-desc">
-                            {t('ocr.documentOrientationDesc')}
-                          </div>
-                        </div>
-                      </label>
-
-                      <label className="bento-checkbox-option">
-                        <input
-                          type="checkbox"
-                          checked={advancedSettings.use_doc_unwarping}
-                          onChange={(e) =>
-                            setAdvancedSettings({
-                              ...advancedSettings,
-                              use_doc_unwarping: e.target.checked,
-                            })
-                          }
-                        />
-                        <div>
-                          <div className="bento-checkbox-label">
-                            {t('ocr.documentUnwarping')}
-                          </div>
-                          <div className="bento-checkbox-desc">
-                            {t('ocr.documentUnwarpingDesc')}
-                          </div>
-                        </div>
-                      </label>
-
-                      {advancedSettings.ocr_model === 'pp-ocrv5' && (
-                        <label className="bento-checkbox-option">
-                          <input
-                            type="checkbox"
-                            checked={advancedSettings.use_textline_orientation}
-                            onChange={(e) =>
-                              setAdvancedSettings({
-                                ...advancedSettings,
-                                use_textline_orientation: e.target.checked,
-                              })
-                            }
-                          />
-                          <div>
-                            <div className="bento-checkbox-label">
-                              {t('ocr.textlineOrientation')}
-                            </div>
-                            <div className="bento-checkbox-desc">
-                              {t('ocr.textlineOrientationDesc')}
-                            </div>
-                          </div>
-                        </label>
-                      )}
-                    </div>
-                  </div>
-                )}
+                <OcrSettingsForm
+                  settings={advancedSettings}
+                  onChange={(ocrSettings) =>
+                    setAdvancedSettings({
+                      ...advancedSettings,
+                      ...ocrSettings,
+                    })
+                  }
+                  variant="bento"
+                />
               </div>
             )}
 

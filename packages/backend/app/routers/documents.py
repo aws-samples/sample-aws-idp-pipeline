@@ -27,6 +27,10 @@ class DocumentUploadRequest(BaseModel):
     content_type: str
     file_size: int
     use_bda: bool = False
+    use_ocr: bool | None = None
+    ocr_model: str | None = None
+    ocr_options: dict[str, object] | None = None
+    document_prompt: str | None = None
 
 
 class DocumentUploadResponse(BaseModel):
@@ -44,6 +48,10 @@ class DocumentResponse(BaseModel):
     status: str
     s3_key: str
     use_bda: bool
+    use_ocr: bool | None = None
+    ocr_model: str | None = None
+    ocr_options: dict[str, object] | None = None
+    document_prompt: str | None = None
     created_at: str
     updated_at: str
 
@@ -58,6 +66,10 @@ class DocumentResponse(BaseModel):
             status=doc.data.status,
             s3_key=doc.data.s3_key,
             use_bda=doc.data.use_bda,
+            use_ocr=doc.data.use_ocr,
+            ocr_model=doc.data.ocr_model,
+            ocr_options=doc.data.ocr_options,
+            document_prompt=doc.data.document_prompt,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
         )
@@ -178,6 +190,10 @@ def create_document_upload(project_id: str, request: DocumentUploadRequest) -> D
         status="uploading",
         s3_key=s3_key,
         use_bda=request.use_bda,
+        use_ocr=request.use_ocr,
+        ocr_model=request.ocr_model,
+        ocr_options=request.ocr_options,
+        document_prompt=request.document_prompt,
     )
     put_document_item(project_id, document_id, data)
 

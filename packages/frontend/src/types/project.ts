@@ -5,6 +5,9 @@ export interface Document {
   file_size: number;
   status: string;
   use_bda: boolean;
+  ocr_model?: string;
+  ocr_options?: Record<string, unknown>;
+  document_prompt?: string;
   started_at: string;
   ended_at: string | null;
 }
@@ -97,6 +100,8 @@ export interface WorkflowDetail {
   created_at: string;
   updated_at: string;
   segments?: SegmentData[];
+  source_url?: string;
+  crawl_instruction?: string;
 }
 
 export interface ChatAttachment {

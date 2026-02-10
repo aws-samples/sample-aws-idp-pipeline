@@ -94,6 +94,8 @@ class WorkflowDetailResponse(BaseModel):
     created_at: str
     updated_at: str
     segments: list[SegmentData]
+    source_url: str | None = None
+    crawl_instruction: str | None = None
 
 
 @router.get("")
@@ -129,6 +131,8 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
         segment_keys = list_segment_keys(wf.data.file_uri)
         total_segments = len(segment_keys)
 
+    webcrawler_meta = (wf.data.preprocess or {}).get("webcrawler", {})
+
     return WorkflowDetailResponse(
         workflow_id=workflow_id,
         document_id=document_id,
@@ -141,6 +145,8 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
         created_at=wf.created_at,
         updated_at=wf.updated_at,
         segments=[],
+        source_url=webcrawler_meta.get("source_url"),
+        crawl_instruction=webcrawler_meta.get("instruction"),
     )
 
 

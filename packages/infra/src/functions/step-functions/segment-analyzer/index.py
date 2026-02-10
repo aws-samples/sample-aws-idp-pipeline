@@ -33,28 +33,16 @@ def handler(event, _context):
     if isinstance(segment_index, dict):
         segment_index = segment_index.get('segment_index', 0)
 
-    # Skip AI analysis for web documents (webcrawler already extracted content)
-    # STEP record already has segment_analyzer as 'skipped' from workflow creation
-    if file_type == 'application/x-webreq':
-        print(f'Skipping AI analysis for web document: {file_uri}')
-        return {
-            'workflow_id': workflow_id,
-            'document_id': document_id,
-            'project_id': project_id,
-            'segment_index': segment_index,
-            'file_uri': file_uri,
-            'file_type': file_type,
-            'segment_count': segment_count,
-            'language': 'ko',
-            'status': 'skipped'
-        }
-
     # Get project settings
     language = get_project_language(project_id)
-    document_prompt = get_project_document_prompt(project_id)
+
+    # Document prompt: event (resolved at upload) > project default
+    document_prompt = event.get('document_prompt', '')
+    if not document_prompt:
+        document_prompt = get_project_document_prompt(project_id)
     print(f'Project {project_id} language: {language}')
     if document_prompt:
-        print(f'Project {project_id} has custom document prompt ({len(document_prompt)} chars)')
+        print(f'Using document prompt ({len(document_prompt)} chars)')
 
     if workflow_id not in is_first_segment:
         is_first_segment[workflow_id] = True

@@ -21,6 +21,7 @@ from shared.ddb_client import (
     record_step_complete,
     record_step_error,
     update_workflow_status,
+    update_workflow_total_segments,
     get_project_language,
     get_entity_prefix,
         WorkflowStatus,
@@ -353,42 +354,73 @@ def download_text_from_s3(uri: str) -> Optional[str]:
         return None
 
 
-def parse_webcrawler_result(file_uri: str) -> dict:
-    """Read webcrawler result from content.md and metadata.json.
+def parse_webcrawler_result(file_uri: str) -> list[dict]:
+    """Read webcrawler result pages from S3.
 
-    Returns dict with:
-    - webcrawler_content: markdown content
-    - source_url: original URL
-    - web_title: page title
-    - instruction: user instruction for crawling
+    New multi-page format:
+      webcrawler/pages/page_0000.json, page_0001.json, ...
+      webcrawler/metadata.json  (start_url, instruction, total_pages)
+
+    Legacy single-page format (fallback):
+      webcrawler/content.md + webcrawler/metadata.json
+
+    Returns list of dicts, each with:
+    - webcrawler_content, source_url, page_title, instruction
     """
     bucket, base_path = get_document_base_path(file_uri)
+    client = get_s3_client()
 
-    # Read markdown content
+    # Try multi-page format first
+    pages_prefix = f'{base_path}/webcrawler/pages/'
+    page_files = []
+    try:
+        paginator = client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=bucket, Prefix=pages_prefix):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if key.endswith('.json'):
+                    page_files.append(key)
+    except Exception as e:
+        print(f'Error listing webcrawler pages: {e}')
+
+    if page_files:
+        page_files.sort()
+        print(f'Found {len(page_files)} webcrawler pages')
+
+        # Read metadata for instruction
+        metadata_uri = f's3://{bucket}/{base_path}/webcrawler/metadata.json'
+        metadata = download_json_from_s3(metadata_uri) or {}
+        instruction = metadata.get('instruction', '')
+
+        pages = []
+        for page_key in page_files:
+            page_uri = f's3://{bucket}/{page_key}'
+            page_data = download_json_from_s3(page_uri)
+            if page_data:
+                pages.append({
+                    'webcrawler_content': page_data.get('content', ''),
+                    'source_url': page_data.get('url', ''),
+                    'page_title': page_data.get('title', ''),
+                    'instruction': instruction,
+                })
+        return pages
+
+    # Legacy single-page fallback
     content_uri = f's3://{bucket}/{base_path}/webcrawler/content.md'
     content = download_text_from_s3(content_uri)
     if content is None:
         print(f'WebCrawler content not found: {content_uri}')
-        return {}
+        return []
 
-    # Read metadata
     metadata_uri = f's3://{bucket}/{base_path}/webcrawler/metadata.json'
-    metadata = download_json_from_s3(metadata_uri)
+    metadata = download_json_from_s3(metadata_uri) or {}
 
-    source_url = ''
-    web_title = ''
-    instruction = ''
-    if metadata:
-        source_url = metadata.get('url', '')
-        web_title = metadata.get('title', '')
-        instruction = metadata.get('instruction', '')
-
-    return {
+    return [{
         'webcrawler_content': content,
-        'source_url': source_url,
-        'web_title': web_title,
-        'instruction': instruction,
-    }
+        'source_url': metadata.get('url', ''),
+        'page_title': metadata.get('title', ''),
+        'instruction': metadata.get('instruction', ''),
+    }]
 
 
 def is_webreq_file(file_type: str) -> bool:
@@ -537,21 +569,26 @@ def handler(event, _context):
                 print('Transcribe: no result found')
 
         # 6. Read webcrawler results (for .webreq files)
-        webcrawler_data = {}
+        webcrawler_pages = []
         if is_webreq:
             print('Reading webcrawler results...')
-            webcrawler_data = parse_webcrawler_result(file_uri)
-            if webcrawler_data:
-                print(f'WebCrawler: found content for {webcrawler_data.get("web_title", "unknown page")}')
+            webcrawler_pages = parse_webcrawler_result(file_uri)
+            if webcrawler_pages:
+                print(f'WebCrawler: found {len(webcrawler_pages)} pages')
             else:
                 print('WebCrawler: no result found')
 
         # 7. Merge preprocessing results into existing segment files
         # For text files, use actual chunk count from format-parser (may differ from estimated)
+        # For webreq files, use actual page count from webcrawler (may differ from placeholder)
         if is_text and parser_results:
             segment_count = len(parser_results)
             segment_indices = list(range(segment_count))
             print(f'Text file: using {segment_count} chunks from format-parser')
+        elif is_webreq and webcrawler_pages:
+            segment_count = len(webcrawler_pages)
+            segment_indices = list(range(segment_count))
+            print(f'WebCrawler: using {segment_count} pages')
         else:
             segment_count = len(preprocessor_segments)
             segment_indices = [seg['segment_index'] for seg in preprocessor_segments]
@@ -621,25 +658,34 @@ def handler(event, _context):
                     segment_data['transcribe_segments'] = []
 
             # Merge webcrawler results (for .webreq files)
-            # image_uri is already set by segment-prep from preprocessed/page_0000.png
-            if is_webreq and webcrawler_data:
-                segment_data['webcrawler_content'] = webcrawler_data.get('webcrawler_content', '')
-                segment_data['source_url'] = webcrawler_data.get('source_url', '')
-                segment_data['web_title'] = webcrawler_data.get('web_title', '')
-                segment_data['instruction'] = webcrawler_data.get('instruction', '')
+            if is_webreq and i < len(webcrawler_pages):
+                page_data = webcrawler_pages[i]
+                segment_data['webcrawler_content'] = page_data.get('webcrawler_content', '')
+                segment_data['source_url'] = page_data.get('source_url', '')
+                segment_data['page_title'] = page_data.get('page_title', '')
+                segment_data['instruction'] = page_data.get('instruction', '')
+                segment_data['segment_type'] = 'WEB'
+                segment_data['image_uri'] = ''
             elif is_webreq:
                 if 'webcrawler_content' not in segment_data:
                     segment_data['webcrawler_content'] = ''
                 if 'source_url' not in segment_data:
                     segment_data['source_url'] = ''
-                if 'web_title' not in segment_data:
-                    segment_data['web_title'] = ''
+                if 'page_title' not in segment_data:
+                    segment_data['page_title'] = ''
                 if 'instruction' not in segment_data:
                     segment_data['instruction'] = ''
 
             # Save merged segment to S3
             save_segment_analysis(file_uri, i, segment_data)
             print(f'Merged segment {i}')
+
+        # Update workflow total_segments when segment count was overridden
+        # (text files from format-parser chunks, webreq from webcrawler pages)
+        if (is_text and parser_results) or (is_webreq and webcrawler_pages):
+            entity_type = get_entity_prefix(file_type)
+            update_workflow_total_segments(document_id, workflow_id, segment_count, entity_type)
+            print(f'Updated workflow total_segments to {segment_count}')
 
         record_step_complete(
             workflow_id,

@@ -214,20 +214,15 @@ def process_audio(file_uri: str) -> list[dict]:
 
 
 def process_webreq(file_uri: str, bucket: str, base_path: str) -> list[dict]:
-    """Process .webreq file: create single WEB type segment.
+    """Process .webreq file: create single WEB type placeholder segment.
 
-    Screenshot is saved by webcrawler agent at preprocessed/page_0000.png
-    Content is saved at webcrawler/content.md and merged by segment-builder.
+    Actual segment count may be overridden by segment-builder based on
+    webcrawler agent's multi-page output.
     """
-    # Screenshot is at preprocessed/page_0000.png (same location as PDF page images)
-    screenshot_key = f'{base_path}/preprocessed/page_0000.png'
-    screenshot_uri = f's3://{bucket}/{screenshot_key}'
-    print(f'WebCrawler screenshot expected at: {screenshot_uri}')
-
     return [{
         'segment_index': 0,
         'segment_type': 'WEB',
-        'image_uri': screenshot_uri,
+        'image_uri': '',
         'file_uri': file_uri,
     }]
 
@@ -374,7 +369,7 @@ def handler(event, _context):
                 segment_data['file_uri'] = seg.get('file_uri', file_uri)
                 segment_data['webcrawler_content'] = ''
                 segment_data['source_url'] = ''
-                segment_data['web_title'] = ''
+                segment_data['page_title'] = ''
 
             # Text-specific fields (DOCX, Markdown, TXT)
             if segment_type == 'TEXT':

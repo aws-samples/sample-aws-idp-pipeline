@@ -1,21 +1,46 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CloudUpload, X, FileText, Loader2, Globe, FileUp } from 'lucide-react';
+import {
+  CloudUpload,
+  X,
+  FileText,
+  Loader2,
+  Globe,
+  FileUp,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
+import OcrSettingsForm, { type OcrSettings } from './OcrSettingsForm';
 
 type UploadTab = 'file' | 'web';
+
+export interface DocumentProcessingOptions {
+  use_bda: boolean;
+  use_ocr?: boolean;
+  ocr_model?: string;
+  ocr_options?: Record<string, unknown>;
+  document_prompt?: string;
+}
 
 interface DocumentUploadModalProps {
   isOpen: boolean;
   uploading: boolean;
-  documentPrompt?: string;
+  projectOcrModel?: string;
+  projectOcrOptions?: Record<string, unknown>;
+  projectDocumentPrompt?: string;
   onClose: () => void;
-  onUpload: (files: File[], useBda: boolean) => Promise<void>;
+  onUpload: (
+    files: File[],
+    options: DocumentProcessingOptions,
+  ) => Promise<void>;
 }
 
 export default function DocumentUploadModal({
   isOpen,
   uploading,
-  documentPrompt,
+  projectOcrModel,
+  projectOcrOptions,
+  projectDocumentPrompt,
   onClose,
   onUpload,
 }: DocumentUploadModalProps) {
@@ -23,8 +48,56 @@ export default function DocumentUploadModal({
   const [activeTab, setActiveTab] = useState<UploadTab>('file');
   const [files, setFiles] = useState<File[]>([]);
   const [useBda, setUseBda] = useState(false);
+  const [useOcr, setUseOcr] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showBda, setShowBda] = useState(false);
+  const [showOcr, setShowOcr] = useState(false);
+
+  const hasOcrEligibleFiles = useMemo(
+    () =>
+      files.length === 0 ||
+      files.some(
+        (f) => f.type === 'application/pdf' || f.type.startsWith('image/'),
+      ),
+    [files],
+  );
+  const [showPrompt, setShowPrompt] = useState(false);
+
+  // OCR settings - initialized from project defaults
+  const [ocrSettings, setOcrSettings] = useState<OcrSettings>(() => ({
+    ocr_model: projectOcrModel || 'paddleocr-vl',
+    ocr_lang: (projectOcrOptions?.lang as string) || '',
+    use_doc_orientation_classify:
+      (projectOcrOptions?.use_doc_orientation_classify as boolean) || false,
+    use_doc_unwarping:
+      (projectOcrOptions?.use_doc_unwarping as boolean) || false,
+    use_textline_orientation:
+      (projectOcrOptions?.use_textline_orientation as boolean) || false,
+  }));
+
+  // Document prompt - initialized from project default
+  const [documentPrompt, setDocumentPrompt] = useState(
+    projectDocumentPrompt || '',
+  );
+
+  // Sync state when project settings change
+  useEffect(() => {
+    setOcrSettings({
+      ocr_model: projectOcrModel || 'paddleocr-vl',
+      ocr_lang: (projectOcrOptions?.lang as string) || '',
+      use_doc_orientation_classify:
+        (projectOcrOptions?.use_doc_orientation_classify as boolean) || false,
+      use_doc_unwarping:
+        (projectOcrOptions?.use_doc_unwarping as boolean) || false,
+      use_textline_orientation:
+        (projectOcrOptions?.use_textline_orientation as boolean) || false,
+    });
+  }, [projectOcrModel, projectOcrOptions]);
+
+  useEffect(() => {
+    setDocumentPrompt(projectDocumentPrompt || '');
+  }, [projectDocumentPrompt]);
 
   // Web tab state
   const [webUrl, setWebUrl] = useState('');
@@ -99,31 +172,82 @@ export default function DocumentUploadModal({
     });
   }, [webUrl, webInstruction]);
 
+  const buildOptions = useCallback((): DocumentProcessingOptions => {
+    const opts: DocumentProcessingOptions = {
+      use_bda: useBda,
+      use_ocr: useOcr,
+    };
+
+    if (useOcr) {
+      // Build ocr_options from OcrSettings
+      const ocrOpts: Record<string, unknown> = {};
+      if (ocrSettings.ocr_lang) ocrOpts.lang = ocrSettings.ocr_lang;
+      if (ocrSettings.use_doc_orientation_classify)
+        ocrOpts.use_doc_orientation_classify = true;
+      if (ocrSettings.use_doc_unwarping) ocrOpts.use_doc_unwarping = true;
+      if (ocrSettings.use_textline_orientation)
+        ocrOpts.use_textline_orientation = true;
+
+      opts.ocr_model = ocrSettings.ocr_model;
+      if (Object.keys(ocrOpts).length > 0) opts.ocr_options = ocrOpts;
+    }
+
+    if (documentPrompt.trim()) opts.document_prompt = documentPrompt.trim();
+
+    return opts;
+  }, [useBda, useOcr, ocrSettings, documentPrompt]);
+
   const handleUpload = useCallback(async () => {
     if (activeTab === 'file') {
       if (files.length === 0) return;
-      await onUpload(files, useBda);
+      await onUpload(files, buildOptions());
       setFiles([]);
       setUseBda(false);
+      setUseOcr(true);
+      setShowBda(false);
+      setShowOcr(false);
+      setShowPrompt(false);
     } else {
       if (!webUrl) return;
       const webreqFile = createWebreqFile();
-      await onUpload([webreqFile], false);
+      await onUpload([webreqFile], { use_bda: false });
       setWebUrl('');
       setWebInstruction('');
     }
-  }, [activeTab, files, useBda, webUrl, onUpload, createWebreqFile]);
+  }, [activeTab, files, webUrl, onUpload, createWebreqFile, buildOptions]);
 
   const handleClose = useCallback(() => {
     if (!uploading) {
       setFiles([]);
       setUseBda(false);
+      setUseOcr(true);
+      setShowBda(false);
+      setShowOcr(false);
+      setShowPrompt(false);
       setWebUrl('');
       setWebInstruction('');
       setActiveTab('file');
+      // Reset to project defaults
+      setOcrSettings({
+        ocr_model: projectOcrModel || 'paddleocr-vl',
+        ocr_lang: (projectOcrOptions?.lang as string) || '',
+        use_doc_orientation_classify:
+          (projectOcrOptions?.use_doc_orientation_classify as boolean) || false,
+        use_doc_unwarping:
+          (projectOcrOptions?.use_doc_unwarping as boolean) || false,
+        use_textline_orientation:
+          (projectOcrOptions?.use_textline_orientation as boolean) || false,
+      });
+      setDocumentPrompt(projectDocumentPrompt || '');
       onClose();
     }
-  }, [uploading, onClose]);
+  }, [
+    uploading,
+    onClose,
+    projectOcrModel,
+    projectOcrOptions,
+    projectDocumentPrompt,
+  ]);
 
   const isUploadDisabled =
     activeTab === 'file' ? files.length === 0 : !webUrl.trim();
@@ -140,7 +264,7 @@ export default function DocumentUploadModal({
 
       {/* Modal */}
       <div
-        className="relative bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg mx-4"
+        className="relative bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg mx-4 min-h-[50vh] max-h-[90vh] flex flex-col"
         style={{
           border: '1px solid rgba(59, 130, 246, 0.3)',
           boxShadow:
@@ -148,7 +272,7 @@ export default function DocumentUploadModal({
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
           <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
             {t('documents.uploadDocuments')}
           </h2>
@@ -162,7 +286,7 @@ export default function DocumentUploadModal({
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-200 dark:border-slate-700">
+        <div className="flex border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
           <button
             onClick={() => setActiveTab('file')}
             disabled={uploading}
@@ -190,7 +314,7 @@ export default function DocumentUploadModal({
         </div>
 
         {/* Content */}
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-4 overflow-y-auto flex-1 min-h-0">
           {activeTab === 'file' ? (
             <>
               {/* Drop Zone */}
@@ -281,38 +405,118 @@ export default function DocumentUploadModal({
                 </div>
               )}
 
-              {/* Document Prompt */}
-              {documentPrompt && (
-                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
-                    {t('analysis.title')}
-                  </p>
-                  <p className="text-xs text-amber-700 dark:text-amber-300 whitespace-pre-wrap">
-                    {documentPrompt}
-                  </p>
+              {/* Processing Options - 3 collapsible sections */}
+              <div className="space-y-2">
+                {/* BDA */}
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-slate-800/50">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={useBda}
+                        onChange={(e) => setUseBda(e.target.checked)}
+                        disabled={uploading}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                      />
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                        {t('documents.bdaAnalysis', 'BDA Analysis')}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowBda(!showBda)}
+                      disabled={uploading}
+                      className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-50"
+                    >
+                      {showBda ? (
+                        <ChevronUp className="h-4 w-4 text-slate-400" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-slate-400" />
+                      )}
+                    </button>
+                  </div>
+                  {showBda && (
+                    <div className="px-3 py-3 border-t border-slate-200 dark:border-slate-700">
+                      <p className="text-xs text-slate-500">
+                        {t('documents.useBdaDescription')}
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
 
-              {/* BDA Option */}
-              <div className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                <input
-                  type="checkbox"
-                  id="use-bda"
-                  checked={useBda}
-                  onChange={(e) => setUseBda(e.target.checked)}
-                  disabled={uploading}
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
-                />
-                <div>
-                  <label
-                    htmlFor="use-bda"
-                    className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer"
+                {/* OCR */}
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-slate-800/50">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={useOcr}
+                        onChange={(e) => setUseOcr(e.target.checked)}
+                        disabled={uploading || !hasOcrEligibleFiles}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                      />
+                      <span
+                        className={`text-sm font-medium ${hasOcrEligibleFiles ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500'}`}
+                      >
+                        {t('projectSettings.ocrSettings')}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowOcr(!showOcr)}
+                      disabled={uploading}
+                      className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-50"
+                    >
+                      {showOcr ? (
+                        <ChevronUp className="h-4 w-4 text-slate-400" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-slate-400" />
+                      )}
+                    </button>
+                  </div>
+                  {showOcr && useOcr && (
+                    <div className="p-3 border-t border-slate-200 dark:border-slate-700">
+                      <OcrSettingsForm
+                        settings={ocrSettings}
+                        onChange={setOcrSettings}
+                        variant="compact"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Analysis Instructions */}
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowPrompt(!showPrompt)}
+                    disabled={uploading}
+                    className="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
                   >
-                    {t('documents.useBda')}
-                  </label>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {t('documents.useBdaDescription')}
-                  </p>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {t('projectSettings.analysisInstructions')}
+                    </span>
+                    {showPrompt ? (
+                      <ChevronUp className="h-4 w-4 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-slate-400" />
+                    )}
+                  </button>
+                  {showPrompt && (
+                    <div className="p-3 border-t border-slate-200 dark:border-slate-700">
+                      <textarea
+                        value={documentPrompt}
+                        onChange={(e) => setDocumentPrompt(e.target.value)}
+                        placeholder={t('analysis.placeholder')}
+                        rows={8}
+                        disabled={uploading}
+                        className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 resize-none"
+                      />
+                      <p className="text-xs text-slate-500 mt-1.5">
+                        {t('analysis.hint')}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </>
@@ -357,7 +561,7 @@ export default function DocumentUploadModal({
                     'Enter instructions for content extraction...\n\nExample:\n- Focus on the main article content\n- Extract product specifications\n- Include pricing information',
                   )}
                   disabled={uploading}
-                  rows={4}
+                  rows={8}
                   className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 resize-none"
                 />
                 <p className="text-xs text-slate-500">
@@ -382,7 +586,7 @@ export default function DocumentUploadModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-4 border-t border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-end gap-3 p-4 border-t border-slate-200 dark:border-slate-700 flex-shrink-0">
           <button
             onClick={handleClose}
             disabled={uploading}
