@@ -5,6 +5,7 @@ from strands import Agent
 from strands.hooks.registry import HookProvider
 from strands.models import BedrockModel
 from strands.session import S3SessionManager
+from strands.tools.mcp.mcp_client import MCPClient
 from strands_tools import calculator, current_time, generate_image, http_request
 
 from agentcore_mcp_client import AgentCoreGatewayMCPClient
@@ -50,6 +51,15 @@ def get_mcp_client():
         gateway_url=config.mcp_gateway_url,
         credentials=credentials,
         region=config.aws_region,
+    )
+
+
+def get_tool_search(mcp_client: MCPClient):
+    """Get x_amz_bedrock_agentcore_search tool from MCP client."""
+    mcp_tools = mcp_client.list_tools_sync()
+    return next(
+        (t for t in mcp_tools if t.tool_name == "x_amz_bedrock_agentcore_search"),
+        None,
     )
 
 
@@ -128,8 +138,9 @@ You MUST NOT specify these parameters in tool calls - they will be overwritten b
 
     if mcp_client:
         with mcp_client:
-            mcp_tools = mcp_client.list_tools_sync()
-            tools.extend(mcp_tools)
+            tool_search = get_tool_search(mcp_client)
+            if tool_search:
+                tools.append(tool_search)
             yield create_agent()
     else:
         yield create_agent()
