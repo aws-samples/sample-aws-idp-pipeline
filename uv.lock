@@ -802,6 +802,20 @@ wheels = [
 ]
 
 [[package]]
+name = "duckduckgo-mcp-server"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "beautifulsoup4" },
+    { name = "httpx" },
+    { name = "mcp", extra = ["cli"] },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/86/82/ad813d88199de0a88aa50536e569f6191da572a6d5bf2e7fcccb7e28b522/duckduckgo_mcp_server-0.1.1.tar.gz", hash = "sha256:d6f48f4cb4234de9e716e87f7d49aa54637ebc4a3700ecfd05f260696463c0ec", size = 19920, upload-time = "2025-02-22T21:39:37.222Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c6/42/e7d7fc70744d3ebf7b309a19176bb745c5e7d5babf77fcf903068cb08bbd/duckduckgo_mcp_server-0.1.1-py3-none-any.whl", hash = "sha256:ca56c67bcfcef259ce083d1700700f5b66f75a48b4c1e13f556289cf3351b50b", size = 6520, upload-time = "2025-02-22T21:39:35.527Z" },
+]
+
+[[package]]
 name = "email-validator"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1424,6 +1438,7 @@ dependencies = [
     { name = "aws-opentelemetry-distro" },
     { name = "bedrock-agentcore" },
     { name = "boto3" },
+    { name = "duckduckgo-mcp-server" },
     { name = "nanoid" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -1436,6 +1451,7 @@ requires-dist = [
     { name = "aws-opentelemetry-distro", specifier = ">=0.14.2" },
     { name = "bedrock-agentcore", specifier = ">=1.1.0,<1.2.0" },
     { name = "boto3", specifier = ">=1.42.36" },
+    { name = "duckduckgo-mcp-server", specifier = ">=0.1.1" },
     { name = "nanoid", specifier = ">=2.0.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
@@ -1760,6 +1776,12 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/25/1a/9c8a5362e3448d585081d6c7aa95898a64e0ac59d3e26169ae6c3ca5feaf/mcp-1.23.0.tar.gz", hash = "sha256:84e0c29316d0a8cf0affd196fd000487ac512aa3f771b63b2ea864e22961772b", size = 596506, upload-time = "2025-12-02T13:40:02.558Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7b/b2/28739ce409f98159c0121eab56e69ad71546c4f34ac8b42e58c03f57dccc/mcp-1.23.0-py3-none-any.whl", hash = "sha256:5a645cf111ed329f4619f2629a3f15d9aabd7adc2ea09d600d31467b51ecb64f", size = 231427, upload-time = "2025-12-02T13:40:00.738Z" },
+]
+
+[package.optional-dependencies]
+cli = [
+    { name = "python-dotenv" },
+    { name = "typer" },
 ]
 
 [[package]]

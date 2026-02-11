@@ -1,7 +1,6 @@
 import asyncio
-from contextlib import ExitStack, contextmanager
+from contextlib import contextmanager
 
-import boto3
 from botocore.config import Config
 from nanoid import generate
 from strands import Agent, tool
@@ -9,7 +8,6 @@ from strands.models import BedrockModel
 from strands_tools import current_time, http_request
 from strands_tools.code_interpreter import AgentCoreCodeInterpreter
 
-from agents.agentcore_mcp_client import AgentCoreGatewayMCPClient
 from agents.constants import REPORT_MODEL_ID
 from agents.pptx_prompts import build_system_prompt
 from config import get_config
@@ -17,27 +15,12 @@ from config import get_config
 NANOID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"
 
 
-def get_mcp_client():
-    """Get MCP client for AgentCore Gateway."""
-    config = get_config()
-    if not config.mcp_gateway_url:
-        return None
-
-    session = boto3.Session()
-    credentials = session.get_credentials()
-
-    return AgentCoreGatewayMCPClient.with_iam_auth(
-        gateway_url=config.mcp_gateway_url,
-        credentials=credentials,
-        region=config.aws_region,
-    )
-
-
 @contextmanager
 def get_report_agent(
     session_id: str,
     project_id: str | None = None,
     user_id: str | None = None,
+    mcp_tools: list | None = None,
 ):
     """Get a report agent instance with S3-based session management.
 
@@ -48,6 +31,7 @@ def get_report_agent(
         session_id: Unique identifier for the session
         project_id: Project ID (optional)
         user_id: User ID for session isolation (optional)
+        mcp_tools: Pre-filtered MCP tools from supervisor (optional)
 
     Yields:
         Report agent instance with session management configured
@@ -70,6 +54,10 @@ def get_report_agent(
         interpreter.code_interpreter,
     ]
 
+    # Add pre-filtered MCP tools if provided
+    if mcp_tools:
+        tools.extend(mcp_tools)
+
     system_prompt = build_system_prompt(bucket_name, artifact_base_path)
 
     bedrock_model = BedrockModel(
@@ -82,23 +70,13 @@ def get_report_agent(
         ),
     )
 
-    # Use ExitStack to manage MCP client context
-    with ExitStack() as stack:
-        mcp_client = get_mcp_client()
-        if mcp_client:
-            stack.enter_context(mcp_client)
-            mcp_tools = mcp_client.list_tools_sync()
-            image_tools = [t for t in mcp_tools if "image" in t.tool_name]
-            if image_tools:
-                tools.extend(image_tools)
+    agent = Agent(
+        model=bedrock_model,
+        system_prompt=system_prompt,
+        tools=tools,
+    )
 
-        agent = Agent(
-            model=bedrock_model,
-            system_prompt=system_prompt,
-            tools=tools,
-        )
-
-        yield agent
+    yield agent
 
 
 def _run_pptx_sync(
@@ -106,15 +84,42 @@ def _run_pptx_sync(
     project_id: str | None,
     user_id: str | None,
     instructions: str,
+    mcp_tools: list | None = None,
 ) -> str:
-    """Run pptx agent synchronously (for use with asyncio.to_thread)."""
-    with get_report_agent(session_id, project_id, user_id) as agent:
+    """Run pptx agent synchronously (for use with asyncio.to_thread).
+
+    Args:
+        session_id: Unique identifier for the session
+        project_id: Project ID (optional)
+        user_id: User ID (optional)
+        instructions: Instructions for creating the presentation
+        mcp_tools: Pre-filtered MCP tools from supervisor (optional)
+
+    Returns:
+        Result of presentation creation as string
+    """
+    with get_report_agent(session_id, project_id, user_id, mcp_tools=mcp_tools) as agent:
         result = agent(instructions)
         return str(result)
 
 
-def create_pptx_tool(session_id: str, project_id: str | None, user_id: str | None):
-    """Create a pptx agent tool bound to session context."""
+def create_pptx_tool(
+    session_id: str,
+    project_id: str | None,
+    user_id: str | None,
+    mcp_tools: list | None = None,
+):
+    """Create a pptx agent tool bound to session context.
+
+    Args:
+        session_id: Unique identifier for the session
+        project_id: Project ID (optional)
+        user_id: User ID (optional)
+        mcp_tools: Pre-filtered MCP tools from supervisor (optional)
+
+    Returns:
+        PPTX agent tool function
+    """
 
     @tool
     async def pptx_agent(instructions: str) -> str:
@@ -131,7 +136,7 @@ def create_pptx_tool(session_id: str, project_id: str | None, user_id: str | Non
             Result of presentation creation including download URL
         """
         return await asyncio.to_thread(
-            _run_pptx_sync, session_id, project_id, user_id, instructions
+            _run_pptx_sync, session_id, project_id, user_id, instructions, mcp_tools
         )
 
     return pptx_agent

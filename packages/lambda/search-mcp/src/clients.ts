@@ -1,7 +1,4 @@
-import {
-  LambdaClient,
-  InvokeCommand,
-} from '@aws-sdk/client-lambda';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime';
 
 export const bedrockClient = new BedrockRuntimeClient();
