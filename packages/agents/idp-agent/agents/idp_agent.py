@@ -1,6 +1,7 @@
-from contextlib import contextmanager
-
+from contextlib import contextmanager, ExitStack
 import boto3
+from strands.tools.mcp.mcp_client import MCPClient
+from mcp import StdioServerParameters, stdio_client
 from strands import Agent
 from strands.hooks.registry import HookProvider
 from strands.models import BedrockModel
@@ -53,6 +54,18 @@ def get_mcp_client():
     )
 
 
+def get_duckduckgo_mcp_client():
+    """Get MCP client for DuckDuckGo search server."""
+
+    return MCPClient(
+        lambda: stdio_client(
+            StdioServerParameters(
+                command="duckduckgo-mcp-server",
+            )
+        )
+    )
+
+
 @contextmanager
 def get_agent(
     session_id: str,
@@ -73,6 +86,7 @@ def get_agent(
     """
     session_manager = get_session_manager(session_id, user_id=user_id, project_id=project_id)
     mcp_client = get_mcp_client()
+    duckduckgo_client = get_duckduckgo_mcp_client()
 
     tools = [calculator, current_time, generate_image, http_request]
 
@@ -104,6 +118,15 @@ You MUST respond in the language corresponding to code: {language_code}.
 ## Tool Parameter Notice
 When using MCP tools, `user_id` and `project_id` parameters are automatically injected by the system.
 You MUST NOT specify these parameters in tool calls - they will be overwritten by the system for security.
+
+## Web Search Guidelines (MANDATORY)
+When performing web searches, you MUST follow these rules strictly:
+1. Search with max_results of 10 to get diverse sources
+2. You MUST call fetch_content on AT LEAST 3 different URLs - this is a hard requirement, not optional
+3. If a website returns an error (403, timeout, etc.), try another URL until you have successfully fetched 3+ pages
+4. Do NOT stop after fetching only 1-2 websites - always continue until you have 3+ successful fetches
+5. Synthesize information from all fetched sources before responding
+6. Always cite the sources you used with their URLs
 """
 
     bedrock_model = BedrockModel(
@@ -126,10 +149,13 @@ You MUST NOT specify these parameters in tool calls - they will be overwritten b
             agent_id=agent_id or "default",
         )
 
-    if mcp_client:
-        with mcp_client:
-            mcp_tools = mcp_client.list_tools_sync()
-            tools.extend(mcp_tools)
-            yield create_agent()
-    else:
+    with ExitStack() as stack:
+        if duckduckgo_client:
+            stack.enter_context(duckduckgo_client)
+            tools.extend(duckduckgo_client.list_tools_sync())
+
+        if mcp_client:
+            stack.enter_context(mcp_client)
+            tools.extend(mcp_client.list_tools_sync())
+
         yield create_agent()
