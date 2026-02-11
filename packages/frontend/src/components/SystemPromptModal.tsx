@@ -7,6 +7,7 @@ import {
   Save,
   Loader2,
   FlaskConical,
+  Globe,
   FileText,
   Video,
   FileType,
@@ -15,11 +16,12 @@ import {
 export type PromptType =
   | 'chat'
   | 'voice'
+  | 'webcrawler'
   | 'analysis-doc'
   | 'analysis-video'
   | 'analysis-text';
 
-type TopTab = 'chat' | 'voice' | 'analysis';
+type TopTab = 'chat' | 'voice' | 'webcrawler' | 'analysis';
 type AnalysisSubTab = 'doc' | 'video' | 'text';
 
 interface PromptTab {
@@ -42,6 +44,7 @@ const TOP_TAB_CONFIG: {
 }[] = [
   { key: 'chat', labelKey: 'systemPrompt.tabChat', icon: Terminal },
   { key: 'voice', labelKey: 'systemPrompt.tabVoice', icon: Mic },
+  { key: 'webcrawler', labelKey: 'systemPrompt.tabWebcrawler', icon: Globe },
   { key: 'analysis', labelKey: 'systemPrompt.tabAnalysis', icon: FlaskConical },
 ];
 
@@ -74,6 +77,7 @@ const ANALYSIS_SUB_TAB_CONFIG: {
 function getTopTab(type: PromptType): TopTab {
   if (type === 'chat') return 'chat';
   if (type === 'voice') return 'voice';
+  if (type === 'webcrawler') return 'webcrawler';
   return 'analysis';
 }
 
@@ -86,6 +90,7 @@ function getAnalysisSubTab(type: PromptType): AnalysisSubTab {
 function getPromptType(topTab: TopTab, subTab: AnalysisSubTab): PromptType {
   if (topTab === 'chat') return 'chat';
   if (topTab === 'voice') return 'voice';
+  if (topTab === 'webcrawler') return 'webcrawler';
   const map: Record<AnalysisSubTab, PromptType> = {
     doc: 'analysis-doc',
     video: 'analysis-video',
@@ -97,6 +102,7 @@ function getPromptType(topTab: TopTab, subTab: AnalysisSubTab): PromptType {
 const EMPTY_CONTENTS: Record<PromptType, string> = {
   chat: '',
   voice: '',
+  webcrawler: '',
   'analysis-doc': '',
   'analysis-video': '',
   'analysis-text': '',

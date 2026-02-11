@@ -58,6 +58,7 @@ class Config(BaseSettings):
     aws_region: str = "us-east-1"
     agent_storage_bucket_name: str = ""
     session_storage_bucket_name: str = ""
+    mcp_gateway_url: str = ""
 
 
 @lru_cache
@@ -108,11 +109,13 @@ def create_bidi_model(
     if model_type == BidiModelType.NOVA_SONIC or model_type == "nova_sonic":
         from strands.experimental.bidi.models import BidiNovaSonicModel
 
-        logger.info(f"Creating nova_sonic model with voice={voice}")
+        # Validate Nova Sonic voice option (defaults to tiffany if invalid)
+        nova_voice = voice if voice in ["tiffany", "matthew"] else "tiffany"
+        logger.info(f"Creating nova_sonic model with voice={nova_voice}")
         return BidiNovaSonicModel(
             model_id="amazon.nova-2-sonic-v1:0",
             provider_config={
-                "audio": {"voice": voice or "tiffany"},
+                "audio": {"voice": nova_voice},
             },
             client_config={"region": config.aws_region},
         )

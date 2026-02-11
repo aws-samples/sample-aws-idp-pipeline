@@ -96,6 +96,65 @@ const LoaderIcon = () => (
   </svg>
 );
 
+const MicIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className || 'w-2.5 h-2.5'}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <line x1="12" x2="12" y1="19" y2="22" />
+  </svg>
+);
+
+const SearchIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className || 'w-2.5 h-2.5'}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <circle cx="11" cy="11" r="8" />
+    <path d="m21 21-4.3-4.3" />
+  </svg>
+);
+
+function AgentBadge({ agentId }: { agentId?: string | null }) {
+  if (!agentId) return null;
+
+  if (agentId.startsWith('voice_')) {
+    return (
+      <span
+        className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-purple-100 dark:bg-purple-900/50 flex-shrink-0"
+        title="Voice"
+      >
+        <MicIcon className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400" />
+      </span>
+    );
+  }
+
+  if (agentId === 'research') {
+    return (
+      <span
+        className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex-shrink-0"
+        title="Research"
+      >
+        <SearchIcon className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
+      </span>
+    );
+  }
+
+  return null;
+}
+
 const ChevronDownIcon = () => (
   <svg
     className="w-4 h-4"
@@ -249,6 +308,7 @@ export default function SidebarSessionList({
                       {session.session_name ||
                         `Session ${session.session_id.slice(0, 8)}`}
                     </span>
+                    <AgentBadge agentId={session.agent_id} />
                   </div>
                 ))
               )}
@@ -308,6 +368,7 @@ export default function SidebarSessionList({
                       {session.session_name ||
                         `Session ${session.session_id.slice(0, 8)}`}
                     </span>
+                    <AgentBadge agentId={session.agent_id} />
 
                     <div
                       className="sidebar-session-actions"

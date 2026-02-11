@@ -130,6 +130,7 @@ function ProjectDetailPage() {
   const [sending, setSending] = useState(false);
   const [streamingBlocks, setStreamingBlocks] = useState<StreamingBlock[]>([]);
   const pendingMessagesRef = useRef<ChatMessage[]>([]);
+  const toolUseNameStackRef = useRef<string[]>([]);
   const [selectedWorkflow, setSelectedWorkflow] =
     useState<WorkflowDetail | null>(null);
   const [loadingWorkflow, setLoadingWorkflow] = useState(false);
@@ -219,92 +220,93 @@ function ProjectDetailPage() {
   );
 
   // Handle Voice Chat transcripts as chat messages
-  // Track current message ID and last role for grouping
-  const voiceChatMsgIdRef = useRef<{ current?: string; lastRole?: string }>({});
-
+  // Uses actual last message in the array (not a ref) to decide append vs create,
+  // so ordering is always correct regardless of event timing.
   useEffect(() => {
+    /** Check if the last message can be appended to (same role, plain text) */
+    const canAppendTo = (
+      msg: (typeof messages)[number] | undefined,
+      role: string,
+    ) =>
+      msg &&
+      msg.role === role &&
+      !msg.isToolUse &&
+      !msg.isToolResult &&
+      !msg.isStageResult;
+
     const unsubscribe = voiceChat.onTranscript((text, role, isFinal) => {
       const chatRole = role === 'user' ? 'user' : 'assistant';
 
-      // Debug: log transcript details
-      console.log('[Transcript]', {
-        model: selectedVoiceModel,
-        role,
-        isFinal,
-        textLength: text.length,
-        textPreview: text.slice(0, 50),
-        lastRole: voiceChatMsgIdRef.current.lastRole,
-      });
-
       // Model-specific transcript handling:
-      // - Nova Sonic: is_final=true is actual transcript
-      // - Gemini: is_final=false is actual, is_final=true is thinking (filter)
-      // - OpenAI: is_final=true is actual, is_final=false is broken text (ignore)
+      // - Gemini: is_final=false only (completely ignore is_final=true)
+      // - Nova Sonic: is_final=false only, but is_final=true creates msg if role changed (ordering)
+      // - OpenAI: is_final=true only (ignore is_final=false)
 
-      if (selectedVoiceModel === 'openai') {
-        // OpenAI: only show is_final=true, ignore is_final=false (broken text)
-        if (!isFinal) {
-          return;
-        }
-        // Show final transcript
-        const lastRole = voiceChatMsgIdRef.current.lastRole;
-        const currentId = voiceChatMsgIdRef.current.current;
-        if (lastRole === chatRole && currentId) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === currentId ? { ...m, content: m.content + text } : m,
-            ),
-          );
-        } else {
-          const newId = crypto.randomUUID();
-          voiceChatMsgIdRef.current = { current: newId, lastRole: chatRole };
-          setMessages((prev) => [
+      // Gemini: completely ignore is_final=true
+      if (selectedVoiceModel === 'gemini' && isFinal) return;
+
+      // Nova Sonic: is_final=true only used for ordering fallback
+      if (selectedVoiceModel === 'nova_sonic' && isFinal) {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (canAppendTo(last, chatRole)) return prev;
+          return [
             ...prev,
-            { id: newId, role: chatRole, content: text, timestamp: new Date() },
-          ]);
-        }
+            {
+              id: crypto.randomUUID(),
+              role: chatRole,
+              content: text,
+              timestamp: new Date(),
+            },
+          ];
+        });
         return;
       }
 
-      if (selectedVoiceModel === 'gemini') {
-        // Gemini: is_final=true is thinking output (filter), is_final=false is actual
-        if (isFinal) {
-          console.log(
-            '[Transcript] Gemini: filtering out is_final=true (thinking)',
-          );
-          return;
-        }
-        // Show streaming transcript
-        const lastRole = voiceChatMsgIdRef.current.lastRole;
-        const currentId = voiceChatMsgIdRef.current.current;
-        if (lastRole === chatRole && currentId) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === currentId ? { ...m, content: m.content + text } : m,
-            ),
-          );
-        } else {
-          const newId = crypto.randomUUID();
-          voiceChatMsgIdRef.current = { current: newId, lastRole: chatRole };
-          setMessages((prev) => [
+      // Nova Sonic & Gemini: show is_final=false (streaming delta)
+      if (
+        selectedVoiceModel === 'nova_sonic' ||
+        selectedVoiceModel === 'gemini'
+      ) {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (canAppendTo(last, chatRole)) {
+            return prev.map((m, i) =>
+              i === prev.length - 1 ? { ...m, content: m.content + text } : m,
+            );
+          }
+          return [
             ...prev,
-            { id: newId, role: chatRole, content: text, timestamp: new Date() },
-          ]);
-        }
+            {
+              id: crypto.randomUUID(),
+              role: chatRole,
+              content: text,
+              timestamp: new Date(),
+            },
+          ];
+        });
         return;
       }
 
-      // Nova Sonic (default): is_final=true is actual transcript
-      if (isFinal) {
-        if (voiceChatMsgIdRef.current.lastRole !== chatRole) {
-          const newId = crypto.randomUUID();
-          voiceChatMsgIdRef.current = { current: newId, lastRole: chatRole };
-          setMessages((prev) => [
-            ...prev,
-            { id: newId, role: chatRole, content: text, timestamp: new Date() },
-          ]);
+      // OpenAI: show is_final=true only, ignore is_final=false
+      if (!isFinal) return;
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (canAppendTo(last, chatRole)) {
+          return prev.map((m, i) =>
+            i === prev.length - 1 ? { ...m, content: m.content + text } : m,
+          );
         }
-      }
+        return [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: chatRole,
+            content: text,
+            timestamp: new Date(),
+          },
+        ];
+      });
     });
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -314,12 +316,6 @@ function ProjectDetailPage() {
   useEffect(() => {
     const unsubscribe = voiceChat.onToolUse((toolName, toolUseId, status) => {
       if (status === 'started') {
-        // Tool use is always assistant role - update lastRole
-        voiceChatMsgIdRef.current = {
-          current: toolUseId,
-          lastRole: 'assistant',
-        };
-        // Add tool_use as a message
         setMessages((prev) => [
           ...prev,
           {
@@ -333,7 +329,6 @@ function ProjectDetailPage() {
           },
         ]);
       } else {
-        // Update tool_use message status
         setMessages((prev) =>
           prev.map((m) =>
             m.id === toolUseId
@@ -341,11 +336,6 @@ function ProjectDetailPage() {
               : m,
           ),
         );
-        // Clear ref so next assistant transcript creates a new bubble (not append to tool_use)
-        voiceChatMsgIdRef.current = {
-          current: undefined,
-          lastRole: 'assistant',
-        };
       }
     });
     return unsubscribe;
@@ -353,9 +343,12 @@ function ProjectDetailPage() {
   }, [voiceChat.onToolUse]);
 
   // Handle Voice Chat text input - add user message and send to WebSocket
+  // If not connected, auto-connect first and queue the message
+  const pendingVoiceTextRef = useRef<string | null>(null);
+
   const handleVoiceChatText = useCallback(
     (text: string) => {
-      // Add user message to chat
+      // Add user message to chat immediately
       setMessages((prev) => [
         ...prev,
         {
@@ -365,12 +358,29 @@ function ProjectDetailPage() {
           timestamp: new Date(),
         },
       ]);
-      // Send to Voice Chat
-      voiceChat.sendText(text);
+
+      if (voiceChat.state.status === 'connected') {
+        voiceChat.sendText(text);
+      } else {
+        // Queue message and auto-connect
+        pendingVoiceTextRef.current = text;
+        if (voiceChat.state.status !== 'connecting') {
+          handleVoiceChatConnect();
+        }
+      }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [voiceChat.sendText],
+    [voiceChat.state.status, voiceChat.sendText, handleVoiceChatConnect],
   );
+
+  // Send pending voice text when connection is established
+  useEffect(() => {
+    if (voiceChat.state.status === 'connected' && pendingVoiceTextRef.current) {
+      voiceChat.sendText(pendingVoiceTextRef.current);
+      pendingVoiceTextRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceChat.state.status]);
 
   // Disconnect Voice Chat on page leave
   useEffect(() => {
@@ -491,6 +501,27 @@ function ProjectDetailPage() {
     [fetchApi, showToast, t],
   );
 
+  const loadWebcrawlerPrompt = useCallback(async () => {
+    try {
+      const data = await fetchApi<{ content: string }>('prompts/webcrawler');
+      return data.content;
+    } catch {
+      return '';
+    }
+  }, [fetchApi]);
+
+  const saveWebcrawlerPrompt = useCallback(
+    async (content: string) => {
+      await fetchApi('prompts/webcrawler', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      showToast('success', t('systemPrompt.webcrawlerSaveSuccess'));
+    },
+    [fetchApi, showToast, t],
+  );
+
   const SEPARATOR = '\n---\n';
 
   const loadAnalysisDocPrompt = useCallback(async () => {
@@ -599,6 +630,11 @@ function ProjectDetailPage() {
         onSave: saveVoiceSystemPrompt,
       },
       {
+        type: 'webcrawler' as const,
+        onLoad: loadWebcrawlerPrompt,
+        onSave: saveWebcrawlerPrompt,
+      },
+      {
         type: 'analysis-doc' as const,
         onLoad: loadAnalysisDocPrompt,
         onSave: saveAnalysisDocPrompt,
@@ -619,6 +655,8 @@ function ProjectDetailPage() {
       saveSystemPrompt,
       loadVoiceSystemPrompt,
       saveVoiceSystemPrompt,
+      loadWebcrawlerPrompt,
+      saveWebcrawlerPrompt,
       loadAnalysisDocPrompt,
       saveAnalysisDocPrompt,
       loadAnalysisVideoPrompt,
@@ -1174,7 +1212,11 @@ function ProjectDetailPage() {
 
                 // Extract text from nested content
                 const textContent = nestedContent
-                  .filter((item) => item.type === 'text' && item.text)
+                  .filter(
+                    (item) =>
+                      (item.type === 'text' || (!item.type && item.text)) &&
+                      item.text,
+                  )
                   .map((item) => item.text)
                   .join('\n');
 
@@ -1198,8 +1240,18 @@ function ProjectDetailPage() {
                     };
                     toolResultType = 'artifact';
                   } else if (parsed.answer && Array.isArray(parsed.sources)) {
-                    sources = parsed.sources;
-                    sources = parsed.sources;
+                    const referencedIds = new Set<string>();
+                    const idPattern = /document_id[=:]?\s*([0-9a-f-]{36})/gi;
+                    let m;
+                    while ((m = idPattern.exec(parsed.answer)) !== null) {
+                      referencedIds.add(m[1]);
+                    }
+                    sources =
+                      referencedIds.size > 0
+                        ? parsed.sources.filter((s: { document_id: string }) =>
+                            referencedIds.has(s.document_id),
+                          )
+                        : parsed.sources;
                   }
                 } catch {
                   // Not JSON, continue with normal processing
@@ -1224,15 +1276,58 @@ function ProjectDetailPage() {
                   toolResultType = 'image';
                 }
 
+                // Extract answer text when sources are present
+                let historyDisplayContent = textContent;
+                if (sources) {
+                  try {
+                    const parsed = JSON.parse(textContent);
+                    historyDisplayContent = parsed.answer || textContent;
+                  } catch {
+                    // Not JSON, use raw text
+                  }
+                }
+
+                // Infer tool name from content structure
+                let inferredToolName: string | undefined;
+                if (sources) {
+                  inferredToolName = 'search___summarize';
+                } else if (
+                  textContent.startsWith('Found') &&
+                  textContent.includes('search results')
+                ) {
+                  inferredToolName = 'search';
+                } else if (toolResultType === 'image') {
+                  inferredToolName = 'generate_image';
+                } else if (
+                  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(textContent.trim())
+                ) {
+                  inferredToolName = 'current_time';
+                } else if (textContent.trim().startsWith('Result:')) {
+                  inferredToolName = 'calculator';
+                } else if (textContent.startsWith('Agent handoff completed')) {
+                  inferredToolName = 'handoff_to_user';
+                } else if (
+                  toolResultType === 'text' &&
+                  !artifact &&
+                  textContent.length > 500 &&
+                  !textContent.startsWith('{') &&
+                  (textContent.match(/^#{1,3}\s/gm) || []).length >= 2
+                ) {
+                  inferredToolName = 'research_agent';
+                } else if (
+                  toolResultType === 'text' &&
+                  !artifact &&
+                  textContent.length > 500 &&
+                  !textContent.startsWith('{')
+                ) {
+                  inferredToolName = 'fetch_content';
+                }
+
                 return {
                   id: `history-${idx}`,
                   role: 'assistant' as const,
                   content:
-                    toolResultType === 'artifact'
-                      ? ''
-                      : sources
-                        ? ''
-                        : textContent,
+                    toolResultType === 'artifact' ? '' : historyDisplayContent,
                   attachments:
                     imageAttachments.length > 0 ? imageAttachments : undefined,
                   timestamp: new Date(),
@@ -1240,6 +1335,7 @@ function ProjectDetailPage() {
                   toolResultType,
                   artifact,
                   sources,
+                  toolName: inferredToolName,
                 };
               }
 
@@ -1337,8 +1433,13 @@ function ProjectDetailPage() {
       setSessions((prev) => prev.filter((s) => s.session_id !== sessionId));
       // If deleted session was current, start new conversation
       if (sessionId === currentSessionId) {
+        voiceChat.disconnect();
+        setVoiceChatMode(false);
+        setResearchMode(false);
+        setSelectedAgent(null);
         setCurrentSessionId(nanoid(33));
         setMessages([]);
+        setStreamingBlocks([]);
       }
     },
     [fetchApi, projectId, currentSessionId],
@@ -1809,6 +1910,7 @@ function ProjectDetailPage() {
         break;
       case 'tool_use': {
         const toolName = event.name ?? '';
+        toolUseNameStackRef.current.push(toolName);
         setStreamingBlocks((prev) => {
           const alreadyExists = prev.some(
             (b) => b.type === 'tool_use' && b.name === toolName,
@@ -1819,28 +1921,17 @@ function ProjectDetailPage() {
         break;
       }
       case 'tool_result': {
-        setStreamingBlocks((prev) => {
-          // Remove the most recent tool_use block
-          let lastToolIdx = -1;
-          for (let i = prev.length - 1; i >= 0; i--) {
-            if (prev[i].type === 'tool_use') {
-              lastToolIdx = i;
-              break;
-            }
-          }
-          if (lastToolIdx >= 0) {
-            return [
-              ...prev.slice(0, lastToolIdx),
-              ...prev.slice(lastToolIdx + 1),
-            ];
-          }
-          return prev;
-        });
+        // Capture tool name synchronously from stack (pushed during tool_use)
+        const capturedToolName = toolUseNameStackRef.current.pop() || '';
+
         if (!Array.isArray(event.content)) break;
         const contents = event.content as ToolResultContent[];
 
         const textContent = contents
-          .filter((item) => item.type === 'text' && item.text)
+          .filter(
+            (item) =>
+              (item.type === 'text' || (!item.type && item.text)) && item.text,
+          )
           .map((item) => item.text)
           .join('\n');
 
@@ -1862,7 +1953,19 @@ function ProjectDetailPage() {
             };
             toolResultType = 'artifact';
           } else if (parsed.answer && Array.isArray(parsed.sources)) {
-            sources = parsed.sources;
+            // Filter sources to only those actually referenced in the answer
+            const referencedIds = new Set<string>();
+            const idPattern = /document_id[=:]?\s*([0-9a-f-]{36})/gi;
+            let m;
+            while ((m = idPattern.exec(parsed.answer)) !== null) {
+              referencedIds.add(m[1]);
+            }
+            sources =
+              referencedIds.size > 0
+                ? parsed.sources.filter((s: { document_id: string }) =>
+                    referencedIds.has(s.document_id),
+                  )
+                : parsed.sources;
           }
         } catch {
           // Not JSON
@@ -1871,7 +1974,7 @@ function ProjectDetailPage() {
         const imageAttachments: ChatAttachment[] = contents
           .filter(
             (item) =>
-              item.type === 'image' &&
+              (item.type === 'image' || (!item.type && item.image)) &&
               (item.s3_url || item.source || item.image?.source?.bytes),
           )
           .map((item, imgIdx) => {
@@ -1894,11 +1997,59 @@ function ProjectDetailPage() {
         // Skip empty tool results
         if (!textContent && imageAttachments.length === 0) break;
 
+        // Determine display content for the streaming block
+        let displayContent: string | undefined;
+        if (toolResultType === 'text' && sources) {
+          // Search result with sources - show the answer part
+          try {
+            const parsed = JSON.parse(textContent);
+            displayContent = parsed.answer || textContent;
+          } catch {
+            displayContent = textContent;
+          }
+        } else if (toolResultType === 'text') {
+          displayContent = textContent;
+        }
+
+        // Remove tool_use block and add tool_result in a single update
+        setStreamingBlocks((prev) => {
+          let lastToolIdx = -1;
+          for (let i = prev.length - 1; i >= 0; i--) {
+            if (prev[i].type === 'tool_use') {
+              lastToolIdx = i;
+              break;
+            }
+          }
+          const withoutToolUse =
+            lastToolIdx >= 0
+              ? [...prev.slice(0, lastToolIdx), ...prev.slice(lastToolIdx + 1)]
+              : prev;
+          return [
+            ...withoutToolUse,
+            {
+              type: 'tool_result' as const,
+              resultType: toolResultType,
+              content: displayContent,
+              images:
+                imageAttachments.length > 0
+                  ? imageAttachments
+                      .filter((a) => a.preview != null)
+                      .map((a) => ({
+                        src: a.preview as string,
+                        alt: a.name,
+                      }))
+                  : undefined,
+              sources,
+              toolName: capturedToolName || undefined,
+            },
+          ];
+        });
+
         const toolResultMessage: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
           content:
-            toolResultType === 'artifact' ? '' : sources ? '' : textContent,
+            toolResultType === 'artifact' ? '' : displayContent || textContent,
           attachments:
             imageAttachments.length > 0 ? imageAttachments : undefined,
           timestamp: new Date(),
@@ -1906,6 +2057,7 @@ function ProjectDetailPage() {
           toolResultType,
           artifact,
           sources,
+          toolName: capturedToolName || undefined,
         };
         pendingMessagesRef.current.push(toolResultMessage);
         break;

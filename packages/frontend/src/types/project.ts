@@ -132,6 +132,7 @@ export interface ChatMessage {
   sources?: { document_id: string; segment_id: string }[];
   isStageResult?: boolean;
   stageName?: string;
+  toolName?: string;
   // Tool use (Voice Chat)
   isToolUse?: boolean;
   toolUseName?: string;

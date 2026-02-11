@@ -8,6 +8,7 @@ router = APIRouter(prefix="/prompts", tags=["prompts"])
 
 SYSTEM_PROMPT_KEY = "__prompts/chat/system_prompt.txt"
 VOICE_SYSTEM_PROMPT_KEY = "__prompts/voice/system_prompt.txt"
+WEBCRAWLER_SYSTEM_PROMPT_KEY = "__prompts/webcrawler/system_prompt.txt"
 
 ANALYSIS_PROMPT_KEYS = {
     "system": "__prompts/analysis/system_prompt.txt",
@@ -88,6 +89,39 @@ def update_voice_system_prompt(request: SystemPromptUpdate) -> SystemPromptRespo
     s3.put_object(
         Bucket=config.agent_storage_bucket_name,
         Key=VOICE_SYSTEM_PROMPT_KEY,
+        Body=request.content.encode("utf-8"),
+        ContentType="text/plain; charset=utf-8",
+    )
+
+    return SystemPromptResponse(content=request.content)
+
+
+@router.get("/webcrawler")
+def get_webcrawler_prompt() -> SystemPromptResponse:
+    """Get the webcrawler system prompt."""
+    config = get_config()
+    s3 = get_s3_client()
+
+    try:
+        response = s3.get_object(
+            Bucket=config.agent_storage_bucket_name,
+            Key=WEBCRAWLER_SYSTEM_PROMPT_KEY,
+        )
+        content = response["Body"].read().decode("utf-8")
+        return SystemPromptResponse(content=content)
+    except s3.exceptions.NoSuchKey:
+        return SystemPromptResponse(content="")
+
+
+@router.put("/webcrawler")
+def update_webcrawler_prompt(request: SystemPromptUpdate) -> SystemPromptResponse:
+    """Update the webcrawler system prompt."""
+    config = get_config()
+    s3 = get_s3_client()
+
+    s3.put_object(
+        Bucket=config.agent_storage_bucket_name,
+        Key=WEBCRAWLER_SYSTEM_PROMPT_KEY,
         Body=request.content.encode("utf-8"),
         ContentType="text/plain; charset=utf-8",
     )

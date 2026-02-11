@@ -113,9 +113,10 @@ export default function VoiceModelSettingsModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    // Reset voice and load API key when model changes (only when not locked)
+    // Reset voice when model changes - check if current voice is valid for new model
     const voices = VOICE_OPTIONS[effectiveModelType];
-    if (voices && voices.length > 0 && !voice) {
+    const isVoiceValidForModel = voices?.some((v) => v.value === voice);
+    if (!isVoiceValidForModel && voices && voices.length > 0) {
       setVoice(voices[0].value);
     }
     // Load stored API key for this model

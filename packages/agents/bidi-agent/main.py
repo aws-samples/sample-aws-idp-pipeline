@@ -7,11 +7,11 @@ voice conversations through AWS Bedrock AgentCore.
 === Architecture ===
 
 Browser (Web Audio API)
-    ↕ WebSocket (wss://bedrock-agentcore.../ws)
+    | WebSocket (wss://bedrock-agentcore.../ws)
 AWS Bedrock AgentCore (WebSocket Proxy)
-    ↕ WebSocket (ws://container:8080/ws)
+    | WebSocket (ws://container:8080/ws)
 This Container (bidi-agent)
-    ↕ Strands SDK BidiModel
+    | Strands SDK BidiModel
 Voice Model (Nova Sonic / Gemini Live / OpenAI Realtime)
 
 === Supported Models ===
@@ -45,7 +45,7 @@ AWS Bedrock AgentCore WebSocket proxy has important limitations:
 === Audio Chunking Strategy ===
 
 OpenAI/Gemini can send larger audio chunks than Nova Sonic.
-Example: OpenAI sends 40KB+ audio chunk → Exceeds AgentCore 32KB limit → Connection drops
+Example: OpenAI sends 40KB+ audio chunk -> Exceeds AgentCore 32KB limit -> Connection drops
 
 Solution: Split into 24KB chunks
 - 24KB audio + JSON overhead (~52 bytes) = ~24KB < 32KB limit
@@ -58,6 +58,7 @@ import asyncio
 import json
 import logging
 import sys
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 import boto3
@@ -98,9 +99,88 @@ from strands.types.session import SessionMessage
 from strands.types._events import ToolResultEvent
 
 from config import get_config, create_bidi_model
-from tools import get_tools, execute_tool
+from agents import get_mcp_client, get_tools
+from agents.bidi_agent import execute_builtin_tool
 
 logger = logging.getLogger(__name__)
+
+# Global MCP client and tools (initialized at startup)
+mcp_client = None
+mcp_tools = []
+
+
+def convert_mcp_tool_to_bidi_format(tool) -> dict:
+    """Convert MCPAgentTool to BidiModel-compatible format."""
+    # MCPAgentTool has tool_name and tool_spec attributes
+    tool_spec = tool.tool_spec if hasattr(tool, "tool_spec") else {}
+    tool_name = tool.tool_name if hasattr(tool, "tool_name") else tool_spec.get("name", "")
+
+    raw_input_schema = tool_spec.get("inputSchema", {})
+
+    # Handle nested {'json': {...}} structure from MCP
+    if "json" in raw_input_schema:
+        input_schema = raw_input_schema["json"].copy() if isinstance(raw_input_schema["json"], dict) else {}
+    else:
+        input_schema = raw_input_schema.copy() if isinstance(raw_input_schema, dict) else {}
+
+    logger.info(f"Original inputSchema for {tool_name}: {input_schema}")
+
+    # Remove user_id and project_id from schema - they are auto-injected
+    if "properties" in input_schema:
+        input_schema["properties"] = {
+            k: v for k, v in input_schema["properties"].items()
+            if k not in ("user_id", "project_id")
+        }
+    if "required" in input_schema:
+        input_schema["required"] = [
+            r for r in input_schema["required"]
+            if r not in ("user_id", "project_id")
+        ]
+
+    logger.info(f"Converted inputSchema for {tool_name}: {input_schema}")
+
+    return {
+        "name": tool_name,
+        "description": tool_spec.get("description", ""),
+        "inputSchema": {"json": input_schema},
+    }
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Load MCP tools at startup."""
+    global mcp_client, mcp_tools
+
+    config = get_config()
+    if config.mcp_gateway_url:
+        logger.info(f"Connecting to MCP Gateway: {config.mcp_gateway_url}")
+        mcp_client = get_mcp_client()
+        if mcp_client:
+            try:
+                mcp_client.__enter__()
+                raw_tools = mcp_client.list_tools_sync()
+                for t in raw_tools:
+                    try:
+                        converted = convert_mcp_tool_to_bidi_format(t)
+                        logger.info(f"MCP tool converted: {converted['name']} -> inputSchema keys: {list(converted.get('inputSchema', {}).get('json', {}).keys())}")
+                        mcp_tools.append(converted)
+                    except Exception as e:
+                        logger.error(f"Failed to convert MCP tool: {e}")
+                logger.info(f"Loaded {len(mcp_tools)} MCP tools: {[t['name'] for t in mcp_tools]}")
+            except Exception as e:
+                logger.error(f"Failed to load MCP tools: {e}")
+                mcp_client = None
+    else:
+        logger.warning("MCP_GATEWAY_URL not set, running without MCP tools")
+
+    yield
+
+    if mcp_client:
+        try:
+            mcp_client.__exit__(None, None, None)
+            logger.info("MCP client closed")
+        except Exception as e:
+            logger.error(f"Error closing MCP client: {e}")
 
 
 class TranscriptSaver:
@@ -198,6 +278,11 @@ CRITICAL LANGUAGE MIRRORING RULES:
 - Always reply in the language spoken. DO NOT mix with English. However, if the user talks in English, reply in English.
 - Please respond in the language the user is talking to you in, If you have a question or suggestion, ask it in the language the user is talking in. I want to ensure that our communication remains in the same language as the user."""
 
+MCP_TOOL_PROMPT = """
+## Tool Parameter Notice
+When using MCP tools, `user_id` and `project_id` parameters are automatically injected by the system.
+You MUST NOT specify these parameters in tool calls - they will be overwritten by the system for security."""
+
 
 def fetch_voice_system_prompt() -> str | None:
     """Fetch voice system prompt from S3."""
@@ -219,21 +304,94 @@ def fetch_voice_system_prompt() -> str | None:
         return None
 
 
-def build_system_prompt(timezone: str) -> str:
+def build_system_prompt(timezone: str, has_mcp_tools: bool = False) -> str:
     base_prompt = fetch_voice_system_prompt() or BASE_SYSTEM_PROMPT
 
     language = TIMEZONE_TO_LANGUAGE.get(timezone)
     if language:
-        return (
+        prompt = (
             f"{base_prompt}\n\n"
             f"The user's timezone is {timezone}. "
             f"Default to {language} unless the user speaks a different language.\n"
             f"{LANGUAGE_MIRROR_PROMPT}"
         )
-    return f"{base_prompt}\n{LANGUAGE_MIRROR_PROMPT}"
+    else:
+        prompt = f"{base_prompt}\n{LANGUAGE_MIRROR_PROMPT}"
+
+    if has_mcp_tools:
+        prompt += f"\n{MCP_TOOL_PROMPT}"
+
+    return prompt
 
 
-app = FastAPI()
+async def execute_tool(tool_use: dict, context: dict) -> dict:
+    """Execute a tool (builtin or MCP) and return the result."""
+    tool_name = tool_use.get("name", "")
+    tool_input = tool_use.get("input", {}) or {}
+    tool_use_id = tool_use.get("toolUseId", "")
+
+    logger.info(f"Executing tool: {tool_name} with input: {tool_input}")
+
+    # Try builtin tool first
+    builtin_result = await execute_builtin_tool(tool_name, tool_input, context)
+    if builtin_result is not None:
+        return {
+            "toolUseId": tool_use_id,
+            "status": "success",
+            "content": [{"text": json.dumps(builtin_result)}],
+        }
+
+    # Try MCP tool
+    if mcp_client:
+        # Inject user_id and project_id for MCP tools
+        if context.get("user_id"):
+            tool_input["user_id"] = context["user_id"]
+        if context.get("project_id"):
+            tool_input["project_id"] = context["project_id"]
+
+        logger.info(f"Calling MCP tool: {tool_name} with injected params: user_id={context.get('user_id')}, project_id={context.get('project_id')}")
+        logger.info(f"Full tool_input: {tool_input}")
+
+        try:
+            result = mcp_client.call_tool_sync(name=tool_name, arguments=tool_input, tool_use_id=tool_use_id)
+            logger.info(f"MCP result type: {type(result)}, result: {result}")
+
+            # If result is already a dict with expected format, return it directly
+            if isinstance(result, dict) and "toolUseId" in result:
+                return result
+
+            # MCP returns a CallToolResult with content attribute
+            content = []
+            if hasattr(result, "content"):
+                for block in result.content:
+                    if hasattr(block, "text"):
+                        content.append({"text": block.text})
+                    else:
+                        content.append({"text": str(block)})
+            else:
+                content.append({"text": str(result)})
+
+            return {
+                "toolUseId": tool_use_id,
+                "status": "success",
+                "content": content,
+            }
+        except Exception as e:
+            logger.exception(f"MCP tool execution failed: {tool_name}")
+            return {
+                "toolUseId": tool_use_id,
+                "status": "error",
+                "content": [{"text": f"Tool execution failed: {str(e)}"}],
+            }
+
+    return {
+        "toolUseId": tool_use_id,
+        "status": "error",
+        "content": [{"text": f"Unknown tool: {tool_name}"}],
+    }
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/ping")
@@ -251,7 +409,9 @@ async def ws_endpoint(websocket: WebSocket):
         config_msg = await websocket.receive_json()
         logger.info(
             f"Session started: voice={config_msg.get('voice')}, "
-            f"timezone={config_msg.get('browser_time_zone')}"
+            f"timezone={config_msg.get('browser_time_zone')}, "
+            f"project_id={config_msg.get('project_id')}, "
+            f"user_id={config_msg.get('user_id')}"
         )
     except (WebSocketDisconnect, json.JSONDecodeError) as e:
         logger.warning(f"Failed to receive config: {e}")
@@ -288,17 +448,28 @@ async def ws_endpoint(websocket: WebSocket):
 
     user_timezone = config_msg.get("browser_time_zone", "UTC")
 
+    # Combine builtin tools with MCP tools
+    all_tools = get_tools() + mcp_tools
+    has_mcp = len(mcp_tools) > 0
+
     try:
         custom_prompt = config_msg.get("system_prompt")
-        system_prompt = custom_prompt or build_system_prompt(user_timezone)
-        tools = get_tools()
-        logger.info(f"Starting model with {len(tools)} tools: {[t['name'] for t in tools]}")
-        await model.start(system_prompt=system_prompt, tools=tools)
+        system_prompt = custom_prompt or build_system_prompt(user_timezone, has_mcp_tools=has_mcp)
+        logger.info(f"Starting model with {len(all_tools)} tools: {[t['name'] for t in all_tools]}")
+        await model.start(system_prompt=system_prompt, tools=all_tools)
         logger.info("voice model started successfully")
     except Exception:
         logger.exception("Failed to start voice model")
         await websocket.close(code=1011, reason="Failed to start model")
         return
+
+    # Tool context for parameter injection
+    tool_context = {
+        "timezone": user_timezone,
+        "project_id": config_msg.get("project_id"),
+        "session_id": config_msg.get("session_id"),
+        "user_id": config_msg.get("user_id"),
+    }
 
     async def browser_to_bedrock():
         """Forward messages from browser WebSocket to voice model."""
@@ -362,7 +533,7 @@ async def ws_endpoint(websocket: WebSocket):
                     # - AgentCore limit: 32KB (32,768 bytes)
                     # - JSON overhead: {"type":"audio","audio":"...","sample_rate":24000}
                     #   adds approximately 50-100 bytes
-                    # - Safety margin: 24KB + JSON overhead ≈ 24-25KB << 32KB limit
+                    # - Safety margin: 24KB + JSON overhead = 24-25KB << 32KB limit
                     # - Audio data is already base64-encoded string from the model
                     #
                     # Notes:
@@ -393,6 +564,7 @@ async def ws_endpoint(websocket: WebSocket):
                                 "sample_rate": sample_rate,
                             })
                 elif isinstance(event, BidiTranscriptStreamEvent):
+                    logger.info(f"Transcript: role={event.role}, is_final={event.is_final}, text={event.text[:50] if event.text else '(empty)'}...")
                     await websocket.send_json(
                         {
                             "type": "transcript",
@@ -431,12 +603,6 @@ async def ws_endpoint(websocket: WebSocket):
                             )
 
                             try:
-                                tool_context = {
-                                    "timezone": user_timezone,
-                                    "project_id": config_msg.get("project_id"),
-                                    "session_id": config_msg.get("session_id"),
-                                    "user_id": config_msg.get("user_id"),
-                                }
                                 tool_result = await execute_tool(tool_use, tool_context)
                                 logger.info(f"Tool result: {tool_name} -> {tool_result.get('status')}")
                                 await model.send(ToolResultEvent(tool_result))
