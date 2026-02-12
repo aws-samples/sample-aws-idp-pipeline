@@ -1,0 +1,9 @@
+boto3
+pillow
+pypdfium2
+pypdf
+pyyaml
+python-docx
+python-pptx
+openpyxl
+xlrd

@@ -89,7 +89,7 @@
     "dropHere": "ファイルをここにドロップ",
     "uploading": "アップロード中...",
     "orClick": "またはクリックして選択",
-    "supportedFormats": "ドキュメント（PDF、DOC、TXT）、画像（PNG、JPG、GIF、TIFF）、動画（MP4、MOV、AVI）、音声（MP3、WAV、FLAC）最大500MBまで対応",
+    "supportedFormats": "ドキュメント（PDF、DOC、PPT、TXT）、画像（PNG、JPG、GIF、TIFF）、動画（MP4、MOV、AVI）、音声（MP3、WAV、FLAC）最大500MBまで対応",
     "processing": "処理中",
     "in_progress": "分析中",
     "completed": "完了",

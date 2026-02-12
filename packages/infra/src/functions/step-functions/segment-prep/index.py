@@ -56,10 +56,16 @@ AUDIO_EXTENSIONS = {'.mp3', '.wav', '.flac', '.aac', '.m4a', '.ogg', '.wma'}
 # Web request extension
 WEBREQ_EXTENSIONS = {'.webreq'}
 
+# Presentation extensions
+PPTX_EXTENSIONS = {'.pptx', '.ppt'}
+
 # Text-based document extensions (no image generation needed)
 DOCX_EXTENSIONS = {'.docx', '.doc'}
 MARKDOWN_EXTENSIONS = {'.md', '.markdown'}
-TEXT_EXTENSIONS = {'.txt', '.csv'}
+TEXT_EXTENSIONS = {'.txt'}
+
+# Spreadsheet extensions
+SPREADSHEET_EXTENSIONS = {'.xlsx', '.xls', '.csv'}
 
 
 def get_file_extension(file_uri: str) -> str:
@@ -278,6 +284,40 @@ def process_text_file(file_uri: str, bucket: str, base_path: str) -> list[dict]:
     return prepare_text_segments(file_uri, 'text/plain')
 
 
+def is_office_document_type(file_type: str) -> bool:
+    """Check if file type is a presentation or Word document (rendered via LibreOffice)."""
+    return file_type in (
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/msword',
+    )
+
+
+def is_spreadsheet_type(file_type: str) -> bool:
+    """Check if file type is a spreadsheet (xlsx, xls, csv)."""
+    return file_type in (
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+        'text/csv',
+    )
+
+
+def prepare_presentation_segments(file_uri: str) -> list[dict]:
+    """Prepare placeholder segment for presentation files.
+
+    Creates 1 placeholder PAGE segment. Actual slide count is determined
+    by format-parser, and segment-builder will override with real data.
+    """
+    print('Creating 1 placeholder segment for presentation')
+    return [{
+        'segment_index': 0,
+        'segment_type': 'PAGE',
+        'image_uri': '',
+        'file_uri': file_uri,
+    }]
+
+
 def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
@@ -296,6 +336,9 @@ def handler(event, _context):
         if ext in WEBREQ_EXTENSIONS or file_type == 'application/x-webreq':
             print('Processing as web request')
             segments = process_webreq(file_uri, bucket, base_path)
+        elif ext in PPTX_EXTENSIONS or ext in DOCX_EXTENSIONS or is_office_document_type(file_type):
+            print('Processing as office document')
+            segments = prepare_presentation_segments(file_uri)
         elif ext in PDF_EXTENSIONS or file_type == 'application/pdf':
             print('Processing as PDF')
             segments = process_pdf(file_uri, bucket, base_path)
@@ -308,16 +351,13 @@ def handler(event, _context):
         elif ext in AUDIO_EXTENSIONS or file_type.startswith('audio/'):
             print('Processing as audio')
             segments = process_audio(file_uri)
-        elif ext in DOCX_EXTENSIONS or file_type in (
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/msword'
-        ):
-            print('Processing as DOCX')
-            segments = process_docx(file_uri, bucket, base_path)
+        elif ext in SPREADSHEET_EXTENSIONS or is_spreadsheet_type(file_type):
+            print('Processing as spreadsheet')
+            segments = prepare_text_segments(file_uri, file_type)
         elif ext in MARKDOWN_EXTENSIONS or file_type == 'text/markdown':
             print('Processing as Markdown')
             segments = process_markdown(file_uri, bucket, base_path)
-        elif ext in TEXT_EXTENSIONS or file_type in ('text/plain', 'text/csv'):
+        elif ext in TEXT_EXTENSIONS or file_type == 'text/plain':
             print('Processing as text file')
             segments = process_text_file(file_uri, bucket, base_path)
         else:

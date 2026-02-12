@@ -376,7 +376,7 @@ export default function DocumentUploadModal({
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept=".pdf,.doc,.docx,.txt,.md,.csv,.png,.jpg,.jpeg,.gif,.tiff,.mp4,.mov,.avi,.mp3,.wav,.flac"
+                    accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.tiff,.mp4,.mov,.avi,.mp3,.wav,.flac"
                     className="hidden"
                     onChange={handleFileSelect}
                     disabled={uploading}

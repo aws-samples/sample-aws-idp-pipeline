@@ -7,10 +7,24 @@ import boto3
 import pytz
 from strands.tools.mcp.mcp_client import MCPClient
 
+from mcp import StdioServerParameters
+from mcp.client.stdio import stdio_client
+
 from agentcore_mcp_client import AgentCoreGatewayMCPClient
 from config import get_config
 
 logger = logging.getLogger(__name__)
+
+
+def get_duckduckgo_mcp_client() -> MCPClient:
+    """Get MCP client for DuckDuckGo search server."""
+    return MCPClient(
+        lambda: stdio_client(
+            StdioServerParameters(
+                command="duckduckgo-mcp-server",
+            )
+        )
+    )
 
 
 def get_mcp_client() -> MCPClient | None:

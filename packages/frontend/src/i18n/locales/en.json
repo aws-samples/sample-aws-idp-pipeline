@@ -89,7 +89,7 @@
     "dropHere": "Drop files here",
     "uploading": "Uploading...",
     "orClick": "or click to select",
-    "supportedFormats": "Supports documents (PDF, DOC, TXT), images (PNG, JPG, GIF, TIFF), videos (MP4, MOV, AVI), and audio files (MP3, WAV, FLAC) up to 500MB",
+    "supportedFormats": "Supports documents (PDF, DOC, PPT, TXT), images (PNG, JPG, GIF, TIFF), videos (MP4, MOV, AVI), and audio files (MP3, WAV, FLAC) up to 500MB",
     "processing": "Processing",
     "in_progress": "Analyzing",
     "completed": "Completed",
