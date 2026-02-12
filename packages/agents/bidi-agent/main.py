@@ -267,6 +267,38 @@ class TranscriptSaver:
         except Exception as e:
             logger.error(f"Failed to save transcript: {e}")
 
+    def save_tool_result(self, tool_name: str, tool_use_id: str, status: str) -> None:
+        """Save a tool result as a proper toolResult content block."""
+        if not self.enabled or not self.session_manager:
+            return
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        try:
+            message = Message(
+                role="assistant",
+                content=[ContentBlock(toolResult={
+                    "toolUseId": tool_use_id,
+                    "status": status,
+                    "content": [{"text": tool_name}],
+                })],
+            )
+            session_message = SessionMessage(
+                message=message,
+                message_id=self.message_index,
+                created_at=now,
+                updated_at=now,
+            )
+            self.session_manager.create_message(
+                session_id=self.session_id,
+                agent_id=self.agent_id,
+                session_message=session_message,
+            )
+            logger.debug(f"Saved tool_result message_{self.message_index}: {tool_name}")
+            self.message_index += 1
+        except Exception as e:
+            logger.error(f"Failed to save tool_result: {e}")
+
 
 TIMEZONE_TO_LANGUAGE: dict[str, str] = {
     "Asia/Seoul": "Korean",
@@ -551,6 +583,7 @@ async def ws_endpoint(websocket: WebSocket):
                 msg_type = msg.get("type")
                 if msg_type == "text":
                     logger.info(f"[b2b] Text message #{msg_count}")
+                    transcript_saver.save_transcript("user", msg["text"])
                     await model.send(BidiTextInputEvent(text=msg["text"]))
                 elif msg_type == "audio":
                     if msg_count <= 5 or msg_count % 100 == 0:
@@ -644,7 +677,15 @@ async def ws_endpoint(websocket: WebSocket):
                             "is_final": event.is_final,
                         }
                     )
-                    if event.is_final and event.text.strip():
+                    # Model-specific save logic (mirrors frontend display logic):
+                    # - OpenAI: is_final=true only
+                    # - Gemini: is_final=false only (is_final=true is empty/duplicate)
+                    # - Nova Sonic: is_final=false only
+                    should_save = event.text.strip() and (
+                        (model_type == "openai" and event.is_final)
+                        or (model_type != "openai" and not event.is_final)
+                    )
+                    if should_save:
                         transcript_saver.save_transcript(event.role, event.text)
                 elif isinstance(event, ToolUseStreamEvent):
                     # Handle tool use requests from the model
@@ -686,6 +727,9 @@ async def ws_endpoint(websocket: WebSocket):
                                         "status": tool_result.get("status"),
                                     }
                                 )
+                                transcript_saver.save_tool_result(
+                                    tool_name, tool_use_id, tool_result.get("status", "success"),
+                                )
                             except Exception as e:
                                 logger.exception(f"Tool execution error: {tool_name}")
                                 error_result = {
@@ -705,6 +749,9 @@ async def ws_endpoint(websocket: WebSocket):
                                         "status": "error",
                                         "error": str(e),
                                     }
+                                )
+                                transcript_saver.save_tool_result(
+                                    tool_name, tool_use_id, "error",
                                 )
                 elif isinstance(event, BidiConnectionStartEvent):
                     await websocket.send_json(

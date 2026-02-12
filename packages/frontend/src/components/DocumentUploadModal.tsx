@@ -11,6 +11,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import OcrSettingsForm, { type OcrSettings } from './OcrSettingsForm';
+import { LANGUAGES } from './ProjectSettingsModal';
 
 type UploadTab = 'file' | 'web';
 
@@ -20,11 +21,13 @@ export interface DocumentProcessingOptions {
   ocr_model?: string;
   ocr_options?: Record<string, unknown>;
   document_prompt?: string;
+  language?: string;
 }
 
 interface DocumentUploadModalProps {
   isOpen: boolean;
   uploading: boolean;
+  projectLanguage?: string;
   projectOcrModel?: string;
   projectOcrOptions?: Record<string, unknown>;
   projectDocumentPrompt?: string;
@@ -38,6 +41,7 @@ interface DocumentUploadModalProps {
 export default function DocumentUploadModal({
   isOpen,
   uploading,
+  projectLanguage,
   projectOcrModel,
   projectOcrOptions,
   projectDocumentPrompt,
@@ -53,6 +57,7 @@ export default function DocumentUploadModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showBda, setShowBda] = useState(false);
   const [showOcr, setShowOcr] = useState(false);
+  const [language, setLanguage] = useState(projectLanguage || 'en');
 
   const hasOcrEligibleFiles = useMemo(
     () =>
@@ -98,6 +103,10 @@ export default function DocumentUploadModal({
   useEffect(() => {
     setDocumentPrompt(projectDocumentPrompt || '');
   }, [projectDocumentPrompt]);
+
+  useEffect(() => {
+    setLanguage(projectLanguage || 'en');
+  }, [projectLanguage]);
 
   // Web tab state
   const [webUrl, setWebUrl] = useState('');
@@ -205,9 +214,10 @@ export default function DocumentUploadModal({
     }
 
     if (documentPrompt.trim()) opts.document_prompt = documentPrompt.trim();
+    opts.language = language;
 
     return opts;
-  }, [useBda, useOcr, ocrSettings, documentPrompt]);
+  }, [useBda, useOcr, ocrSettings, documentPrompt, language]);
 
   const handleUpload = useCallback(async () => {
     if (activeTab === 'file') {
@@ -251,11 +261,13 @@ export default function DocumentUploadModal({
           (projectOcrOptions?.use_textline_orientation as boolean) || false,
       });
       setDocumentPrompt(projectDocumentPrompt || '');
+      setLanguage(projectLanguage || 'en');
       onClose();
     }
   }, [
     uploading,
     onClose,
+    projectLanguage,
     projectOcrModel,
     projectOcrOptions,
     projectDocumentPrompt,
@@ -417,8 +429,31 @@ export default function DocumentUploadModal({
                 </div>
               )}
 
-              {/* Processing Options - 3 collapsible sections */}
+              {/* Processing Options */}
               <div className="space-y-2">
+                {/* Language */}
+                <div className="flex items-center gap-3 px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                  <label
+                    htmlFor="upload-language"
+                    className="text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap"
+                  >
+                    {t('common.language')}
+                  </label>
+                  <select
+                    id="upload-language"
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    disabled={uploading}
+                    className="flex-1 px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                  >
+                    {LANGUAGES.map((lang) => (
+                      <option key={lang.code} value={lang.code}>
+                        {t(`languages.${lang.code}`)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* BDA */}
                 <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
                   <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-slate-800/50">

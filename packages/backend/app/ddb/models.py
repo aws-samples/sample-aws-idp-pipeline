@@ -40,6 +40,7 @@ class DocumentData(BaseModel):
     ocr_model: str | None = None
     ocr_options: dict[str, Any] | None = None
     document_prompt: str | None = None
+    language: str | None = None
 
 
 class Document(BaseModel):
