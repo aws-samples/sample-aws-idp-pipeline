@@ -53,7 +53,8 @@
     "remark-gfm": "^4.0.1",
     "source-map-support": "0.5.21",
     "tailwindcss": "4.1.17",
-    "valibot": "^1.2.0"
+    "valibot": "^1.2.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@aws-cdk/aws-bedrock-agentcore-alpha": "2.235.1-alpha.0",

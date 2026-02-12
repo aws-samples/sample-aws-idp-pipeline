@@ -1,0 +1,6 @@
+**/__pycache__
+**/*.pyc
+container/
+preprocessing/
+lancedb-writer/
+websocket/

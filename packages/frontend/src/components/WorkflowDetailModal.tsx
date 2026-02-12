@@ -16,6 +16,7 @@ import ConfirmModal from './ConfirmModal';
 import { LANGUAGES, CARD_COLORS } from './ProjectSettingsModal';
 import OcrDocumentView from './OcrDocumentView';
 import PdfPageViewer from './PdfPageViewer';
+import ExcelViewer from './ExcelViewer';
 import { useAwsClient } from '../hooks/useAwsClient';
 
 // File type detection helpers
@@ -23,6 +24,8 @@ const TEXT_MIME_TYPES = [
   'text/plain',
   'text/markdown',
   'text/csv',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/msword',
 ];
@@ -34,6 +37,74 @@ const isTextFileType = (fileType: string | undefined): boolean => {
 
 const isMarkdownFileType = (fileType: string | undefined): boolean => {
   return fileType === 'text/markdown';
+};
+
+const isSpreadsheetFileType = (fileType: string | undefined): boolean => {
+  if (!fileType) return false;
+  return [
+    'text/csv',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
+  ].includes(fileType);
+};
+
+const isExcelFileType = (fileType: string | undefined): boolean => {
+  if (!fileType) return false;
+  return [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
+  ].includes(fileType);
+};
+
+const FILE_TYPE_LABELS: Record<string, string> = {
+  'application/pdf': 'PDF',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'XLSX',
+  'application/vnd.ms-excel': 'XLS',
+  'text/csv': 'CSV',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+    'DOCX',
+  'application/msword': 'DOC',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+    'PPTX',
+  'application/vnd.ms-powerpoint': 'PPT',
+  'text/plain': 'TXT',
+  'text/markdown': 'Markdown',
+  'image/png': 'PNG',
+  'image/jpeg': 'JPEG',
+  'image/tiff': 'TIFF',
+  'video/mp4': 'MP4',
+  'audio/mpeg': 'MP3',
+  'application/x-webreq': 'Web',
+};
+
+const getFileTypeLabel = (fileType: string | undefined): string => {
+  if (!fileType) return 'PDF';
+  return FILE_TYPE_LABELS[fileType] || fileType;
+};
+
+/**
+ * Fix broken markdown table rows where cell values contain newlines.
+ * e.g. "| SYM\nBOL |" -> "| SYMBOL |"
+ */
+const sanitizeMarkdownTable = (text: string): string => {
+  const lines = text.split('\n');
+  const result: string[] = [];
+  for (const line of lines) {
+    const prev = result[result.length - 1];
+    // If prev line starts with | but doesn't end with |, merge
+    if (
+      prev &&
+      prev.startsWith('|') &&
+      !prev.endsWith('|') &&
+      !line.startsWith('|') &&
+      !line.startsWith('#')
+    ) {
+      result[result.length - 1] = prev + ' ' + line;
+    } else {
+      result.push(line);
+    }
+  }
+  return result.join('\n');
 };
 
 const isPdfFileType = (fileType: string | undefined): boolean => {
@@ -158,6 +229,46 @@ export default function WorkflowDetailModal({
       cancelled = true;
     };
   }, [isPdf, workflow.file_uri, getPresignedDownloadUrl]);
+
+  // Load Excel presigned URL for Excel files
+  const isExcel = isExcelFileType(workflow.file_type);
+  const [excelUrl, setExcelUrl] = useState<string | null>(null);
+  const [excelUrlLoading, setExcelUrlLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isExcel || !workflow.file_uri) {
+      setExcelUrl(null);
+      return;
+    }
+
+    const s3Info = parseS3Uri(workflow.file_uri);
+    if (!s3Info) {
+      setExcelUrl(null);
+      return;
+    }
+
+    let cancelled = false;
+    setExcelUrlLoading(true);
+
+    getPresignedDownloadUrl(s3Info.bucket, s3Info.key)
+      .then((url) => {
+        if (!cancelled) {
+          setExcelUrl(url);
+          setExcelUrlLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to get Excel presigned URL:', err);
+        if (!cancelled) {
+          setExcelUrl(null);
+          setExcelUrlLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isExcel, workflow.file_uri, getPresignedDownloadUrl]);
 
   // On-demand segment loading
   const [segmentCache, setSegmentCache] = useState<Map<number, SegmentData>>(
@@ -425,7 +536,7 @@ export default function WorkflowDetailModal({
 
         {/* Left Panel - Document Details */}
         <div
-          className={`bg-slate-50 flex flex-col border-r border-slate-200 transition-all duration-300 ${analysisPopup.type ? 'w-[600px]' : 'w-[400px]'}`}
+          className={`bg-slate-50 flex flex-col flex-shrink-0 border-r border-slate-200 transition-all duration-300 ${analysisPopup.type ? 'w-[600px]' : 'w-[400px]'}`}
         >
           {/* Header */}
           <div className="flex items-center gap-3 p-4 border-b border-slate-200 bg-white">
@@ -810,6 +921,17 @@ export default function WorkflowDetailModal({
                         </Markdown>
                       </div>
                     </div>
+                  ) : isSpreadsheetFileType(workflow.file_type) &&
+                    analysisPopup.title.includes('Parser') ? (
+                    <div className="flex-1 overflow-auto">
+                      <div className="overflow-x-auto">
+                        <div className="prose prose-slate prose-sm max-w-none prose-table:border-collapse prose-table:w-max prose-th:border prose-th:border-slate-300 prose-th:bg-slate-100 prose-th:p-2 prose-th:whitespace-nowrap prose-td:border prose-td:border-slate-300 prose-td:p-2 prose-td:whitespace-nowrap">
+                          <Markdown remarkPlugins={[remarkGfm]}>
+                            {sanitizeMarkdownTable(analysisPopup.content)}
+                          </Markdown>
+                        </div>
+                      </div>
+                    </div>
                   ) : !analysisPopup.content ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
                       <svg
@@ -888,8 +1010,8 @@ export default function WorkflowDetailModal({
                       <p className="text-xs text-slate-500 mb-1">
                         {t('workflow.fileType')}
                       </p>
-                      <span className="inline-block px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded">
-                        {workflow.file_type || 'PDF'}
+                      <span className="inline-block px-2 py-1 bg-slate-200 text-slate-700 text-xs font-medium rounded">
+                        {getFileTypeLabel(workflow.file_type)}
                       </span>
                     </div>
                     <div>
@@ -1120,7 +1242,7 @@ export default function WorkflowDetailModal({
         </div>
 
         {/* Right Panel - Image Viewer */}
-        <div className="flex-1 flex flex-col bg-slate-100">
+        <div className="flex-1 flex flex-col bg-slate-100 min-w-0">
           {/* Segment Navigation */}
           <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-white">
             <div className="flex items-center gap-2">
@@ -1198,7 +1320,7 @@ export default function WorkflowDetailModal({
           </div>
 
           {/* Media Display */}
-          <div className="flex-1 flex items-center justify-center p-6 overflow-auto relative">
+          <div className="flex-1 flex items-center justify-center p-6 overflow-auto relative min-w-0">
             {workflow.total_segments === 0 ? (
               <div className="text-slate-500">{t('workflow.noSegments')}</div>
             ) : segmentLoading && !currentSegment ? (
@@ -1235,6 +1357,7 @@ export default function WorkflowDetailModal({
                 const isWebSegment = currentSegment?.segment_type === 'WEB';
                 const isTextFile = isTextFileType(workflow.file_type);
                 const isMarkdownFile = isMarkdownFileType(workflow.file_type);
+                const isSpreadsheet = isSpreadsheetFileType(workflow.file_type);
 
                 if (isVideoSegment && currentSegment?.video_url) {
                   return (
@@ -1249,6 +1372,26 @@ export default function WorkflowDetailModal({
                       >
                         Your browser does not support video playback.
                       </video>
+                    </div>
+                  );
+                }
+
+                // Excel document preview
+                if (isExcel && excelUrl) {
+                  return (
+                    <ExcelViewer
+                      url={excelUrl}
+                      sheetIndex={currentSegmentIndex}
+                      className="w-full h-full bg-white rounded-lg shadow-lg p-4"
+                    />
+                  );
+                }
+
+                if (isExcel && excelUrlLoading) {
+                  return (
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="h-8 w-8 text-slate-400 animate-spin" />
+                      <p className="text-sm text-slate-500">Loading Excel...</p>
                     </div>
                   );
                 }
@@ -1273,11 +1416,15 @@ export default function WorkflowDetailModal({
                         </span>
                       </div>
                       {textContent ? (
-                        isMarkdownFile ? (
-                          <div className="prose prose-slate prose-sm max-w-none">
-                            <Markdown remarkPlugins={[remarkGfm]}>
-                              {textContent}
-                            </Markdown>
+                        isMarkdownFile || isSpreadsheet ? (
+                          <div className="overflow-x-auto">
+                            <div className="prose prose-slate prose-sm max-w-none prose-table:border-collapse prose-table:w-max prose-th:border prose-th:border-slate-300 prose-th:bg-slate-100 prose-th:p-2 prose-th:whitespace-nowrap prose-td:border prose-td:border-slate-300 prose-td:p-2 prose-td:whitespace-nowrap">
+                              <Markdown remarkPlugins={[remarkGfm]}>
+                                {isSpreadsheet
+                                  ? sanitizeMarkdownTable(textContent)
+                                  : textContent}
+                              </Markdown>
+                            </div>
                           </div>
                         ) : (
                           <pre className="whitespace-pre-wrap text-sm text-slate-700 font-mono leading-relaxed">

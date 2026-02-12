@@ -36,6 +36,9 @@ MIME_TYPE_MAP = {
     'txt': 'text/plain',
     'md': 'text/markdown',
     'csv': 'text/csv',
+    # Spreadsheets
+    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'xls': 'application/vnd.ms-excel',
     # Images
     'png': 'image/png',
     'jpg': 'image/jpeg',
@@ -44,6 +47,9 @@ MIME_TYPE_MAP = {
     'tiff': 'image/tiff',
     'tif': 'image/tiff',
     'webp': 'image/webp',
+    # Presentations
+    'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'ppt': 'application/vnd.ms-powerpoint',
     # Videos
     'mp4': 'video/mp4',
     'mov': 'video/quicktime',
@@ -206,7 +212,15 @@ def distribute_to_queues(
     is_text = file_type in (
         'text/plain',
         'text/markdown',
+    )
+    is_spreadsheet = file_type in (
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
         'text/csv',
+    )
+    is_office_document = file_type in (
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'application/vnd.ms-powerpoint',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'application/msword',
     )
@@ -246,8 +260,8 @@ def distribute_to_queues(
         # Trigger immediate SageMaker scale-out (bypass CloudWatch metric delay)
         trigger_sagemaker_scale_out()
 
-    # BDA Queue (if use_bda is enabled, but not .webreq)
-    if use_bda and not is_webreq:
+    # BDA Queue (if use_bda is enabled, but not .webreq, office documents, or spreadsheets)
+    if use_bda and not is_webreq and not is_office_document and not is_spreadsheet:
         send_to_queue(BDA_QUEUE_URL, {
             **base_message,
             'processor': PreprocessType.BDA,
@@ -265,7 +279,7 @@ def distribute_to_queues(
         print(f'Sent to Transcribe queue: {workflow_id}')
 
     # Always send to Workflow Queue (Step Functions will poll for completion)
-    processing_type = 'web' if is_webreq else ('text' if is_text else get_processing_type(file_type))
+    processing_type = 'web' if is_webreq else ('text' if (is_text or is_spreadsheet) else get_processing_type(file_type))
     send_to_queue(WORKFLOW_QUEUE_URL, {
         **base_message,
         'processing_type': processing_type,

@@ -92,13 +92,23 @@ const getFileIcon = (fileType: string) => {
   if (fileType.includes('webreq')) {
     return <Globe className="h-5 w-5 text-cyan-400" />;
   }
+  if (
+    fileType.includes('presentationml') ||
+    fileType.includes('ms-powerpoint')
+  ) {
+    return <Presentation className="h-5 w-5 text-orange-400" />;
+  }
+  if (
+    fileType.includes('spreadsheetml') ||
+    fileType.includes('ms-excel') ||
+    fileType === 'text/csv'
+  ) {
+    return <FileSpreadsheet className="h-5 w-5 text-green-400" />;
+  }
   if (fileType === 'text/markdown') {
     return <FileCode className="h-5 w-5 text-indigo-400" />;
   }
-  if (fileType === 'text/csv') {
-    return <FileSpreadsheet className="h-5 w-5 text-green-400" />;
-  }
-  if (fileType.includes('wordprocessing')) {
+  if (fileType.includes('wordprocessing') || fileType.includes('msword')) {
     return <FileText className="h-5 w-5 text-blue-500" />;
   }
   if (fileType === 'text/plain') {
@@ -457,6 +467,19 @@ export default function SidePanel({
     if (fileType.startsWith('video/') || fileType.startsWith('audio/'))
       return 'media';
     if (fileType.includes('webreq')) return 'web';
+    if (
+      fileType.includes('spreadsheetml') ||
+      fileType.includes('ms-excel') ||
+      fileType === 'text/csv'
+    )
+      return 'spreadsheet';
+    if (
+      fileType.includes('presentationml') ||
+      fileType.includes('ms-powerpoint')
+    )
+      return 'presentation';
+    if (fileType.includes('wordprocessing') || fileType.includes('msword'))
+      return 'document';
     return 'text';
   }, []);
 
@@ -693,6 +716,9 @@ export default function SidePanel({
                   [
                     { key: 'all', label: 'All' },
                     { key: 'pdf', label: 'PDF' },
+                    { key: 'document', label: 'Doc' },
+                    { key: 'spreadsheet', label: 'Sheet' },
+                    { key: 'presentation', label: 'Slide' },
                     { key: 'image', label: 'Image' },
                     { key: 'media', label: 'Media' },
                     { key: 'web', label: 'Web' },

@@ -1,4 +1,4 @@
-import { Duration, Stack, StackProps } from 'aws-cdk-lib';
+import { Duration, Size, Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
@@ -242,17 +242,22 @@ export class WorkflowStack extends Stack {
       layers: [coreLayer, sharedLayer],
     });
 
-    // Format Parser (extracts text from PDF, runs before waiting for async preprocessing)
-    const formatParser = new lambda.Function(this, 'FormatParser', {
-      ...commonLambdaProps,
+    // Format Parser (extracts text from PDF/PPTX, runs before waiting for async preprocessing)
+    // Docker Lambda for LibreOffice (PPT to PDF conversion)
+    const formatParser = new lambda.DockerImageFunction(this, 'FormatParser', {
       functionName: 'idp-v2-format-parser',
-      handler: 'index.handler',
-      timeout: Duration.minutes(10),
-      memorySize: 1024,
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, '../functions/step-functions/format-parser'),
+      code: lambda.DockerImageCode.fromImageAsset(
+        path.join(__dirname, '../functions'),
+        {
+          file: 'step-functions/format-parser/Dockerfile',
+          platform: Platform.LINUX_AMD64,
+        },
       ),
-      layers: [coreLayer, sharedLayer],
+      architecture: lambda.Architecture.X86_64,
+      timeout: Duration.minutes(15),
+      memorySize: 2048,
+      ephemeralStorageSize: Size.gibibytes(2),
+      environment: { ...commonLambdaProps.environment },
     });
 
     // Check preprocess status (called in polling loop)

@@ -248,14 +248,18 @@ def parse_format_parser_result(file_uri: str, is_text: bool = False) -> dict:
             }
         return parser_results
 
-    # Handle PDF (pages)
+    # Handle PDF/PPTX (pages)
     pages = result.get('pages', [])
     for page in pages:
         page_index = page.get('page_index', 0)
         text = page.get('text', '')
-        parser_results[page_index] = {
-            'format_parser': text
+        page_result = {
+            'format_parser': text,
         }
+        # Include image_uri if present (PPTX slides)
+        if page.get('image_uri'):
+            page_result['image_uri'] = page['image_uri']
+        parser_results[page_index] = page_result
 
     return parser_results
 
@@ -483,17 +487,59 @@ def is_media_file(file_type: str) -> bool:
 
 
 def is_text_file(file_type: str) -> bool:
-    """Check if file type is a text-based document (DOCX, Markdown, TXT, CSV)."""
+    """Check if file type is a text-based document (Markdown, TXT)."""
     if not file_type:
         return False
     text_types = (
         'text/plain',
         'text/markdown',
+    )
+    return file_type in text_types
+
+
+def is_spreadsheet_file(file_type: str) -> bool:
+    """Check if file type is a spreadsheet (xlsx, xls, csv)."""
+    if not file_type:
+        return False
+    return file_type in (
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
         'text/csv',
+    )
+
+
+def is_office_document(file_type: str) -> bool:
+    """Check if file type is an office document (PPTX, PPT, DOCX, DOC)."""
+    if not file_type:
+        return False
+    return file_type in (
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'application/vnd.ms-powerpoint',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'application/msword',
     )
-    return file_type in text_types
+
+
+def copy_office_document_images(file_uri: str, parser_results: dict) -> None:
+    """Copy format-parser page/slide images to preprocessed/ folder."""
+    client = get_s3_client()
+    bucket, base_path = get_document_base_path(file_uri)
+
+    for page_idx, page_data in parser_results.items():
+        src_image_uri = page_data.get('image_uri', '')
+        if not src_image_uri:
+            continue
+
+        src_bucket, src_key = parse_s3_uri(src_image_uri)
+        dst_key = f'{base_path}/preprocessed/page_{page_idx:04d}.png'
+
+        client.copy_object(
+            Bucket=bucket,
+            CopySource={'Bucket': src_bucket, 'Key': src_key},
+            Key=dst_key,
+            ContentType='image/png',
+        )
+        print(f'Copied page image {page_idx} to preprocessed/')
 
 
 def handler(event, _context):
@@ -513,6 +559,8 @@ def handler(event, _context):
     is_media = is_media_file(file_type)  # video or audio
     is_webreq = is_webreq_file(file_type)
     is_text = is_text_file(file_type)
+    is_spread = is_spreadsheet_file(file_type)
+    is_office_doc = is_office_document(file_type)
 
     try:
         # 1. Read preprocessor metadata (always required)
@@ -540,20 +588,20 @@ def handler(event, _context):
             else:
                 print('BDA output not found in S3')
 
-        # 3. Read OCR results (skip for video and text files)
+        # 3. Read OCR results (skip for video, text, spreadsheet, and office document files)
         ocr_results = {}
-        if not is_video and not is_text:
+        if not is_video and not is_text and not is_spread and not is_office_doc:
             print('Reading OCR results...')
             ocr_results = parse_ocr_result(file_uri)
             print(f'OCR: {len(ocr_results)} pages')
 
         # 4. Read format parser results (skip for video)
-        # Text files also use format-parser for text extraction
+        # Text files and spreadsheets also use format-parser for text extraction
         parser_results = {}
         if not is_video:
             print('Reading format parser results...')
-            parser_results = parse_format_parser_result(file_uri, is_text=is_text)
-            if is_text:
+            parser_results = parse_format_parser_result(file_uri, is_text=is_text or is_spread)
+            if is_text or is_spread:
                 print(f'Parser: {len(parser_results)} chunks')
             else:
                 print(f'Parser: {len(parser_results)} pages')
@@ -579,9 +627,20 @@ def handler(event, _context):
                 print('WebCrawler: no result found')
 
         # 7. Merge preprocessing results into existing segment files
-        # For text files, use actual chunk count from format-parser (may differ from estimated)
+        # For text/spreadsheet files, use actual chunk count from format-parser (may differ from estimated)
+        # For office documents, use actual page/slide count from format-parser
         # For webreq files, use actual page count from webcrawler (may differ from placeholder)
-        if is_text and parser_results:
+        if is_office_doc and parser_results:
+            segment_count = len(parser_results)
+            segment_indices = list(range(segment_count))
+            print(f'Office document: using {segment_count} pages from format-parser')
+            # Copy page/slide images to preprocessed/ folder
+            copy_office_document_images(file_uri, parser_results)
+        elif is_spread and parser_results:
+            segment_count = len(parser_results)
+            segment_indices = list(range(segment_count))
+            print(f'Spreadsheet: using {segment_count} sheets from format-parser')
+        elif is_text and parser_results:
             segment_count = len(parser_results)
             segment_indices = list(range(segment_count))
             print(f'Text file: using {segment_count} chunks from format-parser')
@@ -603,7 +662,7 @@ def handler(event, _context):
                 # Fallback: create new if not exists
                 segment_data = {
                     'segment_index': i,
-                    'segment_type': seg.get('segment_type', 'TEXT' if is_text else 'PAGE') if seg else ('TEXT' if is_text else 'PAGE'),
+                    'segment_type': seg.get('segment_type', 'TEXT' if (is_text or is_spread) else 'PAGE') if seg else ('TEXT' if (is_text or is_spread) else 'PAGE'),
                     'image_uri': seg.get('image_uri', '') if seg else '',
                     'ai_analysis': [],
                 }
@@ -641,9 +700,13 @@ def handler(event, _context):
             if i in parser_results:
                 parser_data = parser_results[i]
                 segment_data['format_parser'] = parser_data.get('format_parser', '')
-                # For text files, also merge text_content
-                if is_text and 'text_content' in parser_data:
+                # For text/spreadsheet files, also merge text_content
+                if (is_text or is_spread) and 'text_content' in parser_data:
                     segment_data['text_content'] = parser_data['text_content']
+                # For office documents, set image_uri from preprocessed path
+                if is_office_doc and parser_data.get('image_uri'):
+                    doc_bucket, doc_base = get_document_base_path(file_uri)
+                    segment_data['image_uri'] = f's3://{doc_bucket}/{doc_base}/preprocessed/page_{i:04d}.png'
             elif 'format_parser' not in segment_data:
                 segment_data['format_parser'] = ''
 
@@ -681,8 +744,8 @@ def handler(event, _context):
             print(f'Merged segment {i}')
 
         # Update workflow total_segments when segment count was overridden
-        # (text files from format-parser chunks, webreq from webcrawler pages)
-        if (is_text and parser_results) or (is_webreq and webcrawler_pages):
+        # (office docs from format-parser pages/slides, text/spreadsheet files from format-parser chunks, webreq from webcrawler pages)
+        if (is_office_doc and parser_results) or (is_spread and parser_results) or (is_text and parser_results) or (is_webreq and webcrawler_pages):
             entity_type = get_entity_prefix(file_type)
             update_workflow_total_segments(document_id, workflow_id, segment_count, entity_type)
             print(f'Updated workflow total_segments to {segment_count}')

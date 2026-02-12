@@ -99,14 +99,17 @@ from strands.types.session import SessionMessage
 from strands.types._events import ToolResultEvent
 
 from config import get_config, create_bidi_model
-from agents import get_mcp_client, get_tools
+from agents import get_mcp_client, get_duckduckgo_mcp_client, get_tools
 from agents.bidi_agent import execute_builtin_tool
 
 logger = logging.getLogger(__name__)
 
 # Global MCP client and tools (initialized at startup)
 mcp_client = None
+duckduckgo_client = None
 mcp_tools = []
+duckduckgo_tools = []
+duckduckgo_tool_names = set()
 
 
 def convert_mcp_tool_to_bidi_format(tool) -> dict:
@@ -148,9 +151,27 @@ def convert_mcp_tool_to_bidi_format(tool) -> dict:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load MCP tools at startup."""
-    global mcp_client, mcp_tools
+    """Load MCP tools and DuckDuckGo tools at startup."""
+    global mcp_client, duckduckgo_client, mcp_tools, duckduckgo_tools, duckduckgo_tool_names
 
+    # Initialize DuckDuckGo MCP client
+    try:
+        duckduckgo_client = get_duckduckgo_mcp_client()
+        duckduckgo_client.__enter__()
+        raw_ddg_tools = duckduckgo_client.list_tools_sync()
+        for t in raw_ddg_tools:
+            try:
+                converted = convert_mcp_tool_to_bidi_format(t)
+                duckduckgo_tools.append(converted)
+                duckduckgo_tool_names.add(converted["name"])
+            except Exception as e:
+                logger.error(f"Failed to convert DuckDuckGo tool: {e}")
+        logger.info(f"Loaded {len(duckduckgo_tools)} DuckDuckGo tools: {[t['name'] for t in duckduckgo_tools]}")
+    except Exception as e:
+        logger.error(f"Failed to load DuckDuckGo tools: {e}")
+        duckduckgo_client = None
+
+    # Initialize AgentCore MCP client
     config = get_config()
     if config.mcp_gateway_url:
         logger.info(f"Connecting to MCP Gateway: {config.mcp_gateway_url}")
@@ -174,6 +195,13 @@ async def lifespan(app: FastAPI):
         logger.warning("MCP_GATEWAY_URL not set, running without MCP tools")
 
     yield
+
+    if duckduckgo_client:
+        try:
+            duckduckgo_client.__exit__(None, None, None)
+            logger.info("DuckDuckGo client closed")
+        except Exception as e:
+            logger.error(f"Error closing DuckDuckGo client: {e}")
 
     if mcp_client:
         try:
@@ -283,6 +311,16 @@ MCP_TOOL_PROMPT = """
 When using MCP tools, `user_id` and `project_id` parameters are automatically injected by the system.
 You MUST NOT specify these parameters in tool calls - they will be overwritten by the system for security."""
 
+WEB_SEARCH_PROMPT = """
+## Web Search Guidelines (MANDATORY)
+When performing web searches, you MUST follow these rules strictly:
+1. Search with max_results of 10 to get diverse sources
+2. You MUST call fetch_content on AT LEAST 3 different URLs - this is a hard requirement, not optional
+3. If a website returns an error (403, timeout, etc.), try another URL until you have successfully fetched 3+ pages
+4. Do NOT stop after fetching only 1-2 websites - always continue until you have 3+ successful fetches
+5. Synthesize information from all fetched sources before responding
+6. Always cite the sources you used with their URLs"""
+
 
 def fetch_voice_system_prompt() -> str | None:
     """Fetch voice system prompt from S3."""
@@ -304,7 +342,7 @@ def fetch_voice_system_prompt() -> str | None:
         return None
 
 
-def build_system_prompt(timezone: str, has_mcp_tools: bool = False) -> str:
+def build_system_prompt(timezone: str, has_mcp_tools: bool = False, has_web_search: bool = False) -> str:
     base_prompt = fetch_voice_system_prompt() or BASE_SYSTEM_PROMPT
 
     language = TIMEZONE_TO_LANGUAGE.get(timezone)
@@ -320,6 +358,9 @@ def build_system_prompt(timezone: str, has_mcp_tools: bool = False) -> str:
 
     if has_mcp_tools:
         prompt += f"\n{MCP_TOOL_PROMPT}"
+
+    if has_web_search:
+        prompt += f"\n{WEB_SEARCH_PROMPT}"
 
     return prompt
 
@@ -340,6 +381,35 @@ async def execute_tool(tool_use: dict, context: dict) -> dict:
             "status": "success",
             "content": [{"text": json.dumps(builtin_result)}],
         }
+
+    # Try DuckDuckGo tool
+    if duckduckgo_client and tool_name in duckduckgo_tool_names:
+        try:
+            result = duckduckgo_client.call_tool_sync(name=tool_name, arguments=tool_input, tool_use_id=tool_use_id)
+            logger.info(f"DuckDuckGo result type: {type(result)}")
+
+            content = []
+            if hasattr(result, "content"):
+                for block in result.content:
+                    if hasattr(block, "text"):
+                        content.append({"text": block.text})
+                    else:
+                        content.append({"text": str(block)})
+            else:
+                content.append({"text": str(result)})
+
+            return {
+                "toolUseId": tool_use_id,
+                "status": "success",
+                "content": content,
+            }
+        except Exception as e:
+            logger.exception(f"DuckDuckGo tool execution failed: {tool_name}")
+            return {
+                "toolUseId": tool_use_id,
+                "status": "error",
+                "content": [{"text": f"Tool execution failed: {str(e)}"}],
+            }
 
     # Try MCP tool
     if mcp_client:
@@ -448,13 +518,14 @@ async def ws_endpoint(websocket: WebSocket):
 
     user_timezone = config_msg.get("browser_time_zone", "UTC")
 
-    # Combine builtin tools with MCP tools
-    all_tools = get_tools() + mcp_tools
+    # Combine builtin tools with DuckDuckGo and MCP tools
+    all_tools = get_tools() + duckduckgo_tools + mcp_tools
     has_mcp = len(mcp_tools) > 0
 
     try:
         custom_prompt = config_msg.get("system_prompt")
-        system_prompt = custom_prompt or build_system_prompt(user_timezone, has_mcp_tools=has_mcp)
+        has_ddg = len(duckduckgo_tools) > 0
+        system_prompt = custom_prompt or build_system_prompt(user_timezone, has_mcp_tools=has_mcp, has_web_search=has_ddg)
         logger.info(f"Starting model with {len(all_tools)} tools: {[t['name'] for t in all_tools]}")
         await model.start(system_prompt=system_prompt, tools=all_tools)
         logger.info("voice model started successfully")
@@ -686,15 +757,23 @@ async def ws_endpoint(websocket: WebSocket):
                 })
             except Exception:
                 pass
-        except RuntimeError as e:
+        except Exception as e:
+            error_str = str(e)
+            # Nova Sonic input timeout (user silent too long)
+            if "Timed out waiting for input events" in error_str:
+                logger.info(f"Model input timeout after {event_count} events: {e}")
+                try:
+                    await websocket.send_json({
+                        "type": "timeout",
+                        "reason": "Session timed out due to inactivity",
+                    })
+                except Exception:
+                    pass
             # Handle "websocket.send after close" errors gracefully
-            error_str = str(e).lower()
-            if "websocket" in error_str or "closed" in error_str:
+            elif isinstance(e, RuntimeError) and ("websocket" in error_str.lower() or "closed" in error_str.lower()):
                 logger.info(f"WebSocket closed while sending (after {event_count} events): {e}")
             else:
-                logger.exception(f"Runtime error in bedrock_to_browser after {event_count} events")
-        except Exception:
-            logger.exception(f"Error in bedrock_to_browser after {event_count} events")
+                logger.exception(f"Error in bedrock_to_browser after {event_count} events")
 
     try:
         async with asyncio.TaskGroup() as tg:
