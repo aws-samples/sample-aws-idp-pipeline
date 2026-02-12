@@ -318,12 +318,13 @@ def handler(event, context):
 
             workflow_id = generate_workflow_id()
 
-            # Get project language setting
-            language = get_project_language(project_id)
-            print(f'Project {project_id} language: {language}')
-
             # Get document settings
             document = get_document(project_id, document_id)
+
+            # Resolve language: document override > project default
+            language = (document.get('language') if document else None) or get_project_language(project_id)
+            print(f'Project {project_id} language: {language}')
+
             use_bda = document.get('use_bda', False) if document else False
             use_ocr = document.get('use_ocr', True) if document else True
 

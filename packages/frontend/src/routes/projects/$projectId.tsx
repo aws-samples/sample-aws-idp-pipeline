@@ -1206,8 +1206,28 @@ function ProjectDetailPage() {
                 (item) => item.type === 'tool_result',
               );
 
+              // Voice chat tool_result: single short text = tool name
+              if (
+                toolResultItem?.content?.length === 1 &&
+                toolResultItem.content[0].type === 'text' &&
+                toolResultItem.content[0].text &&
+                !toolResultItem.content[0].text.includes('\n') &&
+                toolResultItem.content[0].text.length < 100
+              ) {
+                const voiceToolName = toolResultItem.content[0].text!;
+                return {
+                  id: `history-${idx}`,
+                  role: 'assistant' as const,
+                  content: voiceToolName,
+                  timestamp: new Date(),
+                  isToolUse: true,
+                  toolUseName: voiceToolName,
+                  toolUseStatus: 'success',
+                };
+              }
+
               if (toolResultItem && toolResultItem.content) {
-                // Handle tool_result - show as assistant message
+                // Handle chat agent tool_result - show as assistant message
                 const nestedContent = toolResultItem.content;
 
                 // Extract text from nested content
@@ -1394,7 +1414,29 @@ function ProjectDetailPage() {
               };
             },
           );
-          setMessages(loadedMessages);
+          // Merge consecutive same-role plain text messages
+          // (Gemini saves streaming chunks as separate messages)
+          const merged: ChatMessage[] = [];
+          for (const msg of loadedMessages) {
+            const prev = merged[merged.length - 1];
+            if (
+              prev &&
+              prev.role === msg.role &&
+              !prev.isToolUse &&
+              !prev.isToolResult &&
+              !prev.isStageResult &&
+              !msg.isToolUse &&
+              !msg.isToolResult &&
+              !msg.isStageResult &&
+              !prev.attachments &&
+              !msg.attachments
+            ) {
+              prev.content += msg.content;
+            } else {
+              merged.push({ ...msg });
+            }
+          }
+          setMessages(merged);
         }
       } catch (error) {
         console.error('Failed to load chat history:', error);
@@ -1796,6 +1838,7 @@ function ProjectDetailPage() {
               ocr_model: options.ocr_model,
               ocr_options: options.ocr_options,
               document_prompt: options.document_prompt,
+              language: options.language,
             }),
           },
         );
@@ -2715,6 +2758,7 @@ function ProjectDetailPage() {
       <DocumentUploadModal
         isOpen={showUploadModal}
         uploading={uploading}
+        projectLanguage={project?.language || undefined}
         projectOcrModel={project?.ocr_model || undefined}
         projectOcrOptions={project?.ocr_options || undefined}
         projectDocumentPrompt={project?.document_prompt || undefined}

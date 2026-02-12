@@ -759,7 +759,8 @@ def handler(event, _context):
         print(f'Built {segment_count} segments')
 
         project_id = event.get('project_id', 'default')
-        language = get_project_language(project_id)
+        language = event.get('language') or get_project_language(project_id)
+        document_prompt = event.get('document_prompt', '')
 
         return {
             'workflow_id': workflow_id,
@@ -770,6 +771,7 @@ def handler(event, _context):
             'segment_count': segment_count,
             'segment_ids': list(range(segment_count)),
             'language': language,
+            'document_prompt': document_prompt,
             'is_reanalysis': event.get('is_reanalysis', False)
         }
 

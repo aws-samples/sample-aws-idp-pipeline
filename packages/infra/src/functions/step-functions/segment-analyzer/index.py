@@ -33,8 +33,8 @@ def handler(event, _context):
     if isinstance(segment_index, dict):
         segment_index = segment_index.get('segment_index', 0)
 
-    # Get project settings
-    language = get_project_language(project_id)
+    # Get language: event (per-document override) > project default
+    language = event.get('language') or get_project_language(project_id)
 
     # Document prompt: event (resolved at upload) > project default
     document_prompt = event.get('document_prompt', '')
