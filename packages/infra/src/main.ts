@@ -65,6 +65,8 @@ const agentStack = new AgentStack(app, 'IDP-V2-Agent', {
 agentStack.addDependency(storageStack);
 agentStack.addDependency(mcpStack);
 
+eventStack.addDependency(agentStack);
+
 const applicationStack = new ApplicationStack(app, 'IDP-V2-Application', {
   env,
   crossRegionReferences: true,
