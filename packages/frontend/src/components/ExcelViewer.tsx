@@ -77,7 +77,9 @@ function buildMergeMap(merges: string[]): Map<string, MergeInfo> {
 }
 
 async function parseWorkbook(data: ArrayBuffer): Promise<ParsedSheet[]> {
-  const wb = await new Workbook().xlsx.load(data as unknown as Buffer);
+  // exceljs accepts ArrayBuffer at runtime despite Buffer type signature
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wb = await new Workbook().xlsx.load(data as any);
   return wb.worksheets.map((ws) => {
     const rowCount = ws.rowCount;
     const colCount = ws.columnCount;
