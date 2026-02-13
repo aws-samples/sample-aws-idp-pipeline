@@ -6,6 +6,25 @@ import { useModal } from '../hooks/useModal';
 
 const VOICE_MODEL_STORAGE_KEY = 'voice_model_config';
 
+function obfuscate(value: string): string {
+  return btoa(
+    Array.from(new TextEncoder().encode(value), (b) =>
+      String.fromCharCode(b),
+    ).join(''),
+  );
+}
+
+function deobfuscate(encoded: string): string {
+  try {
+    const binary = atob(encoded);
+    return new TextDecoder().decode(
+      Uint8Array.from(binary, (c) => c.charCodeAt(0)),
+    );
+  } catch {
+    return encoded;
+  }
+}
+
 export interface VoiceModelSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -53,10 +72,16 @@ export function getStoredVoiceModelConfig(): VoiceModelConfig {
     const stored = localStorage.getItem(VOICE_MODEL_STORAGE_KEY);
     if (stored) {
       const config = JSON.parse(stored) as VoiceModelConfig;
-      // Set apiKey from the stored apiKeys for the current model
+      // Decode obfuscated API keys
+      const decoded: Record<string, string> = {};
       if (config.apiKeys) {
-        config.apiKey = config.apiKeys[config.modelType as 'gemini' | 'openai'];
+        for (const [k, v] of Object.entries(config.apiKeys)) {
+          decoded[k] = v ? deobfuscate(v) : '';
+        }
       }
+      config.apiKeys = decoded as VoiceModelConfig['apiKeys'];
+      config.apiKey =
+        decoded[config.modelType as 'gemini' | 'openai'] || undefined;
       return config;
     }
   } catch {
@@ -66,7 +91,19 @@ export function getStoredVoiceModelConfig(): VoiceModelConfig {
 }
 
 export function saveVoiceModelConfig(config: VoiceModelConfig): void {
-  localStorage.setItem(VOICE_MODEL_STORAGE_KEY, JSON.stringify(config));
+  // Obfuscate API keys before persisting
+  const encoded: Record<string, string> = {};
+  if (config.apiKeys) {
+    for (const [k, v] of Object.entries(config.apiKeys)) {
+      encoded[k] = v ? obfuscate(v) : '';
+    }
+  }
+  const toStore = {
+    ...config,
+    apiKey: undefined,
+    apiKeys: encoded,
+  };
+  localStorage.setItem(VOICE_MODEL_STORAGE_KEY, JSON.stringify(toStore));
 }
 
 function getApiKeyForModel(

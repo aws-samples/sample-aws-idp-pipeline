@@ -66,8 +66,12 @@ export const prepareMarkdown = (content: string): string => {
 
   result = result
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>\s*<p>/gi, '\n\n')
-    .replace(/<(?!\/?(?:strong|em))[^>]*>/g, '');
+    .replace(/<\/p>\s*<p>/gi, '\n\n');
+  let prev = '';
+  while (prev !== result) {
+    prev = result;
+    result = result.replace(/<(?!\/?(?:strong|em))[^>]*>/g, '');
+  }
 
   result = result.replace(/^[ \t]*[•●◦‣⁃]/gm, '-');
 
