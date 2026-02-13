@@ -212,9 +212,9 @@ export default function ArtifactViewer({
   }, [onClose]);
 
   return (
-    <div className="absolute inset-0 z-10 flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden animate-fade-in">
+    <div className="glass-panel absolute inset-0 z-10 flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden animate-fade-in">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-white/[0.03]">
         <div
           className={`flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br ${isPptx ? 'from-orange-500 to-red-600' : 'from-blue-500 to-indigo-600'}`}
         >
@@ -236,14 +236,14 @@ export default function ArtifactViewer({
         </div>
         <button
           onClick={() => onDownload(artifact)}
-          className="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+          className="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
           title={t('common.download', 'Download')}
         >
           <Download className="w-5 h-5" />
         </button>
         <button
           onClick={onClose}
-          className="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+          className="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
           title={t('common.close', 'Close')}
         >
           <X className="w-5 h-5" />
@@ -282,11 +282,11 @@ export default function ArtifactViewer({
             </p>
             <div
               ref={pptxContainerRef}
-              className="flex-1 overflow-auto bg-slate-100 dark:bg-slate-800 rounded-lg p-4 [&_.pptx-wrapper]:flex [&_.pptx-wrapper]:flex-col [&_.pptx-wrapper]:items-center [&_.pptx-wrapper]:gap-6 [&_.pptx-slide]:shadow-xl [&_.pptx-slide]:rounded-lg [&_.pptx-slide]:overflow-hidden"
+              className="flex-1 overflow-auto bg-slate-100 dark:bg-white/[0.04] rounded-lg p-4 [&_.pptx-wrapper]:flex [&_.pptx-wrapper]:flex-col [&_.pptx-wrapper]:items-center [&_.pptx-wrapper]:gap-6 [&_.pptx-slide]:shadow-xl [&_.pptx-slide]:rounded-lg [&_.pptx-slide]:overflow-hidden"
             />
           </div>
         ) : isImage && imageUrl ? (
-          <div className="flex items-center justify-center h-full bg-slate-100 dark:bg-slate-800 rounded-lg">
+          <div className="flex items-center justify-center h-full bg-slate-100 dark:bg-white/[0.04] rounded-lg">
             <img
               src={imageUrl}
               alt={artifact.filename}

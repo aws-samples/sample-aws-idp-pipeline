@@ -74,25 +74,25 @@ export default function ToolResultCard({
   const Icon = entry.icon;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-gradient-to-br dark:from-violet-600/30 dark:via-purple-600/25 dark:to-fuchsia-600/20 border border-slate-200 dark:border-violet-400 shadow-sm dark:shadow-lg dark:shadow-violet-500/20">
+    <div className="glass-panel relative overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-sm">
       {/* Decorative background elements - dark mode only */}
-      <div className="hidden dark:block absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-violet-300/20 to-transparent rounded-full -translate-y-1/2 translate-x-1/2" />
-      <div className="hidden dark:block absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-fuchsia-300/20 to-transparent rounded-full translate-y-1/2 -translate-x-1/2" />
+      <div className="hidden dark:block absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-violet-400/10 to-transparent rounded-full -translate-y-1/2 translate-x-1/2" />
+      <div className="hidden dark:block absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-fuchsia-400/10 to-transparent rounded-full translate-y-1/2 -translate-x-1/2" />
 
       {/* Header */}
-      <div className="tool-result-header relative flex items-center gap-2 px-4 py-2.5 border-b border-slate-200 dark:border-violet-400/50">
+      <div className="tool-result-header relative flex items-center gap-2 px-4 py-2.5 border-b border-slate-200 dark:border-white/[0.06]">
         <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm">
           <Icon className="w-3.5 h-3.5 text-white" />
         </div>
-        <span className="text-xs font-semibold text-slate-600 dark:text-fuchsia-300">
+        <span className="text-xs font-semibold text-slate-600 dark:text-violet-300">
           {t(entry.resultLabel, entry.resultLabel)}
         </span>
         <div className="flex-1" />
-        <Sparkles className="w-4 h-4 text-slate-300 dark:text-violet-400/80" />
+        <Sparkles className="w-4 h-4 text-slate-300 dark:text-violet-400/50" />
       </div>
 
       {/* Content */}
-      <div className="relative p-4 space-y-3 dark:bg-violet-500/10">
+      <div className="relative p-4 space-y-3">
         {/* Artifact card */}
         {resultType === 'artifact' && artifact && (
           <div className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/30 dark:to-teal-900/30 border border-emerald-200 dark:border-emerald-500/40">
@@ -272,7 +272,6 @@ export default function ToolResultCard({
 
 function CollapsibleSources({
   sources,
-  expandKey,
   isExpanded,
   onToggle,
   onSourceClick,
@@ -371,7 +370,6 @@ function CollapsibleSources({
 
 function WebSearchSection({
   content,
-  expandKey,
   isExpanded,
   onToggle,
 }: {
@@ -455,7 +453,6 @@ function WebSearchSection({
 
 function FetchPreviewSection({
   content,
-  expandKey,
   isExpanded,
   onToggle,
   onViewDetails,

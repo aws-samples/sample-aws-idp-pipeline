@@ -155,6 +155,21 @@ function AgentBadge({ agentId }: { agentId?: string | null }) {
   return null;
 }
 
+const PlusIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className || 'w-3.5 h-3.5'}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
 const ChevronDownIcon = () => (
   <svg
     className="w-4 h-4"
@@ -229,6 +244,7 @@ export default function SidebarSessionList({
     onSessionSelect,
     onSessionRename,
     onSessionDelete,
+    onNewSession,
     hasMoreSessions,
     loadingMoreSessions,
     onLoadMoreSessions,
@@ -269,73 +285,93 @@ export default function SidebarSessionList({
   // Collapsed sidebar: show icon + bubble popup on click
   if (sidebarCollapsed) {
     return (
-      <div className="sidebar-sessions collapsed-icon" ref={bubbleRef}>
+      <>
         <button
           type="button"
-          className="sidebar-sessions-header-icon"
-          title={t('chat.history')}
-          onClick={() => setBubbleOpen(!bubbleOpen)}
+          className="sidebar-sessions-header-icon sidebar-new-chat-icon"
+          title={t('chat.newChat')}
+          onClick={onNewSession}
         >
-          <MessageSquareIcon className="w-4 h-4" />
-          {sessions.length > 0 && (
-            <span className="sidebar-sessions-badge">{sessions.length}</span>
-          )}
+          <PlusIcon className="w-4 h-4" />
         </button>
+        <div className="sidebar-sessions collapsed-icon" ref={bubbleRef}>
+          <button
+            type="button"
+            className="sidebar-sessions-header-icon"
+            title={t('chat.history')}
+            onClick={() => setBubbleOpen(!bubbleOpen)}
+          >
+            <MessageSquareIcon className="w-4 h-4" />
+            {sessions.length > 0 && (
+              <span className="sidebar-sessions-badge">{sessions.length}</span>
+            )}
+          </button>
 
-        {bubbleOpen && (
-          <div className="sidebar-sessions-bubble">
-            <div className="sidebar-sessions-bubble-header">
-              <MessageSquareIcon />
-              <span>{t('chat.history')}</span>
-            </div>
-            <div className="sidebar-sessions-bubble-list">
-              {sessions.length === 0 ? (
-                <div className="sidebar-sessions-empty">
-                  <span>{t('chat.noHistory')}</span>
-                </div>
-              ) : (
-                sessions.map((session) => (
-                  <div
-                    key={session.session_id}
-                    className={`sidebar-session-item ${session.session_id === currentSessionId ? 'active' : ''}`}
-                    onClick={() => {
-                      onSessionSelect(session.session_id);
-                      setBubbleOpen(false);
-                    }}
-                  >
-                    <MessageSquareIcon />
-                    <span className="sidebar-session-name">
-                      {session.session_name ||
-                        `Session ${session.session_id.slice(0, 8)}`}
-                    </span>
-                    <AgentBadge agentId={session.agent_id} />
+          {bubbleOpen && (
+            <div className="sidebar-sessions-bubble">
+              <div className="sidebar-sessions-bubble-header">
+                <MessageSquareIcon />
+                <span>{t('chat.history')}</span>
+              </div>
+              <div className="sidebar-sessions-bubble-list">
+                {sessions.length === 0 ? (
+                  <div className="sidebar-sessions-empty">
+                    <span>{t('chat.noHistory')}</span>
                   </div>
-                ))
-              )}
-              {hasMoreSessions && (
-                <button
-                  type="button"
-                  className="sidebar-sessions-load-more"
-                  onClick={onLoadMoreSessions}
-                  disabled={loadingMoreSessions}
-                >
-                  {loadingMoreSessions ? <LoaderIcon /> : <ChevronDownIcon />}
-                  <span>
-                    {loadingMoreSessions
-                      ? t('common.loading')
-                      : t('chat.loadMore', 'Load more')}
-                  </span>
-                </button>
-              )}
+                ) : (
+                  sessions.map((session) => (
+                    <div
+                      key={session.session_id}
+                      className={`sidebar-session-item ${session.session_id === currentSessionId ? 'active' : ''}`}
+                      onClick={() => {
+                        onSessionSelect(session.session_id);
+                        setBubbleOpen(false);
+                      }}
+                    >
+                      <MessageSquareIcon />
+                      <span className="sidebar-session-name">
+                        {session.session_name ||
+                          `Session ${session.session_id.slice(0, 8)}`}
+                      </span>
+                      <AgentBadge agentId={session.agent_id} />
+                    </div>
+                  ))
+                )}
+                {hasMoreSessions && (
+                  <button
+                    type="button"
+                    className="sidebar-sessions-load-more"
+                    onClick={onLoadMoreSessions}
+                    disabled={loadingMoreSessions}
+                  >
+                    {loadingMoreSessions ? <LoaderIcon /> : <ChevronDownIcon />}
+                    <span>
+                      {loadingMoreSessions
+                        ? t('common.loading')
+                        : t('chat.loadMore', 'Load more')}
+                    </span>
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </>
     );
   }
 
   return (
     <>
+      {/* New Chat Button - above the history divider */}
+      <button
+        type="button"
+        className="sidebar-new-chat-btn"
+        onClick={onNewSession}
+      >
+        <PlusIcon />
+        <span>{t('chat.newChat')}</span>
+      </button>
+
       <div className="sidebar-sessions">
         {/* Header */}
         <button

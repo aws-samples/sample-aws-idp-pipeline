@@ -2,12 +2,6 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation, getI18n } from 'react-i18next';
 import {
-  FileText,
-  Image,
-  Film,
-  FileCode,
-  FileSpreadsheet,
-  File,
   Search,
   MoreVertical,
   Download,
@@ -17,7 +11,6 @@ import {
   ChevronDown,
   X,
   ExternalLink,
-  Presentation,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
@@ -28,82 +21,15 @@ import { useAwsClient } from '../hooks/useAwsClient';
 import { useToast } from '../components/Toast';
 import { Artifact, ArtifactsResponse } from '../types/project';
 import ConfirmModal from '../components/ConfirmModal';
+import {
+  getArtifactIcon,
+  getArtifactIconClass,
+  formatFileSize,
+} from '../lib/fileTypeUtils';
 
 export const Route = createFileRoute('/artifacts')({
   component: ArtifactsPage,
 });
-
-function getArtifactIcon(contentType: string) {
-  if (contentType.startsWith('image/')) return Image;
-  if (contentType.startsWith('video/')) return Film;
-  if (contentType === 'application/pdf') return FileText;
-  if (
-    contentType ===
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-    contentType === 'application/msword'
-  )
-    return FileText;
-  if (
-    contentType ===
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
-    contentType === 'application/vnd.ms-powerpoint'
-  )
-    return Presentation;
-  if (
-    contentType === 'application/vnd.ms-excel' ||
-    contentType ===
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-    contentType === 'text/csv'
-  )
-    return FileSpreadsheet;
-  if (
-    contentType.startsWith('text/') ||
-    contentType === 'application/json' ||
-    contentType === 'application/javascript'
-  )
-    return FileCode;
-  return File;
-}
-
-function getIconClass(contentType: string): string {
-  if (contentType.startsWith('image/')) return 'bg-purple-500';
-  if (contentType.startsWith('video/')) return 'bg-pink-500';
-  if (contentType === 'application/pdf') return 'bg-red-500';
-  if (
-    contentType ===
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-    contentType === 'application/msword'
-  )
-    return 'bg-indigo-500';
-  if (
-    contentType ===
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
-    contentType === 'application/vnd.ms-powerpoint'
-  )
-    return 'bg-orange-500';
-  if (
-    contentType === 'application/vnd.ms-excel' ||
-    contentType ===
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-    contentType === 'text/csv'
-  )
-    return 'bg-green-500';
-  if (
-    contentType.startsWith('text/') ||
-    contentType === 'application/json' ||
-    contentType === 'application/javascript'
-  )
-    return 'bg-blue-500';
-  return 'bg-slate-500';
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
 
 function ArtifactsPage() {
   const { t } = useTranslation();
@@ -503,12 +429,12 @@ function ArtifactsPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('artifacts.searchPlaceholder', 'Search files...')}
-            className="w-full pl-10 pr-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 transition-all"
+            className="w-full pl-10 pr-4 py-2.5 text-sm bg-white dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.12] rounded-xl outline-none focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 transition-all text-slate-700 dark:text-slate-200"
           />
         </div>
 
         {/* Count */}
-        <div className="flex items-center gap-2 px-4 py-2 text-sm text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
+        <div className="flex items-center gap-2 px-4 py-2 text-sm text-slate-500 dark:text-slate-400 bg-white dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.12] rounded-xl">
           <Layers className="w-4 h-4" />
           <span>
             {filteredArtifacts.length} {t('artifacts.items', 'files')}
@@ -536,7 +462,7 @@ function ArtifactsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {filteredArtifacts.map((artifact) => {
                 const ArtifactIcon = getArtifactIcon(artifact.content_type);
-                const iconClass = getIconClass(artifact.content_type);
+                const iconClass = getArtifactIconClass(artifact.content_type);
                 return (
                   <div
                     key={artifact.artifact_id}
@@ -583,26 +509,26 @@ function ArtifactsPage() {
                             }
                             className={`p-1.5 rounded-lg transition-all ${
                               openMenuId === artifact.artifact_id
-                                ? 'opacity-100 bg-slate-100 dark:bg-slate-700'
+                                ? 'opacity-100 bg-slate-100 dark:bg-white/10'
                                 : 'opacity-0 group-hover:opacity-100'
-                            } text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700`}
+                            } text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10`}
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
 
                           {openMenuId === artifact.artifact_id && (
-                            <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg py-1 overflow-hidden">
+                            <div className="glass-panel absolute right-0 top-full mt-1 z-50 min-w-[140px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/[0.15] rounded-xl shadow-lg py-1 overflow-hidden">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleDownload(artifact);
                                 }}
-                                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10/50"
                               >
                                 <Download className="w-4 h-4" />
                                 {t('common.download', 'Download')}
                               </button>
-                              <div className="h-px bg-slate-100 dark:bg-slate-700 my-1" />
+                              <div className="h-px bg-slate-100 dark:bg-white/[0.1] my-1" />
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -619,7 +545,7 @@ function ArtifactsPage() {
                       </div>
 
                       {/* Footer */}
-                      <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-white/[0.08]">
                         <span className="text-xs text-slate-400 dark:text-slate-500">
                           {formatDate(artifact.created_at)}
                         </span>
@@ -646,7 +572,7 @@ function ArtifactsPage() {
                 <button
                   onClick={handleLoadMore}
                   disabled={loadingMore}
-                  className="flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.12] rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 transition-colors disabled:opacity-50"
                 >
                   {loadingMore ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -685,18 +611,18 @@ function ArtifactsPage() {
           onClick={handleCloseViewer}
         >
           <div
-            className="relative w-full max-w-4xl max-h-[90vh] mx-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+            className="glass-panel relative w-full max-w-4xl max-h-[90vh] mx-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-white/[0.03]">
               {(() => {
                 const ViewerIcon = getArtifactIcon(
                   viewingArtifact.content_type,
                 );
                 return (
                   <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${getIconClass(viewingArtifact.content_type)}`}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${getArtifactIconClass(viewingArtifact.content_type)}`}
                   >
                     <ViewerIcon className="w-5 h-5 text-white" />
                   </div>
@@ -723,14 +649,14 @@ function ArtifactsPage() {
               </button>
               <button
                 onClick={() => handleDownload(viewingArtifact)}
-                className="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                className="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
                 title={t('common.download', 'Download')}
               >
                 <Download className="w-5 h-5" />
               </button>
               <button
                 onClick={handleCloseViewer}
-                className="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                className="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
                 title={t('common.close', 'Close')}
               >
                 <X className="w-5 h-5" />
@@ -776,7 +702,7 @@ function ArtifactsPage() {
                   </p>
                   <div
                     ref={pptxContainerRef}
-                    className="flex-1 overflow-auto bg-slate-100 dark:bg-slate-800 rounded-lg p-4 [&_.pptx-wrapper]:flex [&_.pptx-wrapper]:flex-col [&_.pptx-wrapper]:items-center [&_.pptx-wrapper]:gap-6 [&_.pptx-slide]:shadow-xl [&_.pptx-slide]:rounded-lg [&_.pptx-slide]:overflow-hidden"
+                    className="flex-1 overflow-auto bg-slate-100 dark:bg-white/[0.04] rounded-lg p-4 [&_.pptx-wrapper]:flex [&_.pptx-wrapper]:flex-col [&_.pptx-wrapper]:items-center [&_.pptx-wrapper]:gap-6 [&_.pptx-slide]:shadow-xl [&_.pptx-slide]:rounded-lg [&_.pptx-slide]:overflow-hidden"
                   />
                 </div>
               ) : (viewingArtifact.content_type ===
@@ -788,7 +714,7 @@ function ArtifactsPage() {
                   dangerouslySetInnerHTML={{ __html: viewerContent }}
                 />
               ) : viewerImageUrl ? (
-                <div className="flex items-center justify-center min-h-64 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                <div className="flex items-center justify-center min-h-64 bg-slate-100 dark:bg-white/[0.04] rounded-lg">
                   <img
                     src={viewerImageUrl}
                     alt={viewingArtifact.filename}
@@ -813,7 +739,7 @@ function ArtifactsPage() {
                     dangerouslySetInnerHTML={{ __html: viewerContent }}
                   />
                 ) : (
-                  <pre className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono bg-slate-50 dark:bg-slate-800 p-4 rounded-lg overflow-auto">
+                  <pre className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono bg-slate-50 dark:bg-white/[0.04] p-4 rounded-lg overflow-auto">
                     {viewerContent}
                   </pre>
                 )
@@ -834,7 +760,7 @@ function ArtifactsPage() {
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+            <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-white/[0.03]">
               <span className="text-xs text-slate-500 dark:text-slate-400">
                 {formatDate(viewingArtifact.created_at)}
               </span>

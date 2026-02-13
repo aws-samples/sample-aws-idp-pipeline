@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Settings, X, Eye, EyeOff } from 'lucide-react';
 import type { BidiModelType, VoiceModelConfig } from '../hooks/useVoiceChat';
+import { useModal } from '../hooks/useModal';
 
 const VOICE_MODEL_STORAGE_KEY = 'voice_model_config';
 
@@ -123,29 +124,7 @@ export default function VoiceModelSettingsModal({
     setApiKey(storedApiKeys[effectiveModelType as 'gemini' | 'openai'] || '');
   }, [effectiveModelType, storedApiKeys, isOpen, voice]);
 
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'hidden';
-    }
-
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-      document.body.style.overflow = '';
-    };
-  }, [isOpen, onClose]);
-
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
+  const { handleBackdropClick } = useModal({ isOpen, onClose });
 
   const handleSave = () => {
     // Update stored API keys with current key

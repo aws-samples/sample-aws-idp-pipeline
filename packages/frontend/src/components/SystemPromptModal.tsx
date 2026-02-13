@@ -12,6 +12,7 @@ import {
   Video,
   FileType,
 } from 'lucide-react';
+import { useModal } from '../hooks/useModal';
 
 export type PromptType =
   | 'chat'
@@ -181,11 +182,15 @@ export default function SystemPromptModal({
     }
   }, [activeTabConfig, activePromptType, contents, onClose]);
 
+  const { handleBackdropClick } = useModal({
+    isOpen,
+    onClose,
+    disableClose: saving,
+  });
+
   useEffect(() => {
+    if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !saving) {
-        onClose();
-      }
       if (
         (e.ctrlKey || e.metaKey) &&
         e.key === 'Enter' &&
@@ -196,23 +201,9 @@ export default function SystemPromptModal({
         handleSave();
       }
     };
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
-    }
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
-    };
-  }, [isOpen, onClose, saving, loading, handleSave]);
-
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && !saving) {
-      onClose();
-    }
-  };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, saving, loading, handleSave]);
 
   const handleTopTabChange = (tab: TopTab) => {
     if (tab === activeTopTab || saving) return;

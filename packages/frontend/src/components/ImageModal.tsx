@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, ZoomIn, ZoomOut, Download, Maximize2 } from 'lucide-react';
+import { useModal } from '../hooks/useModal';
 
 interface ImageModalProps {
   src: string;
@@ -91,13 +92,12 @@ export default function ImageModal({ src, alt, onClose }: ImageModalProps) {
       });
   }, [src, alt]);
 
+  useModal({ isOpen: true, onClose });
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       switch (e.key) {
-        case 'Escape':
-          onClose();
-          break;
         case '+':
         case '=':
           handleZoomIn();
@@ -113,7 +113,7 @@ export default function ImageModal({ src, alt, onClose }: ImageModalProps) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, handleZoomIn, handleZoomOut, handleReset]);
+  }, [handleZoomIn, handleZoomOut, handleReset]);
 
   // Mouse wheel zoom
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -147,14 +147,6 @@ export default function ImageModal({ src, alt, onClose }: ImageModalProps) {
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
-  }, []);
-
-  // Prevent body scroll when modal is open
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
   }, []);
 
   return (

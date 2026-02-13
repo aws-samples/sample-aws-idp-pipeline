@@ -22,6 +22,25 @@ import type {
   VoiceChatState,
 } from './types';
 
+interface InputBoxVoiceChat {
+  mode: boolean;
+  state?: VoiceChatState;
+  selectedModel?: BidiModelType;
+  available?: boolean;
+  onText?: (text: string) => void;
+  onModelSelect?: (modelType: BidiModelType) => void;
+  onDisconnect?: () => void;
+  setMode: (mode: boolean) => void;
+  handleDisable: () => void;
+}
+
+interface InputBoxResearch {
+  mode: boolean;
+  onResearch?: (files: AttachedFile[], message?: string) => void;
+  setMode: (mode: boolean) => void;
+  handleDisable: () => void;
+}
+
 interface ChatInputBoxProps {
   inputMessage: string;
   sending: boolean;
@@ -31,28 +50,15 @@ interface ChatInputBoxProps {
   documents: Document[];
   agents: Agent[];
   selectedAgent: Agent | null;
-  researchMode: boolean;
-  voiceChatMode: boolean;
-  voiceChatState?: VoiceChatState;
-  selectedVoiceModel?: BidiModelType;
-  voiceChatAvailable?: boolean;
   onInputChange: (value: string) => void;
   onSendMessage: (files: AttachedFile[], message?: string) => void;
-  onResearch?: (files: AttachedFile[], message?: string) => void;
   onAgentSelect?: (agentName: string | null) => void;
   onAgentClick: () => void;
-  onVoiceChatText?: (text: string) => void;
-  onVoiceModelSelect?: (modelType: BidiModelType) => void;
-  onVoiceChatDisconnect?: () => void;
-  onVoiceChatSettings?: () => void;
-  setResearchMode: (mode: boolean) => void;
-  setNovaSonicMode: (mode: boolean) => void;
-  handleNovaSonicDisable: () => void;
-  handleResearchDisable: () => void;
+  voiceChat: InputBoxVoiceChat;
+  research: InputBoxResearch;
   messagesLength: number;
   setPendingAgentChange: (val: string | null) => void;
   setShowRemoveAgentConfirm: (val: boolean) => void;
-  // Expose refs for parent
   inputRef: React.RefObject<HTMLDivElement | null>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
 }
@@ -66,23 +72,12 @@ export default function ChatInputBox({
   documents,
   agents,
   selectedAgent,
-  researchMode,
-  voiceChatMode,
-  voiceChatState,
-  selectedVoiceModel,
-  voiceChatAvailable,
   onInputChange,
   onSendMessage,
-  onResearch,
   onAgentSelect,
   onAgentClick,
-  onVoiceChatText,
-  onVoiceModelSelect,
-  onVoiceChatDisconnect,
-  setResearchMode,
-  setNovaSonicMode,
-  handleNovaSonicDisable,
-  handleResearchDisable,
+  voiceChat,
+  research,
   messagesLength,
   setPendingAgentChange,
   setShowRemoveAgentConfirm,
@@ -416,10 +411,10 @@ export default function ChatInputBox({
 
     const messageContent = getInputContent();
 
-    if (voiceChatMode && onVoiceChatText) {
-      onVoiceChatText(messageContent);
-    } else if (researchMode && onResearch) {
-      onResearch(attachedFiles, messageContent);
+    if (voiceChat.mode && voiceChat.onText) {
+      voiceChat.onText(messageContent);
+    } else if (research.mode && research.onResearch) {
+      research.onResearch(attachedFiles, messageContent);
     } else {
       onSendMessage(attachedFiles, messageContent);
     }
@@ -433,10 +428,8 @@ export default function ChatInputBox({
   }, [
     hasContent,
     sending,
-    researchMode,
-    voiceChatMode,
-    onResearch,
-    onVoiceChatText,
+    research,
+    voiceChat,
     onSendMessage,
     attachedFiles,
     onInputChange,
@@ -512,7 +505,7 @@ export default function ChatInputBox({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      <div className="chat-input-box flex flex-col rounded-2xl border transition-all duration-200 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm hover:shadow-md focus-within:shadow-lg">
+      <div className="chat-input-box glass-panel flex flex-col rounded-2xl border transition-all duration-200 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm hover:shadow-md focus-within:shadow-lg">
         <div className="flex flex-col px-3 pt-3 pb-2 gap-2">
           {/* Attached Files Preview */}
           {attachedFiles.length > 0 && (
@@ -599,21 +592,23 @@ export default function ChatInputBox({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center justify-center h-8 w-8 rounded-lg transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95"
+                className="inline-flex items-center justify-center h-8 w-8 rounded-lg transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 active:scale-95"
               >
                 <Plus className="w-5 h-5" />
               </button>
 
               {/* Tools popover */}
-              {(onResearch || onAgentSelect || voiceChatAvailable) && (
+              {(research.onResearch ||
+                onAgentSelect ||
+                voiceChat.available) && (
                 <div className="relative" ref={toolsMenuRef}>
                   <button
                     type="button"
                     onClick={() => setShowToolsMenu((v) => !v)}
                     className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-medium transition-colors ${
                       showToolsMenu
-                        ? 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
-                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
+                        ? 'bg-slate-100 dark:bg-white/15 text-slate-700 dark:text-slate-200'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10'
                     } active:scale-95`}
                   >
                     <Settings2 className="w-4 h-4" />
@@ -622,17 +617,24 @@ export default function ChatInputBox({
 
                   {showToolsMenu && (
                     <ToolsMenuPopover
-                      onResearch={onResearch ? () => undefined : undefined}
-                      researchMode={researchMode}
+                      voiceChat={{
+                        available: voiceChat.available,
+                        mode: voiceChat.mode,
+                        selectedModel: voiceChat.selectedModel,
+                        onModelSelect: voiceChat.onModelSelect,
+                        onDisable: voiceChat.handleDisable,
+                        setMode: voiceChat.setMode,
+                        onDisconnect: voiceChat.onDisconnect,
+                      }}
+                      research={{
+                        available: !!research.onResearch,
+                        mode: research.mode,
+                        onToggle: () => research.setMode(!research.mode),
+                        setMode: research.setMode,
+                      }}
                       onAgentSelect={onAgentSelect}
                       selectedAgent={selectedAgent}
                       agents={agents}
-                      voiceChatAvailable={voiceChatAvailable}
-                      voiceChatMode={voiceChatMode}
-                      selectedVoiceModel={selectedVoiceModel}
-                      onVoiceModelSelect={onVoiceModelSelect}
-                      onVoiceChatDisable={handleNovaSonicDisable}
-                      onResearchToggle={() => setResearchMode(!researchMode)}
                       messagesLength={messagesLength}
                       onAgentClick={onAgentClick}
                       onClose={() => setShowToolsMenu(false)}
@@ -640,22 +642,19 @@ export default function ChatInputBox({
                       onShowRemoveAgentConfirm={() =>
                         setShowRemoveAgentConfirm(true)
                       }
-                      setNovaSonicMode={setNovaSonicMode}
-                      setResearchMode={setResearchMode}
-                      onVoiceChatDisconnect={onVoiceChatDisconnect}
                     />
                   )}
                 </div>
               )}
 
               {/* Selected tool chips */}
-              {(researchMode || selectedAgent || voiceChatMode) && (
+              {(research.mode || selectedAgent || voiceChat.mode) && (
                 <>
-                  <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
-                  {researchMode && onResearch && (
+                  <div className="w-px h-5 bg-slate-200 dark:bg-white/10 mx-0.5" />
+                  {research.mode && research.onResearch && (
                     <button
                       type="button"
-                      onClick={handleResearchDisable}
+                      onClick={research.handleDisable}
                       className="inline-flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-800/40 transition-colors"
                     >
                       <Search className="w-3.5 h-3.5" />
@@ -681,18 +680,18 @@ export default function ChatInputBox({
                       <X className="w-3.5 h-3.5 ml-0.5 opacity-60 hover:opacity-100" />
                     </button>
                   )}
-                  {voiceChatMode && (
+                  {voiceChat.mode && (
                     <button
                       type="button"
-                      onClick={handleNovaSonicDisable}
+                      onClick={voiceChat.handleDisable}
                       className="inline-flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-800/40 transition-colors"
                     >
                       <Mic className="w-3.5 h-3.5" />
-                      {selectedVoiceModel === 'nova_sonic'
+                      {voiceChat.selectedModel === 'nova_sonic'
                         ? 'Nova Sonic'
-                        : selectedVoiceModel === 'gemini'
+                        : voiceChat.selectedModel === 'gemini'
                           ? 'Gemini'
-                          : selectedVoiceModel === 'openai'
+                          : voiceChat.selectedModel === 'openai'
                             ? 'OpenAI'
                             : t('voiceChat.title')}
                       <X className="w-3.5 h-3.5 ml-0.5 opacity-60 hover:opacity-100" />
@@ -707,12 +706,12 @@ export default function ChatInputBox({
               type="button"
               className={`inline-flex items-center justify-center h-8 w-8 rounded-xl transition-all active:scale-95 ${
                 hasContent && !sending
-                  ? voiceChatMode
+                  ? voiceChat.mode
                     ? 'bg-purple-500 hover:bg-purple-600 text-white shadow-md'
-                    : researchMode
+                    : research.mode
                       ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md'
                       : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md'
-                  : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
+                  : 'bg-slate-200 dark:bg-white/15 text-slate-400 cursor-not-allowed'
               }`}
             >
               {sending ? (
@@ -748,10 +747,10 @@ export default function ChatInputBox({
         (filteredArtifacts.length > 0 || filteredDocuments.length > 0) && (
           <div
             ref={mentionDropdownRef}
-            className="absolute bottom-full left-0 mb-2 w-72 max-h-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-50 overflow-hidden"
+            className="glass-panel absolute bottom-full left-0 mb-2 w-72 max-h-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/[0.08] rounded-lg shadow-lg z-50 overflow-hidden"
           >
             {/* Tabs */}
-            <div className="flex border-b border-slate-100 dark:border-slate-700">
+            <div className="flex border-b border-slate-100 dark:border-white/[0.06]">
               <button
                 type="button"
                 onClick={() => {
@@ -783,7 +782,7 @@ export default function ChatInputBox({
             </div>
 
             {/* Tab hint */}
-            <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700">
+            <div className="px-3 py-1.5 bg-slate-50 dark:bg-white/[0.04] border-b border-slate-100 dark:border-white/[0.06]">
               <span className="text-[10px] text-slate-400 dark:text-slate-500">
                 {t('chat.tabToSwitch', 'Press Tab to switch')}
               </span>
@@ -802,7 +801,7 @@ export default function ChatInputBox({
                       className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
                         index === selectedMentionIndex
                           ? 'bg-violet-50 dark:bg-violet-900/30'
-                          : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                          : 'hover:bg-slate-50 dark:hover:bg-white/10'
                       }`}
                     >
                       <div className="flex items-center justify-center w-7 h-7 rounded bg-violet-100 dark:bg-violet-900/40">
@@ -846,7 +845,7 @@ export default function ChatInputBox({
                     className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
                       index === selectedMentionIndex
                         ? 'bg-blue-50 dark:bg-blue-900/30'
-                        : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                        : 'hover:bg-slate-50 dark:hover:bg-white/10'
                     }`}
                   >
                     <div className="flex items-center justify-center w-7 h-7 rounded bg-blue-100 dark:bg-blue-900/40">

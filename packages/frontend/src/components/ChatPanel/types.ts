@@ -41,7 +41,31 @@ export type StreamingBlock =
   | { type: 'stage_complete'; stage: string; result: string }
   | { type: 'voice_transcript'; role: 'user' | 'assistant'; content: string };
 
+export interface VoiceChatProps {
+  available?: boolean;
+  state?: VoiceChatState;
+  audioLevel?: { input: number; output: number };
+  mode?: boolean;
+  selectedModel?: BidiModelType;
+  onModeChange?: (mode: boolean) => void;
+  onConnect?: () => void;
+  onDisconnect?: () => void;
+  onText?: (text: string) => void;
+  onToggleMic?: () => void;
+  onSettings?: () => void;
+  onModelSelect?: (modelType: BidiModelType) => void;
+}
+
+export interface ResearchProps {
+  mode?: boolean;
+  onModeChange?: (mode: boolean) => void;
+  onResearch?: (files: AttachedFile[], message?: string) => void;
+}
+
 export interface ChatPanelProps {
+  projectName?: string;
+  projectDescription?: string;
+  projectColor?: number;
   messages: ChatMessage[];
   inputMessage: string;
   sending: boolean;
@@ -53,7 +77,6 @@ export interface ChatPanelProps {
   documents?: Document[];
   onInputChange: (value: string) => void;
   onSendMessage: (files: AttachedFile[], message?: string) => void;
-  onResearch?: (files: AttachedFile[], message?: string) => void;
   onAgentSelect?: (agentName: string | null) => void;
   onAgentClick: () => void;
   onNewChat: () => void;
@@ -61,22 +84,8 @@ export interface ChatPanelProps {
   onSourceClick?: (documentId: string, segmentId: string) => void;
   loadingSourceKey?: string | null;
   scrollPositionRef?: React.MutableRefObject<number>;
-  // Research Mode
-  researchMode?: boolean;
-  onResearchModeChange?: (mode: boolean) => void;
-  // Voice Chat
-  voiceChatAvailable?: boolean;
-  voiceChatState?: VoiceChatState;
-  voiceChatAudioLevel?: { input: number; output: number };
-  voiceChatMode?: boolean;
-  selectedVoiceModel?: BidiModelType;
-  onVoiceChatModeChange?: (mode: boolean) => void;
-  onVoiceChatConnect?: () => void;
-  onVoiceChatDisconnect?: () => void;
-  onVoiceChatText?: (text: string) => void;
-  onVoiceChatToggleMic?: () => void;
-  onVoiceChatSettings?: () => void;
-  onVoiceModelSelect?: (modelType: BidiModelType) => void;
+  voiceChat?: VoiceChatProps;
+  research?: ResearchProps;
 }
 
 export interface ToolRegistryEntry {

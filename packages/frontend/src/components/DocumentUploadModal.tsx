@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import OcrSettingsForm, { type OcrSettings } from './OcrSettingsForm';
 import { LANGUAGES } from './ProjectSettingsModal';
+import { useModal } from '../hooks/useModal';
 
 type UploadTab = 'file' | 'web';
 
@@ -272,6 +273,8 @@ export default function DocumentUploadModal({
     projectOcrOptions,
     projectDocumentPrompt,
   ]);
+
+  useModal({ isOpen, onClose: handleClose, disableClose: uploading });
 
   const isUploadDisabled =
     activeTab === 'file' ? files.length === 0 : !webUrl.trim();

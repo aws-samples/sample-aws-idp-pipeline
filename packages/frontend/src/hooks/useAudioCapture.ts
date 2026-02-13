@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { calculateAudioLevel } from '../lib/audioUtils';
 
 const SAMPLE_RATE = 16000;
 const CHUNK_INTERVAL_MS = 100;
@@ -121,18 +122,9 @@ export function useAudioCapture({
     // Audio level animation loop
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
     const updateLevel = () => {
-      analyser.getByteFrequencyData(dataArray);
-      // Find max value for better responsiveness
-      let max = 0;
-      for (let i = 0; i < dataArray.length; i++) {
-        if (dataArray[i] > max) max = dataArray[i];
-      }
-      // Normalize and apply curve for better visual response
-      const normalized = max / 255;
-      const boosted = Math.pow(normalized, 0.5); // Square root for more sensitivity at low levels
-      setAudioLevel(boosted);
-      // Call callback with audio level
-      onAudioLevelRef.current?.(boosted);
+      const level = calculateAudioLevel(analyser, dataArray);
+      setAudioLevel(level);
+      onAudioLevelRef.current?.(level);
       animFrameRef.current = requestAnimationFrame(updateLevel);
     };
     updateLevel();

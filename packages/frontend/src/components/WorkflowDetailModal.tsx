@@ -18,69 +18,15 @@ import OcrDocumentView from './OcrDocumentView';
 import PdfPageViewer from './PdfPageViewer';
 import ExcelViewer from './ExcelViewer';
 import { useAwsClient } from '../hooks/useAwsClient';
-
-// File type detection helpers
-const TEXT_MIME_TYPES = [
-  'text/plain',
-  'text/markdown',
-  'text/csv',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/msword',
-];
-
-const isTextFileType = (fileType: string | undefined): boolean => {
-  if (!fileType) return false;
-  return TEXT_MIME_TYPES.includes(fileType);
-};
-
-const isMarkdownFileType = (fileType: string | undefined): boolean => {
-  return fileType === 'text/markdown';
-};
-
-const isSpreadsheetFileType = (fileType: string | undefined): boolean => {
-  if (!fileType) return false;
-  return [
-    'text/csv',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/vnd.ms-excel',
-  ].includes(fileType);
-};
-
-const isExcelFileType = (fileType: string | undefined): boolean => {
-  if (!fileType) return false;
-  return [
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/vnd.ms-excel',
-  ].includes(fileType);
-};
-
-const FILE_TYPE_LABELS: Record<string, string> = {
-  'application/pdf': 'PDF',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'XLSX',
-  'application/vnd.ms-excel': 'XLS',
-  'text/csv': 'CSV',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-    'DOCX',
-  'application/msword': 'DOC',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation':
-    'PPTX',
-  'application/vnd.ms-powerpoint': 'PPT',
-  'text/plain': 'TXT',
-  'text/markdown': 'Markdown',
-  'image/png': 'PNG',
-  'image/jpeg': 'JPEG',
-  'image/tiff': 'TIFF',
-  'video/mp4': 'MP4',
-  'audio/mpeg': 'MP3',
-  'application/x-webreq': 'Web',
-};
-
-const getFileTypeLabel = (fileType: string | undefined): string => {
-  if (!fileType) return 'PDF';
-  return FILE_TYPE_LABELS[fileType] || fileType;
-};
+import { useModal } from '../hooks/useModal';
+import {
+  isTextFileType,
+  isMarkdownFileType,
+  isSpreadsheetFileType,
+  isExcelFileType,
+  isPdfFileType,
+  getFileTypeLabel,
+} from '../lib/fileTypeUtils';
 
 /**
  * Fix broken markdown table rows where cell values contain newlines.
@@ -105,10 +51,6 @@ const sanitizeMarkdownTable = (text: string): string => {
     }
   }
   return result.join('\n');
-};
-
-const isPdfFileType = (fileType: string | undefined): boolean => {
-  return fileType === 'application/pdf';
 };
 
 // Parse S3 URI to bucket and key
@@ -462,6 +404,8 @@ export default function WorkflowDetailModal({
     setReanalyzeInstructions('');
   };
 
+  const { handleBackdropClick } = useModal({ isOpen: !!workflow, onClose });
+
   // Update analysisPopup content when segment changes
   // Skip when currentSegment is null (still loading) to avoid flashing empty state
   useEffect(() => {
@@ -504,9 +448,12 @@ export default function WorkflowDetailModal({
   }, [currentSegmentIndex, currentSegment]);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6">
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6"
+      onClick={handleBackdropClick}
+    >
       <div
-        className="document-detail-modal bg-white rounded-2xl w-full max-w-7xl h-[90vh] flex overflow-hidden relative"
+        className="document-detail-modal bg-white dark:bg-slate-900 rounded-2xl w-full max-w-7xl h-[90vh] flex overflow-hidden relative"
         style={
           {
             '--modal-glow-color':
@@ -517,10 +464,10 @@ export default function WorkflowDetailModal({
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 p-2 bg-white hover:bg-slate-100 rounded-lg transition-colors shadow-md"
+          className="absolute top-4 right-4 z-10 p-2 bg-white dark:bg-white/10 hover:bg-slate-100 dark:hover:bg-white/20 rounded-lg transition-colors shadow-md"
         >
           <svg
-            className="h-5 w-5 text-slate-600"
+            className="h-5 w-5 text-slate-600 dark:text-slate-300"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -536,13 +483,13 @@ export default function WorkflowDetailModal({
 
         {/* Left Panel - Document Details */}
         <div
-          className={`bg-slate-50 flex flex-col flex-shrink-0 border-r border-slate-200 transition-all duration-300 ${analysisPopup.type ? 'w-[600px]' : 'w-[400px]'}`}
+          className={`bg-slate-50 dark:bg-white/[0.03] flex flex-col flex-shrink-0 border-r border-slate-200 dark:border-white/[0.08] transition-all duration-300 ${analysisPopup.type ? 'w-[600px]' : 'w-[400px]'}`}
         >
           {/* Header */}
-          <div className="flex items-center gap-3 p-4 border-b border-slate-200 bg-white">
-            <div className="p-2 bg-slate-200 rounded-lg">
+          <div className="flex items-center gap-3 p-4 border-b border-slate-200 dark:border-white/[0.08] bg-white dark:bg-transparent">
+            <div className="p-2 bg-slate-200 dark:bg-white/10 rounded-lg">
               <svg
-                className="h-5 w-5 text-slate-600"
+                className="h-5 w-5 text-slate-600 dark:text-slate-300"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -555,7 +502,7 @@ export default function WorkflowDetailModal({
                 />
               </svg>
             </div>
-            <h2 className="text-base font-semibold text-slate-800">
+            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
               {t('workflow.documentDetails')}
             </h2>
           </div>
@@ -580,11 +527,11 @@ export default function WorkflowDetailModal({
                         qaItems: [],
                       })
                     }
-                    className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                    className="p-2 hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg transition-colors"
                     title={t('workflow.backToDetails')}
                   >
                     <svg
-                      className="h-4 w-4 text-slate-600"
+                      className="h-4 w-4 text-slate-600 dark:text-slate-400"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -680,7 +627,7 @@ export default function WorkflowDetailModal({
                               type !== 'Web' &&
                               analysisPopup.title.includes(type))
                               ? 'bg-blue-500 text-white'
-                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/20'
                           }`}
                         >
                           {type}
@@ -690,7 +637,7 @@ export default function WorkflowDetailModal({
                 </div>
 
                 {/* Title */}
-                <h3 className="text-sm font-semibold text-slate-800 mb-4">
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-4">
                   {analysisPopup.title}
                 </h3>
 
@@ -725,7 +672,7 @@ export default function WorkflowDetailModal({
                     ) : (
                       <>
                         {/* Question Navigator */}
-                        <div className="flex-shrink-0 flex flex-wrap gap-2 mb-4 pb-3 border-b border-slate-200">
+                        <div className="flex-shrink-0 flex flex-wrap gap-2 mb-4 pb-3 border-b border-slate-200 dark:border-white/[0.08]">
                           {analysisPopup.qaItems.map((_, idx) => (
                             <button
                               key={idx}
@@ -748,7 +695,7 @@ export default function WorkflowDetailModal({
                                 })
                               }
                               disabled={addingQa || regeneratingIndex !== null}
-                              className="w-8 h-8 border-2 border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50 text-slate-400 hover:text-blue-500 text-xs font-bold rounded-full flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="w-8 h-8 border-2 border-dashed border-slate-300 dark:border-white/20 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-400 hover:text-blue-500 text-xs font-bold rounded-full flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                               title={t('workflow.addQa')}
                             >
                               {addingQa ? (
@@ -766,15 +713,15 @@ export default function WorkflowDetailModal({
                             <div
                               key={idx}
                               id={`qa-item-${idx}`}
-                              className="bg-white rounded-lg border border-slate-200 overflow-hidden scroll-mt-2"
+                              className="bg-white dark:bg-white/[0.04] rounded-lg border border-slate-200 dark:border-white/[0.08] overflow-hidden scroll-mt-2"
                             >
                               {/* Question */}
-                              <div className="bg-blue-50 border-b border-blue-100 px-4 py-3">
+                              <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800/30 px-4 py-3">
                                 <div className="flex items-start gap-2">
                                   <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
                                     Q{idx + 1}
                                   </span>
-                                  <p className="text-sm font-medium text-slate-800 flex-1">
+                                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200 flex-1">
                                     {item.question}
                                   </p>
                                   {onRegenerateQa && (
@@ -790,7 +737,7 @@ export default function WorkflowDetailModal({
                                         regeneratingIndex !== null ||
                                         deletingIndex !== null
                                       }
-                                      className="flex-shrink-0 p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors disabled:opacity-30"
+                                      className="flex-shrink-0 p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors disabled:opacity-30"
                                       title={t('workflow.regenerateQa')}
                                     >
                                       {regeneratingIndex === idx ? (
@@ -807,7 +754,7 @@ export default function WorkflowDetailModal({
                                         regeneratingIndex !== null ||
                                         deletingIndex !== null
                                       }
-                                      className="flex-shrink-0 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-30"
+                                      className="flex-shrink-0 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors disabled:opacity-30"
                                       title={t('workflow.deleteQa')}
                                     >
                                       {deletingIndex === idx ? (
@@ -829,7 +776,7 @@ export default function WorkflowDetailModal({
                                     </span>
                                   </div>
                                 ) : (
-                                  <div className="prose prose-slate prose-sm max-w-none prose-table:border-collapse prose-th:border prose-th:border-slate-300 prose-th:bg-slate-100 prose-th:p-2 prose-td:border prose-td:border-slate-300 prose-td:p-2">
+                                  <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-table:border-collapse prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2">
                                     <Markdown
                                       remarkPlugins={[remarkGfm]}
                                       components={{
@@ -861,7 +808,7 @@ export default function WorkflowDetailModal({
                         <button
                           key={idx}
                           onClick={() => seekVideo(seg.start_time)}
-                          className="w-full text-left bg-white rounded-lg border border-slate-200 p-3 hover:bg-purple-50 hover:border-purple-300 transition-colors cursor-pointer"
+                          className="w-full text-left bg-white dark:bg-white/[0.04] rounded-lg border border-slate-200 dark:border-white/[0.08] p-3 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-300 dark:hover:border-purple-800/40 transition-colors cursor-pointer"
                         >
                           <div className="inline-flex items-center gap-1.5 px-2 py-1 mb-1.5 bg-purple-50 dark:bg-purple-900/30 rounded">
                             <span className="text-xs font-mono text-purple-600 dark:text-purple-400">
@@ -874,7 +821,7 @@ export default function WorkflowDetailModal({
                               {seg.end_time.toFixed(1)}s
                             </span>
                           </div>
-                          <p className="text-sm text-slate-800">
+                          <p className="text-sm text-slate-800 dark:text-slate-200">
                             {seg.transcript}
                           </p>
                         </button>
@@ -884,9 +831,9 @@ export default function WorkflowDetailModal({
                     <div className="flex-1 overflow-y-auto">
                       {(currentSegment?.source_url ||
                         currentSegment?.page_title) && (
-                        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/30 rounded-lg">
                           {currentSegment?.page_title && (
-                            <p className="text-sm font-medium text-slate-800 mb-1">
+                            <p className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-1">
                               {currentSegment.page_title}
                             </p>
                           )}
@@ -902,7 +849,7 @@ export default function WorkflowDetailModal({
                           )}
                         </div>
                       )}
-                      <div className="prose prose-slate prose-sm max-w-none prose-table:border-collapse prose-th:border prose-th:border-slate-300 prose-th:bg-slate-100 prose-th:p-2 prose-td:border prose-td:border-slate-300 prose-td:p-2">
+                      <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-table:border-collapse prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2">
                         <Markdown
                           remarkPlugins={[remarkGfm]}
                           components={{
@@ -925,7 +872,7 @@ export default function WorkflowDetailModal({
                     analysisPopup.title.includes('Parser') ? (
                     <div className="flex-1 overflow-auto">
                       <div className="overflow-x-auto">
-                        <div className="prose prose-slate prose-sm max-w-none prose-table:border-collapse prose-table:w-max prose-th:border prose-th:border-slate-300 prose-th:bg-slate-100 prose-th:p-2 prose-th:whitespace-nowrap prose-td:border prose-td:border-slate-300 prose-td:p-2 prose-td:whitespace-nowrap">
+                        <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-table:border-collapse prose-table:w-max prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-th:whitespace-nowrap prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2 prose-td:whitespace-nowrap">
                           <Markdown remarkPlugins={[remarkGfm]}>
                             {sanitizeMarkdownTable(analysisPopup.content)}
                           </Markdown>
@@ -952,7 +899,7 @@ export default function WorkflowDetailModal({
                       </p>
                     </div>
                   ) : (
-                    <div className="prose prose-slate prose-sm max-w-none prose-table:border-collapse prose-th:border prose-th:border-slate-300 prose-th:bg-slate-100 prose-th:p-2 prose-td:border prose-td:border-slate-300 prose-td:p-2">
+                    <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-table:border-collapse prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2">
                       <Markdown
                         remarkPlugins={[remarkGfm]}
                         components={{
@@ -979,14 +926,14 @@ export default function WorkflowDetailModal({
                 <div className="space-y-4">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
                         {t('workflow.fileName')}
                       </p>
                       {canReanalyze && (
                         <button
                           onClick={() => setShowReanalyzeModal(true)}
                           disabled={reanalyzing}
-                          className="flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {reanalyzing ? (
                             <Loader2 className="h-3 w-3 animate-spin" />
@@ -998,7 +945,7 @@ export default function WorkflowDetailModal({
                       )}
                     </div>
                     <p
-                      className="text-sm text-slate-800 truncate"
+                      className="text-sm text-slate-800 dark:text-slate-200 truncate"
                       title={workflow.file_name}
                     >
                       {workflow.file_name}
@@ -1007,25 +954,25 @@ export default function WorkflowDetailModal({
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-xs text-slate-500 mb-1">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                         {t('workflow.fileType')}
                       </p>
-                      <span className="inline-block px-2 py-1 bg-slate-200 text-slate-700 text-xs font-medium rounded">
+                      <span className="inline-block px-2 py-1 bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-medium rounded">
                         {getFileTypeLabel(workflow.file_type)}
                       </span>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500 mb-1">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                         {t('workflow.totalSegments')}
                       </p>
-                      <p className="text-sm text-slate-800">
+                      <p className="text-sm text-slate-800 dark:text-slate-200">
                         {workflow.total_segments}
                       </p>
                     </div>
                   </div>
 
                   <div>
-                    <p className="text-xs text-slate-500 mb-1">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                       {t('workflow.analysisLanguage')}
                     </p>
                     <div className="flex items-center gap-2">
@@ -1034,7 +981,7 @@ export default function WorkflowDetailModal({
                           (l) => l.code === (workflow.language || 'en'),
                         )?.flag || 'EN'}
                       </span>
-                      <span className="text-sm text-slate-800">
+                      <span className="text-sm text-slate-800 dark:text-slate-200">
                         {LANGUAGES.find(
                           (l) => l.code === (workflow.language || 'en'),
                         )?.name || 'English'}
@@ -1043,22 +990,22 @@ export default function WorkflowDetailModal({
                   </div>
 
                   <div>
-                    <p className="text-xs text-slate-500 mb-1">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                       {t('workflow.status')}
                     </p>
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                      <span className="text-sm text-slate-800">
+                      <span className="text-sm text-slate-800 dark:text-slate-200">
                         {workflow.status}
                       </span>
                     </div>
                   </div>
 
                   <div>
-                    <p className="text-xs text-slate-500 mb-1">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                       {t('workflow.created')}
                     </p>
-                    <p className="text-sm text-slate-800">
+                    <p className="text-sm text-slate-800 dark:text-slate-200">
                       {new Date(workflow.created_at).toLocaleString('ko-KR')}
                     </p>
                   </div>
@@ -1068,7 +1015,7 @@ export default function WorkflowDetailModal({
                       <div className="space-y-3">
                         {workflow.source_url && (
                           <div>
-                            <p className="text-xs text-slate-500 mb-1">
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                               {t('workflow.sourceUrl', 'Source URL')}
                             </p>
                             <a
@@ -1084,13 +1031,13 @@ export default function WorkflowDetailModal({
                         )}
                         {workflow.crawl_instruction && (
                           <div>
-                            <p className="text-xs text-slate-500 mb-1">
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                               {t(
                                 'workflow.crawlInstruction',
                                 'Crawl Instruction',
                               )}
                             </p>
-                            <p className="text-sm text-slate-800">
+                            <p className="text-sm text-slate-800 dark:text-slate-200">
                               {workflow.crawl_instruction}
                             </p>
                           </div>
@@ -1099,12 +1046,12 @@ export default function WorkflowDetailModal({
                     )}
                 </div>
 
-                <hr className="border-slate-200" />
+                <hr className="border-slate-200 dark:border-white/[0.08]" />
 
                 {/* Analysis Summary */}
                 {workflow.total_segments > 0 && (
                   <div>
-                    <h3 className="text-sm font-medium text-slate-700 mb-4">
+                    <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-4">
                       {t('workflow.segmentAiAnalysis', 'Segment AI Analysis')}
                     </h3>
                     <p className="text-xs text-slate-400 mb-3">
@@ -1116,10 +1063,10 @@ export default function WorkflowDetailModal({
                           (label) => (
                             <div
                               key={label}
-                              className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-center animate-pulse"
+                              className="flex-1 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-lg p-3 text-center animate-pulse"
                             >
-                              <div className="h-3 w-8 bg-slate-200 rounded mx-auto mb-2" />
-                              <div className="h-6 w-6 bg-slate-200 rounded mx-auto" />
+                              <div className="h-3 w-8 bg-slate-200 dark:bg-white/10 rounded mx-auto mb-2" />
+                              <div className="h-6 w-6 bg-slate-200 dark:bg-white/10 rounded mx-auto" />
                             </div>
                           ),
                         )}
@@ -1224,10 +1171,12 @@ export default function WorkflowDetailModal({
                                   });
                                 }
                               }}
-                              className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-center hover:bg-slate-50 hover:border-slate-300 transition-colors"
+                              className="flex-1 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-lg p-3 text-center hover:bg-slate-50 dark:hover:bg-white/[0.08] hover:border-slate-300 dark:hover:border-white/20 transition-colors"
                             >
-                              <p className="text-xs text-slate-500">{label}</p>
-                              <p className="text-lg font-semibold text-slate-800">
+                              <p className="text-xs text-slate-500 dark:text-slate-400">
+                                {label}
+                              </p>
+                              <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">
                                 {type === 'ai' || type === 'stt' ? count : 1}
                               </p>
                             </button>
@@ -1242,9 +1191,9 @@ export default function WorkflowDetailModal({
         </div>
 
         {/* Right Panel - Image Viewer */}
-        <div className="flex-1 flex flex-col bg-slate-100 min-w-0">
+        <div className="flex-1 flex flex-col bg-slate-100 dark:bg-white/[0.02] min-w-0">
           {/* Segment Navigation */}
-          <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-white">
+          <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-white/[0.08] bg-white dark:bg-transparent">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
@@ -1252,10 +1201,10 @@ export default function WorkflowDetailModal({
                   setCurrentSegmentIndex((prev) => Math.max(0, prev - 1));
                 }}
                 disabled={currentSegmentIndex === 0}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <svg
-                  className="h-4 w-4 text-slate-600"
+                  className="h-4 w-4 text-slate-600 dark:text-slate-400"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1275,7 +1224,7 @@ export default function WorkflowDetailModal({
                   setImageLoading(true);
                   setCurrentSegmentIndex(Number(e.target.value));
                 }}
-                className="bg-white border border-slate-300 text-slate-800 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="bg-white dark:bg-white/[0.06] border border-slate-300 dark:border-white/[0.12] text-slate-800 dark:text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {Array.from({ length: workflow.total_segments }, (_, idx) => (
                   <option key={idx} value={idx}>
@@ -1288,7 +1237,7 @@ export default function WorkflowDetailModal({
                 {currentSegmentIndex + 1}/{workflow.total_segments}
               </span>
 
-              <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full border border-green-200">
+              <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded-full border border-green-200 dark:border-green-800/40">
                 {workflow.status}
               </span>
 
@@ -1300,10 +1249,10 @@ export default function WorkflowDetailModal({
                   );
                 }}
                 disabled={currentSegmentIndex >= workflow.total_segments - 1}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <svg
-                  className="h-4 w-4 text-slate-600"
+                  className="h-4 w-4 text-slate-600 dark:text-slate-400"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1382,7 +1331,7 @@ export default function WorkflowDetailModal({
                     <ExcelViewer
                       url={excelUrl}
                       sheetIndex={currentSegmentIndex}
-                      className="w-full h-full bg-white rounded-lg shadow-lg p-4"
+                      className="w-full h-full bg-white dark:bg-white/[0.04] rounded-lg shadow-lg p-4"
                     />
                   );
                 }
@@ -1406,10 +1355,10 @@ export default function WorkflowDetailModal({
                     currentSegment?.format_parser ||
                     '';
                   return (
-                    <div className="w-full h-full overflow-auto bg-white rounded-lg shadow-lg p-6">
-                      <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-200">
-                        <FileText className="h-5 w-5 text-slate-500" />
-                        <span className="text-sm font-medium text-slate-600">
+                    <div className="w-full h-full overflow-auto bg-white dark:bg-white/[0.04] rounded-lg shadow-lg p-6">
+                      <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-200 dark:border-white/[0.08]">
+                        <FileText className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+                        <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
                           {t('workflow.textPreview', 'Text Preview')} -{' '}
                           {t('workflow.chunk', 'Chunk')}{' '}
                           {currentSegmentIndex + 1}
@@ -1418,7 +1367,7 @@ export default function WorkflowDetailModal({
                       {textContent ? (
                         isMarkdownFile || isSpreadsheet ? (
                           <div className="overflow-x-auto">
-                            <div className="prose prose-slate prose-sm max-w-none prose-table:border-collapse prose-table:w-max prose-th:border prose-th:border-slate-300 prose-th:bg-slate-100 prose-th:p-2 prose-th:whitespace-nowrap prose-td:border prose-td:border-slate-300 prose-td:p-2 prose-td:whitespace-nowrap">
+                            <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-table:border-collapse prose-table:w-max prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-th:whitespace-nowrap prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2 prose-td:whitespace-nowrap">
                               <Markdown remarkPlugins={[remarkGfm]}>
                                 {isSpreadsheet
                                   ? sanitizeMarkdownTable(textContent)
@@ -1427,7 +1376,7 @@ export default function WorkflowDetailModal({
                             </div>
                           </div>
                         ) : (
-                          <pre className="whitespace-pre-wrap text-sm text-slate-700 font-mono leading-relaxed">
+                          <pre className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300 font-mono leading-relaxed">
                             {textContent}
                           </pre>
                         )
@@ -1450,10 +1399,10 @@ export default function WorkflowDetailModal({
                 if (isWebSegment) {
                   const webContent = currentSegment?.webcrawler_content || '';
                   return (
-                    <div className="w-full h-full overflow-auto bg-white rounded-lg shadow-lg p-6">
-                      <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-200">
-                        <Globe className="h-5 w-5 text-blue-500" />
-                        <span className="text-sm font-medium text-slate-600">
+                    <div className="w-full h-full overflow-auto bg-white dark:bg-white/[0.04] rounded-lg shadow-lg p-6">
+                      <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-200 dark:border-white/[0.08]">
+                        <Globe className="h-5 w-5 text-blue-500 dark:text-blue-400" />
+                        <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
                           {currentSegment?.page_title ||
                             `${t('workflow.segment')} ${currentSegmentIndex + 1}`}
                         </span>
@@ -1471,7 +1420,7 @@ export default function WorkflowDetailModal({
                         </div>
                       )}
                       {webContent ? (
-                        <div className="prose prose-slate prose-sm max-w-none prose-table:border-collapse prose-th:border prose-th:border-slate-300 prose-th:bg-slate-100 prose-th:p-2 prose-td:border prose-td:border-slate-300 prose-td:p-2">
+                        <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-table:border-collapse prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2">
                           <Markdown
                             remarkPlugins={[remarkGfm]}
                             components={{
@@ -1529,7 +1478,7 @@ export default function WorkflowDetailModal({
                   return (
                     <>
                       {imageLoading && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-slate-100">
+                        <div className="absolute inset-0 flex items-center justify-center bg-slate-100 dark:bg-white/[0.04]">
                           <div className="flex flex-col items-center gap-3">
                             <svg
                               className="h-8 w-8 text-slate-400 animate-spin"
@@ -1597,18 +1546,18 @@ export default function WorkflowDetailModal({
       {/* Regenerate Q&A Modal */}
       {regenerateTarget && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-xl w-full max-w-lg mx-4 overflow-hidden shadow-xl border border-slate-200 ring-1 ring-slate-900/5">
-            <div className="p-6 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-800">
+          <div className="bg-white dark:bg-slate-800 rounded-xl w-full max-w-lg mx-4 overflow-hidden shadow-xl border border-slate-200 dark:border-white/[0.12] ring-1 ring-slate-900/5 dark:ring-white/5">
+            <div className="p-6 border-b border-slate-200 dark:border-white/[0.08]">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
                 {t('workflow.regenerateQaTitle')}
               </h3>
-              <p className="text-sm text-slate-500 mt-1">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                 {t('workflow.regenerateQaDescription')}
               </p>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   {t('workflow.regenerateQaQuestion')}
                 </label>
                 <textarea
@@ -1618,11 +1567,11 @@ export default function WorkflowDetailModal({
                       prev ? { ...prev, question: e.target.value } : null,
                     )
                   }
-                  className="w-full h-24 px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full h-24 px-3 py-2 text-sm border border-slate-300 dark:border-white/[0.12] rounded-lg bg-white dark:bg-white/[0.06] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   {t('workflow.regenerateQaInstructions')}
                 </label>
                 <textarea
@@ -1637,14 +1586,14 @@ export default function WorkflowDetailModal({
                   placeholder={t(
                     'workflow.regenerateQaInstructionsPlaceholder',
                   )}
-                  className="w-full h-24 px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full h-24 px-3 py-2 text-sm border border-slate-300 dark:border-white/[0.12] rounded-lg bg-white dark:bg-white/[0.06] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 bg-slate-50 border-t border-slate-200">
+            <div className="flex justify-end gap-3 px-6 py-4 bg-slate-50 dark:bg-white/[0.03] border-t border-slate-200 dark:border-white/[0.08]">
               <button
                 onClick={() => setRegenerateTarget(null)}
-                className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg transition-colors"
               >
                 {t('common.cancel')}
               </button>
@@ -1676,18 +1625,18 @@ export default function WorkflowDetailModal({
       {/* Add Q&A Modal */}
       {addQaTarget && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-xl w-full max-w-lg mx-4 overflow-hidden shadow-xl border border-slate-200 ring-1 ring-slate-900/5">
-            <div className="p-6 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-800">
+          <div className="bg-white dark:bg-slate-800 rounded-xl w-full max-w-lg mx-4 overflow-hidden shadow-xl border border-slate-200 dark:border-white/[0.12] ring-1 ring-slate-900/5 dark:ring-white/5">
+            <div className="p-6 border-b border-slate-200 dark:border-white/[0.08]">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
                 {t('workflow.addQaTitle')}
               </h3>
-              <p className="text-sm text-slate-500 mt-1">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                 {t('workflow.addQaDescription')}
               </p>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   {t('workflow.addQaQuestion')}
                 </label>
                 <textarea
@@ -1698,11 +1647,11 @@ export default function WorkflowDetailModal({
                     )
                   }
                   placeholder={t('workflow.addQaQuestionPlaceholder', '')}
-                  className="w-full h-24 px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full h-24 px-3 py-2 text-sm border border-slate-300 dark:border-white/[0.12] rounded-lg bg-white dark:bg-white/[0.06] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   {t('workflow.addQaInstructions')}
                 </label>
                 <textarea
@@ -1715,14 +1664,14 @@ export default function WorkflowDetailModal({
                     )
                   }
                   placeholder={t('workflow.addQaInstructionsPlaceholder')}
-                  className="w-full h-24 px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full h-24 px-3 py-2 text-sm border border-slate-300 dark:border-white/[0.12] rounded-lg bg-white dark:bg-white/[0.06] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 bg-slate-50 border-t border-slate-200">
+            <div className="flex justify-end gap-3 px-6 py-4 bg-slate-50 dark:bg-white/[0.03] border-t border-slate-200 dark:border-white/[0.08]">
               <button
                 onClick={() => setAddQaTarget(null)}
-                className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg transition-colors"
               >
                 {t('common.cancel')}
               </button>
@@ -1743,7 +1692,7 @@ export default function WorkflowDetailModal({
       {showReanalyzeModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
           <div className="bg-white dark:bg-slate-800 rounded-xl w-full max-w-lg mx-4 overflow-hidden shadow-xl">
-            <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+            <div className="p-6 border-b border-slate-200 dark:border-white/[0.08]">
               <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
                 {t('workflow.reanalyzeTitle')}
               </h3>
@@ -1759,16 +1708,16 @@ export default function WorkflowDetailModal({
                 value={reanalyzeInstructions}
                 onChange={(e) => setReanalyzeInstructions(e.target.value)}
                 placeholder={t('workflow.reanalyzeInstructionsPlaceholder')}
-                className="w-full h-40 px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full h-40 px-3 py-2 text-sm border border-slate-300 dark:border-white/[0.12] rounded-lg bg-white dark:bg-white/[0.06] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               />
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+            <div className="flex justify-end gap-3 px-6 py-4 bg-slate-50 dark:bg-white/[0.03] border-t border-slate-200 dark:border-white/[0.08]">
               <button
                 onClick={() => {
                   setShowReanalyzeModal(false);
                   setReanalyzeInstructions('');
                 }}
-                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg transition-colors"
               >
                 {t('common.cancel')}
               </button>

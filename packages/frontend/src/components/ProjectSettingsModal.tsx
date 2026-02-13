@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Info, Hash, Type, AlignLeft, Globe, Palette } from 'lucide-react';
 import OcrSettingsForm, { type OcrSettings } from './OcrSettingsForm';
+import { useModal } from '../hooks/useModal';
 
 export interface Project {
   project_id: string;
@@ -240,6 +241,8 @@ export default function ProjectSettingsModal({
       setSaving(false);
     }
   };
+
+  useModal({ isOpen, onClose });
 
   if (!isOpen) return null;
 

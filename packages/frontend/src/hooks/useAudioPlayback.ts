@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { calculateAudioLevel } from '../lib/audioUtils';
 
 function base64ToInt16Array(base64: string): Int16Array {
   const binary = atob(base64);
@@ -48,15 +49,7 @@ export function useAudioPlayback(): UseAudioPlaybackReturn {
 
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
     const update = () => {
-      analyser.getByteFrequencyData(dataArray);
-      // Use max value for better responsiveness
-      let max = 0;
-      for (let i = 0; i < dataArray.length; i++) {
-        if (dataArray[i] > max) max = dataArray[i];
-      }
-      const normalized = max / 255;
-      const boosted = Math.pow(normalized, 0.5);
-      setAudioLevel(boosted);
+      setAudioLevel(calculateAudioLevel(analyser, dataArray));
       animFrameRef.current = requestAnimationFrame(update);
     };
     update();
