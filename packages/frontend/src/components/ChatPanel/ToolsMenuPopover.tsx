@@ -17,117 +17,116 @@ const VOICE_MODELS: { key: BidiModelType; label: string }[] = [
   { key: 'openai', label: 'OpenAI' },
 ];
 
+interface ToolsMenuVoiceChat {
+  available?: boolean;
+  mode: boolean;
+  selectedModel?: BidiModelType;
+  onModelSelect?: (modelType: BidiModelType) => void;
+  onDisable: () => void;
+  setMode: (mode: boolean) => void;
+  onDisconnect?: () => void;
+}
+
+interface ToolsMenuResearch {
+  available: boolean;
+  mode: boolean;
+  onToggle: () => void;
+  setMode: (mode: boolean) => void;
+}
+
 interface ToolsMenuPopoverProps {
-  onResearch?: () => void;
-  researchMode: boolean;
+  voiceChat: ToolsMenuVoiceChat;
+  research: ToolsMenuResearch;
   onAgentSelect?: (agentName: string | null) => void;
   selectedAgent: Agent | null;
   agents: Agent[];
-  voiceChatAvailable?: boolean;
-  voiceChatMode: boolean;
-  selectedVoiceModel?: BidiModelType;
-  onVoiceModelSelect?: (modelType: BidiModelType) => void;
-  onVoiceChatDisable: () => void;
-  onResearchToggle: () => void;
   messagesLength: number;
   onAgentClick: () => void;
   onClose: () => void;
   onPendingAgentChange: (agentName: string | null) => void;
   onShowRemoveAgentConfirm: () => void;
-  setNovaSonicMode: (mode: boolean) => void;
-  setResearchMode: (mode: boolean) => void;
-  onVoiceChatDisconnect?: () => void;
 }
 
 export default function ToolsMenuPopover({
-  onResearch,
-  researchMode,
+  voiceChat,
+  research,
   onAgentSelect,
   selectedAgent,
   agents,
-  voiceChatAvailable,
-  voiceChatMode,
-  selectedVoiceModel,
-  onVoiceModelSelect,
-  onVoiceChatDisable,
-  onResearchToggle,
   messagesLength,
   onAgentClick,
   onClose,
   onPendingAgentChange,
   onShowRemoveAgentConfirm,
-  setNovaSonicMode,
-  setResearchMode,
-  onVoiceChatDisconnect,
 }: ToolsMenuPopoverProps) {
   const { t } = useTranslation();
   const [showAgentSubmenu, setShowAgentSubmenu] = useState(false);
   const [showVoiceModelSubmenu, setShowVoiceModelSubmenu] = useState(false);
 
   return (
-    <div className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-50 py-1">
+    <div className="glass-panel absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/30 rounded-xl shadow-lg z-50 py-1">
       {/* Research toggle */}
-      {onResearch && (
+      {research.available && (
         <button
           type="button"
-          disabled={!!selectedAgent || voiceChatMode || messagesLength > 0}
+          disabled={!!selectedAgent || voiceChat.mode || messagesLength > 0}
           onClick={() => {
-            if (!researchMode) {
+            if (!research.mode) {
               if (selectedAgent && onAgentSelect) {
                 onAgentSelect(null);
               }
-              if (voiceChatMode) {
-                setNovaSonicMode(false);
-                onVoiceChatDisconnect?.();
+              if (voiceChat.mode) {
+                voiceChat.setMode(false);
+                voiceChat.onDisconnect?.();
               }
             }
-            onResearchToggle();
+            research.onToggle();
             onClose();
           }}
           className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-            selectedAgent || voiceChatMode || messagesLength > 0
-              ? 'opacity-40 cursor-not-allowed'
-              : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
+            selectedAgent || voiceChat.mode || messagesLength > 0
+              ? 'opacity-30 cursor-not-allowed'
+              : 'glass-menu-item'
           }`}
         >
           <Search
-            className={`w-4 h-4 ${researchMode ? 'text-blue-500' : 'text-slate-500 dark:text-slate-400'}`}
+            className={`w-4 h-4 ${research.mode ? 'text-blue-500' : 'text-slate-500 dark:text-slate-400'}`}
           />
           <span
             className={
-              researchMode
+              research.mode
                 ? 'text-blue-600 dark:text-blue-400'
                 : 'text-slate-700 dark:text-slate-300'
             }
           >
             {t('chat.research')}
           </span>
-          {researchMode && <Check className="w-4 h-4 text-blue-500 ml-auto" />}
+          {research.mode && <Check className="w-4 h-4 text-blue-500 ml-auto" />}
         </button>
       )}
 
       {/* Voice Chat submenu */}
-      {voiceChatAvailable && onVoiceModelSelect && (
+      {voiceChat.available && voiceChat.onModelSelect && (
         <div className="relative">
           <button
             type="button"
-            disabled={!!selectedAgent || researchMode}
+            disabled={!!selectedAgent || research.mode}
             onClick={() => {
               setShowVoiceModelSubmenu((v) => !v);
               setShowAgentSubmenu(false);
             }}
             className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-              selectedAgent || researchMode
-                ? 'opacity-40 cursor-not-allowed'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+              selectedAgent || research.mode
+                ? 'opacity-30 cursor-not-allowed'
+                : 'text-slate-700 dark:text-slate-300 glass-menu-item'
             }`}
           >
             <Mic
-              className={`w-4 h-4 ${voiceChatMode ? 'text-purple-500' : 'text-slate-500 dark:text-slate-400'}`}
+              className={`w-4 h-4 ${voiceChat.mode ? 'text-purple-500' : 'text-slate-500 dark:text-slate-400'}`}
             />
             <span
               className={`flex-1 text-left ${
-                voiceChatMode ? 'text-purple-600 dark:text-purple-400' : ''
+                voiceChat.mode ? 'text-purple-600 dark:text-purple-400' : ''
               }`}
             >
               {t('voiceChat.title')}
@@ -137,61 +136,64 @@ export default function ToolsMenuPopover({
 
           {/* Voice Model submenu panel */}
           {showVoiceModelSubmenu && (
-            <div className="absolute left-full bottom-0 ml-1 w-52 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-[60] py-1">
+            <div className="glass-panel absolute left-full bottom-0 ml-1 w-52 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/30 rounded-xl shadow-lg z-[60] py-1">
               {VOICE_MODELS.map((model) => (
                 <button
                   key={model.key}
                   type="button"
                   onClick={() => {
-                    if (voiceChatMode && selectedVoiceModel === model.key) {
-                      onVoiceChatDisable();
+                    if (
+                      voiceChat.mode &&
+                      voiceChat.selectedModel === model.key
+                    ) {
+                      voiceChat.onDisable();
                     } else {
                       if (selectedAgent && onAgentSelect) {
                         onAgentSelect(null);
                       }
-                      if (researchMode) {
-                        setResearchMode(false);
+                      if (research.mode) {
+                        research.setMode(false);
                       }
-                      onVoiceModelSelect(model.key);
-                      if (!voiceChatMode) {
-                        setNovaSonicMode(true);
+                      voiceChat.onModelSelect?.(model.key);
+                      if (!voiceChat.mode) {
+                        voiceChat.setMode(true);
                       }
                     }
                     onClose();
                     setShowVoiceModelSubmenu(false);
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors glass-menu-item"
                 >
                   <Mic
-                    className={`w-4 h-4 ${voiceChatMode && selectedVoiceModel === model.key ? 'text-purple-500' : 'text-slate-400 dark:text-slate-500'}`}
+                    className={`w-4 h-4 ${voiceChat.mode && voiceChat.selectedModel === model.key ? 'text-purple-500' : 'text-slate-400 dark:text-slate-500'}`}
                   />
                   <span
                     className={`flex-1 text-left ${
-                      voiceChatMode && selectedVoiceModel === model.key
+                      voiceChat.mode && voiceChat.selectedModel === model.key
                         ? 'text-purple-600 dark:text-purple-400'
                         : 'text-slate-700 dark:text-slate-300'
                     }`}
                   >
                     {model.label}
                   </span>
-                  {voiceChatMode && selectedVoiceModel === model.key && (
+                  {voiceChat.mode && voiceChat.selectedModel === model.key && (
                     <Check className="w-4 h-4 text-purple-500 ml-auto" />
                   )}
                 </button>
               ))}
 
               {/* Disable option */}
-              {voiceChatMode && (
+              {voiceChat.mode && (
                 <>
-                  <div className="my-1 border-t border-slate-200 dark:border-slate-700" />
+                  <div className="my-1 border-t border-slate-200 dark:border-white/30" />
                   <button
                     type="button"
                     onClick={() => {
-                      onVoiceChatDisable();
+                      voiceChat.onDisable();
                       onClose();
                       setShowVoiceModelSubmenu(false);
                     }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 glass-menu-item transition-colors"
                   >
                     <X className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                     <span>{t('voiceChat.disable', 'Disable Voice Chat')}</span>
@@ -206,19 +208,19 @@ export default function ToolsMenuPopover({
       {/* Agent submenu */}
       {onAgentSelect && (
         <>
-          <div className="my-1 border-t border-slate-200 dark:border-slate-700" />
+          <div className="my-1 border-t border-slate-200 dark:border-white/30" />
           <div className="relative">
             <button
               type="button"
-              disabled={researchMode || voiceChatMode}
+              disabled={research.mode || voiceChat.mode}
               onClick={() => {
                 setShowAgentSubmenu((v) => !v);
                 setShowVoiceModelSubmenu(false);
               }}
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                researchMode || voiceChatMode
-                  ? 'opacity-40 cursor-not-allowed'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                research.mode || voiceChat.mode
+                  ? 'opacity-30 cursor-not-allowed'
+                  : 'text-slate-700 dark:text-slate-300 glass-menu-item'
               }`}
             >
               <Sparkles className="w-4 h-4 text-slate-500 dark:text-slate-400" />
@@ -228,7 +230,7 @@ export default function ToolsMenuPopover({
 
             {/* Agent submenu panel */}
             {showAgentSubmenu && (
-              <div className="absolute left-full bottom-0 ml-1 w-52 max-h-72 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-[60] py-1">
+              <div className="glass-panel absolute left-full bottom-0 ml-1 w-52 max-h-72 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/30 rounded-xl shadow-lg z-[60] py-1">
                 {/* Default agent */}
                 <button
                   type="button"
@@ -242,7 +244,7 @@ export default function ToolsMenuPopover({
                     onClose();
                     setShowAgentSubmenu(false);
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors glass-menu-item"
                 >
                   <Sparkles
                     className={`w-4 h-4 ${!selectedAgent ? 'text-blue-500' : 'text-slate-400 dark:text-slate-500'}`}
@@ -276,19 +278,19 @@ export default function ToolsMenuPopover({
                           onPendingAgentChange(agent.name);
                           onShowRemoveAgentConfirm();
                         } else {
-                          if (voiceChatMode) {
-                            setNovaSonicMode(false);
-                            onVoiceChatDisconnect?.();
+                          if (voiceChat.mode) {
+                            voiceChat.setMode(false);
+                            voiceChat.onDisconnect?.();
                           }
-                          if (researchMode) {
-                            setResearchMode(false);
+                          if (research.mode) {
+                            research.setMode(false);
                           }
                           onAgentSelect(agent.name);
                         }
                         onClose();
                         setShowAgentSubmenu(false);
                       }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors glass-menu-item"
                     >
                       <Sparkles
                         className={`w-4 h-4 ${isSelected ? 'text-blue-500' : 'text-slate-400 dark:text-slate-500'}`}
@@ -310,7 +312,7 @@ export default function ToolsMenuPopover({
                 })}
 
                 {/* Manage agents */}
-                <div className="my-1 border-t border-slate-200 dark:border-slate-700" />
+                <div className="my-1 border-t border-slate-200 dark:border-white/30" />
                 <button
                   type="button"
                   onClick={() => {
@@ -318,7 +320,7 @@ export default function ToolsMenuPopover({
                     setShowAgentSubmenu(false);
                     onAgentClick();
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 glass-menu-item transition-colors"
                 >
                   <Settings2 className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                   <span>{t('chat.manageAgents')}</span>

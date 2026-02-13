@@ -1,9 +1,9 @@
-import { useEffect } from 'react';
 import { X, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
+import { useModal } from '../hooks/useModal';
 
 interface ToolResultDetailModalProps {
   isOpen: boolean;
@@ -18,20 +18,7 @@ export default function ToolResultDetailModal({
 }: ToolResultDetailModalProps) {
   const { t } = useTranslation();
 
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.body.style.overflow = 'unset';
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen, onClose]);
+  useModal({ isOpen, onClose });
 
   if (!isOpen) return null;
 

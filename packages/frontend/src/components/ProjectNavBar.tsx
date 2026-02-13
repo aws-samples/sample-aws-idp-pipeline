@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import {
   ChevronRight,
   Home,
-  MessageSquarePlus,
   Settings,
   ChevronDown,
   RefreshCw,
@@ -15,13 +14,11 @@ import { useAwsClient } from '../hooks/useAwsClient';
 interface ProjectNavBarProps {
   project: Project;
   onSettingsClick: () => void;
-  onNewChat?: () => void;
 }
 
 export default function ProjectNavBar({
   project,
   onSettingsClick,
-  onNewChat,
 }: ProjectNavBarProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -79,7 +76,7 @@ export default function ProjectNavBar({
   };
 
   return (
-    <nav className="flex items-center h-[68px] min-h-[68px] flex-shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-4">
+    <nav className="glow-through flex items-center h-[68px] min-h-[68px] flex-shrink-0 bg-white dark:bg-transparent border-b border-slate-200 dark:border-white/[0.08] px-4">
       {/* Breadcrumb */}
       <div className="flex items-center">
         {/* Home */}
@@ -118,13 +115,13 @@ export default function ProjectNavBar({
 
           {/* Dropdown */}
           {dropdownOpen && (
-            <div className="absolute left-0 top-full mt-1 z-50 min-w-[240px] max-w-[320px] max-h-[320px] overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1">
+            <div className="glass-panel absolute left-0 top-full mt-1 z-50 min-w-[240px] max-w-[320px] max-h-[320px] overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg py-1">
               {/* Project Home + Refresh */}
               <div className="flex items-center">
                 <Link
                   to="/"
                   onClick={() => setDropdownOpen(false)}
-                  className="flex-1 flex items-center gap-2.5 px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                  className="glass-menu-item flex-1 flex items-center gap-2.5 px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 transition-colors"
                 >
                   <Home className="h-4 w-4 text-slate-400 dark:text-slate-500" />
                   <span>{t('projects.title')}</span>
@@ -132,7 +129,7 @@ export default function ProjectNavBar({
                 <button
                   onClick={loadProjects}
                   disabled={loadingProjects}
-                  className="p-1.5 mr-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-50"
+                  className="glass-menu-item p-1.5 mr-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded transition-colors disabled:opacity-50"
                   title={t('common.refresh', 'Refresh')}
                 >
                   <RefreshCw
@@ -140,7 +137,7 @@ export default function ProjectNavBar({
                   />
                 </button>
               </div>
-              <div className="my-1 border-t border-slate-200 dark:border-slate-700" />
+              <div className="my-1 border-t border-slate-200 dark:border-white/[0.1]" />
 
               {loadingProjects && projects.length === 0 ? (
                 <div className="px-3 py-4 text-center text-xs text-slate-400">
@@ -160,19 +157,19 @@ export default function ProjectNavBar({
                       onClick={() => handleSelectProject(p)}
                       className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
                         isActive
-                          ? 'bg-blue-50 dark:bg-blue-900/20'
-                          : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                          ? 'nav-project-active border-l-2 border-blue-500'
+                          : 'glass-menu-item border-l-2 border-transparent'
                       }`}
                     >
                       <span
-                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ring-2 ${isActive ? 'ring-blue-400/50' : 'ring-transparent'}`}
                         style={{ background: color.border }}
                       />
                       <div className="flex-1 min-w-0">
                         <p
                           className={`text-sm truncate ${
                             isActive
-                              ? 'font-medium text-blue-600 dark:text-blue-400'
+                              ? 'font-semibold text-blue-600 dark:text-blue-300'
                               : 'text-slate-700 dark:text-slate-200'
                           }`}
                         >
@@ -194,7 +191,7 @@ export default function ProjectNavBar({
 
         {/* Description & Owner */}
         {(project.created_by || project.description) && (
-          <div className="flex flex-col justify-center ml-2 pl-3 border-l border-slate-200 dark:border-slate-700 text-xs text-slate-400 dark:text-slate-500 max-w-[400px] divide-y divide-slate-200 dark:divide-slate-700">
+          <div className="flex flex-col justify-center ml-2 pl-3 border-l border-slate-200 dark:border-white/[0.1] text-xs text-slate-400 dark:text-slate-500 max-w-[400px] divide-y divide-slate-200 dark:divide-white/[0.1]">
             {project.description && (
               <span
                 className="truncate leading-tight pb-0.5"
@@ -217,18 +214,9 @@ export default function ProjectNavBar({
 
       {/* Menu */}
       <div className="flex items-center gap-1">
-        {onNewChat && (
-          <button
-            onClick={onNewChat}
-            className="inline-flex items-center gap-1.5 h-8 px-3 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
-          >
-            <MessageSquarePlus className="h-4 w-4" />
-            <span>{t('chat.newChat')}</span>
-          </button>
-        )}
         <button
           onClick={onSettingsClick}
-          className="inline-flex items-center gap-1.5 h-8 px-3 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
+          className="glass-menu-item inline-flex items-center gap-1.5 h-8 px-3 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-md transition-colors"
         >
           <Settings className="h-4 w-4" />
           <span>{t('nav.settings')}</span>

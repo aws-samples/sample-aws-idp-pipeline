@@ -23,7 +23,7 @@ export default function ToolUseIndicator({
 
   return (
     <div
-      className={`relative flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border backdrop-blur-sm transition-all duration-500 overflow-hidden ${
+      className={`glass-panel relative flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border backdrop-blur-sm transition-all duration-500 overflow-hidden ${
         isRunning
           ? 'bg-white/80 dark:bg-white/[0.03] border-slate-200/80 dark:border-white/10 shadow-sm'
           : isSuccess

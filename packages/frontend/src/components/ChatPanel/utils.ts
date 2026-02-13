@@ -1,7 +1,6 @@
 import DOMPurify from 'isomorphic-dompurify';
-import type { LucideIcon } from 'lucide-react';
-import { FileText, FileSpreadsheet, FileCode, File } from 'lucide-react';
 import type { WebSearchResult, FetchContentPreview } from './types';
+export { formatFileSize, getFileTypeInfo } from '../../lib/fileTypeUtils';
 
 export const formatToolDisplayName = (rawName: string): string => {
   const base = rawName.split('___')[0];
@@ -48,62 +47,6 @@ export const parseFetchContent = (text: string): FetchContentPreview | null => {
       ? snippetLines.slice(0, 300) + '...'
       : snippetLines;
   return { title, snippet };
-};
-
-export const formatFileSize = (bytes: number) => {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-};
-
-export const getFileTypeInfo = (
-  filename: string,
-): { icon: LucideIcon; color: string; bgColor: string } => {
-  const ext = filename.split('.').pop()?.toLowerCase() || '';
-  switch (ext) {
-    case 'pdf':
-      return {
-        icon: FileText,
-        color: 'text-red-500',
-        bgColor: 'bg-red-100 dark:bg-red-900/30',
-      };
-    case 'doc':
-    case 'docx':
-      return {
-        icon: FileText,
-        color: 'text-blue-500',
-        bgColor: 'bg-blue-100 dark:bg-blue-900/30',
-      };
-    case 'xls':
-    case 'xlsx':
-    case 'csv':
-      return {
-        icon: FileSpreadsheet,
-        color: 'text-green-500',
-        bgColor: 'bg-green-100 dark:bg-green-900/30',
-      };
-    case 'html':
-    case 'md':
-      return {
-        icon: FileCode,
-        color: 'text-purple-500',
-        bgColor: 'bg-purple-100 dark:bg-purple-900/30',
-      };
-    case 'txt':
-      return {
-        icon: File,
-        color: 'text-slate-500',
-        bgColor: 'bg-slate-100 dark:bg-slate-600',
-      };
-    default:
-      return {
-        icon: File,
-        color: 'text-slate-500',
-        bgColor: 'bg-slate-100 dark:bg-slate-600',
-      };
-  }
 };
 
 /** Prepare content for markdown parsing */

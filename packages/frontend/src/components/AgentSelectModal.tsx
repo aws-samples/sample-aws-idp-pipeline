@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Plus, Pencil, Trash2, Check, Sparkles } from 'lucide-react';
 import { Agent } from '../types/project';
 import ConfirmModal from './ConfirmModal';
+import { useModal } from '../hooks/useModal';
 
 type ModalView = 'list' | 'create' | 'edit';
 
@@ -67,36 +68,22 @@ export default function AgentSelectModal({
     }
   }, [view]);
 
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !saving && !deleting && !showConfirm) {
-        if (view !== 'list') {
-          setView('list');
-          setEditingAgent(null);
-          setName('');
-          setContent('');
-        } else {
-          onClose();
-        }
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'hidden';
-    }
-
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-      document.body.style.overflow = '';
-    };
-  }, [isOpen, onClose, view, saving, deleting, showConfirm]);
-
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && !saving && !deleting) {
+  const handleEscapeClose = useCallback(() => {
+    if (view !== 'list') {
+      setView('list');
+      setEditingAgent(null);
+      setName('');
+      setContent('');
+    } else {
       onClose();
     }
-  };
+  }, [view, onClose]);
+
+  const { handleBackdropClick } = useModal({
+    isOpen,
+    onClose: handleEscapeClose,
+    disableClose: saving || deleting || showConfirm,
+  });
 
   const handleCreate = async () => {
     if (!name.trim() || !content.trim()) return;

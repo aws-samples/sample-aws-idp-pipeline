@@ -21,6 +21,9 @@ import type { ChatPanelProps, AttachedFile, ChatArtifact } from './types';
 export type { AttachedFile, StreamingBlock } from './types';
 
 export default function ChatPanel({
+  projectName,
+  projectDescription,
+  projectColor,
   messages,
   inputMessage,
   sending,
@@ -32,7 +35,6 @@ export default function ChatPanel({
   documents = [],
   onInputChange,
   onSendMessage,
-  onResearch,
   onAgentSelect,
   onAgentClick,
   onNewChat,
@@ -40,20 +42,8 @@ export default function ChatPanel({
   onSourceClick,
   loadingSourceKey,
   scrollPositionRef,
-  researchMode: researchModeProp,
-  onResearchModeChange,
-  voiceChatAvailable,
-  voiceChatState,
-  voiceChatAudioLevel,
-  voiceChatMode: voiceChatModeProp,
-  selectedVoiceModel,
-  onVoiceChatModeChange,
-  onVoiceChatConnect,
-  onVoiceChatDisconnect,
-  onVoiceChatText,
-  onVoiceChatToggleMic,
-  onVoiceChatSettings,
-  onVoiceModelSelect,
+  voiceChat,
+  research,
 }: ChatPanelProps) {
   const { t } = useTranslation();
   const { getPresignedDownloadUrl } = useAwsClient();
@@ -82,54 +72,59 @@ export default function ChatPanel({
     new Set(),
   );
 
+  // Extract stable references for hook dependencies
+  const researchOnModeChange = research?.onModeChange;
+  const voiceChatOnModeChange = voiceChat?.onModeChange;
+  const voiceChatOnDisconnect = voiceChat?.onDisconnect;
+
   // Research mode: use controlled prop if provided, otherwise internal state
   const [researchModeInternal, setResearchModeInternal] = useState(false);
-  const researchMode = researchModeProp ?? researchModeInternal;
+  const researchMode = research?.mode ?? researchModeInternal;
   const setResearchMode = useCallback(
     (mode: boolean) => {
-      if (onResearchModeChange) {
-        onResearchModeChange(mode);
+      if (researchOnModeChange) {
+        researchOnModeChange(mode);
       } else {
         setResearchModeInternal(mode);
       }
     },
-    [onResearchModeChange],
+    [researchOnModeChange],
   );
 
   // Voice Chat mode: use controlled prop if provided, otherwise internal state
   const [voiceChatModeInternal, setVoiceChatModeInternal] = useState(false);
-  const voiceChatMode = voiceChatModeProp ?? voiceChatModeInternal;
+  const voiceChatMode = voiceChat?.mode ?? voiceChatModeInternal;
   const setNovaSonicMode = useCallback(
     (mode: boolean) => {
-      if (onVoiceChatModeChange) {
-        onVoiceChatModeChange(mode);
+      if (voiceChatOnModeChange) {
+        voiceChatOnModeChange(mode);
       } else {
         setVoiceChatModeInternal(mode);
       }
     },
-    [onVoiceChatModeChange],
+    [voiceChatOnModeChange],
   );
 
   // Reset modes when loading a session history
   const prevLoadingHistory = useRef(false);
   useEffect(() => {
     if (loadingHistory && !prevLoadingHistory.current) {
-      if (!onResearchModeChange) setResearchModeInternal(false);
-      if (!onVoiceChatModeChange) setVoiceChatModeInternal(false);
+      if (!researchOnModeChange) setResearchModeInternal(false);
+      if (!voiceChatOnModeChange) setVoiceChatModeInternal(false);
     }
     prevLoadingHistory.current = loadingHistory;
-  }, [loadingHistory, onResearchModeChange, onVoiceChatModeChange]);
+  }, [loadingHistory, researchOnModeChange, voiceChatOnModeChange]);
 
   // Sync voiceChatMode with connection status
   useEffect(() => {
     if (
-      !onVoiceChatModeChange &&
-      (voiceChatState?.status === 'connected' ||
-        voiceChatState?.status === 'connecting')
+      !voiceChatOnModeChange &&
+      (voiceChat?.state?.status === 'connected' ||
+        voiceChat?.state?.status === 'connecting')
     ) {
       setVoiceChatModeInternal(true);
     }
-  }, [voiceChatState?.status, onVoiceChatModeChange]);
+  }, [voiceChat?.state?.status, voiceChatOnModeChange]);
 
   // Confirm modals state
   const [showRemoveAgentConfirm, setShowRemoveAgentConfirm] = useState(false);
@@ -147,16 +142,16 @@ export default function ChatPanel({
       setShowNovaSonicDisableConfirm(true);
     } else {
       setNovaSonicMode(false);
-      onVoiceChatDisconnect?.();
+      voiceChatOnDisconnect?.();
     }
-  }, [messages.length, setNovaSonicMode, onVoiceChatDisconnect]);
+  }, [messages.length, setNovaSonicMode, voiceChatOnDisconnect]);
 
   const confirmNovaSonicDisable = useCallback(() => {
     setShowNovaSonicDisableConfirm(false);
     setNovaSonicMode(false);
-    onVoiceChatDisconnect?.();
+    voiceChatOnDisconnect?.();
     onNewChat();
-  }, [setNovaSonicMode, onVoiceChatDisconnect, onNewChat]);
+  }, [setNovaSonicMode, voiceChatOnDisconnect, onNewChat]);
 
   // Handle Research mode disable with confirmation if needed
   const handleResearchDisable = useCallback(() => {
@@ -294,13 +289,13 @@ export default function ChatPanel({
   }, [hasMessages]);
 
   // Voice chat panel element
-  const voiceChatPanel = voiceChatMode && voiceChatState && (
+  const voiceChatPanel = voiceChatMode && voiceChat?.state && (
     <VoiceChatPanel
-      voiceChatState={voiceChatState}
-      voiceChatAudioLevel={voiceChatAudioLevel}
-      onConnect={onVoiceChatConnect}
-      onDisconnect={onVoiceChatDisconnect}
-      onSettings={onVoiceChatSettings}
+      voiceChatState={voiceChat.state}
+      voiceChatAudioLevel={voiceChat.audioLevel}
+      onConnect={voiceChat.onConnect}
+      onDisconnect={voiceChat.onDisconnect}
+      onSettings={voiceChat.onSettings}
     />
   );
 
@@ -315,23 +310,27 @@ export default function ChatPanel({
       documents={documents}
       agents={agents}
       selectedAgent={selectedAgent}
-      researchMode={researchMode}
-      voiceChatMode={voiceChatMode}
-      voiceChatState={voiceChatState}
-      selectedVoiceModel={selectedVoiceModel}
-      voiceChatAvailable={voiceChatAvailable}
       onInputChange={onInputChange}
       onSendMessage={onSendMessage}
-      onResearch={onResearch}
       onAgentSelect={onAgentSelect}
       onAgentClick={onAgentClick}
-      onVoiceChatText={onVoiceChatText}
-      onVoiceModelSelect={onVoiceModelSelect}
-      onVoiceChatDisconnect={onVoiceChatDisconnect}
-      setResearchMode={setResearchMode}
-      setNovaSonicMode={setNovaSonicMode}
-      handleNovaSonicDisable={handleNovaSonicDisable}
-      handleResearchDisable={handleResearchDisable}
+      voiceChat={{
+        mode: voiceChatMode,
+        state: voiceChat?.state,
+        selectedModel: voiceChat?.selectedModel,
+        available: voiceChat?.available,
+        onText: voiceChat?.onText,
+        onModelSelect: voiceChat?.onModelSelect,
+        onDisconnect: voiceChat?.onDisconnect,
+        setMode: setNovaSonicMode,
+        handleDisable: handleNovaSonicDisable,
+      }}
+      research={{
+        mode: researchMode,
+        onResearch: research?.onResearch,
+        setMode: setResearchMode,
+        handleDisable: handleResearchDisable,
+      }}
       messagesLength={messages.length}
       setPendingAgentChange={(val) => setPendingAgentChange(val)}
       setShowRemoveAgentConfirm={(val) => setShowRemoveAgentConfirm(val)}
@@ -341,7 +340,7 @@ export default function ChatPanel({
   );
 
   return (
-    <div className="w-full h-full flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 overflow-hidden relative">
+    <div className="glow-through w-full h-full flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 overflow-hidden relative">
       {/* Messages Container */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
         {loadingHistory ? (
@@ -372,7 +371,13 @@ export default function ChatPanel({
             </div>
           </div>
         ) : !hasMessages ? (
-          <WelcomeScreen voiceChatPanel={voiceChatPanel} inputBox={inputBox} />
+          <WelcomeScreen
+            voiceChatPanel={voiceChatPanel}
+            inputBox={inputBox}
+            projectName={projectName}
+            projectDescription={projectDescription}
+            projectColor={projectColor}
+          />
         ) : (
           <MessageList
             messages={messages}

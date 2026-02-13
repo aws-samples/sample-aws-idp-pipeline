@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Trash2, Info, X } from 'lucide-react';
+import { useModal } from '../hooks/useModal';
 
 export type ConfirmVariant = 'danger' | 'warning' | 'info';
 
@@ -71,29 +72,11 @@ export default function ConfirmModal({
   const styles = variantStyles[variant];
   const Icon = styles.icon;
 
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !loading) {
-        onClose();
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'hidden';
-    }
-
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-      document.body.style.overflow = '';
-    };
-  }, [isOpen, onClose, loading]);
-
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && !loading) {
-      onClose();
-    }
-  };
+  const { handleBackdropClick } = useModal({
+    isOpen,
+    onClose,
+    disableClose: loading,
+  });
 
   if (!isOpen) return null;
 
