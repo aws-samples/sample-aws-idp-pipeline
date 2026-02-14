@@ -348,48 +348,5 @@ export class EventStack extends Stack {
         batchSize: 1,
       }),
     );
-
-    // ========================================
-    // WebCrawler Consumer Lambda
-    // ========================================
-
-    const webcrawlerAgentRuntimeArn =
-      ssm.StringParameter.valueForStringParameter(
-        this,
-        SSM_KEYS.WEBCRAWLER_AGENT_RUNTIME_ARN,
-      );
-
-    const webcrawlerConsumer = new lambda.Function(this, 'WebcrawlerConsumer', {
-      functionName: 'idp-v2-webcrawler-consumer',
-      runtime: lambda.Runtime.PYTHON_3_14,
-      handler: 'index.handler',
-      timeout: Duration.minutes(1),
-      memorySize: 256,
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, '../functions/preprocessing/webcrawler-consumer'),
-      ),
-      layers: [sharedLayer],
-      environment: {
-        BACKEND_TABLE_NAME: backendTableName,
-        WEBCRAWLER_AGENT_RUNTIME_ARN: webcrawlerAgentRuntimeArn,
-      },
-    });
-
-    backendTable.grantReadWriteData(webcrawlerConsumer);
-
-    webcrawlerConsumer.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ['bedrock-agentcore:InvokeAgentRuntime'],
-        resources: [
-          `arn:aws:bedrock-agentcore:${this.region}:${this.account}:runtime/webcrawler_agent*`,
-        ],
-      }),
-    );
-
-    webcrawlerConsumer.addEventSource(
-      new lambdaEventSources.SqsEventSource(this.webcrawlerQueue, {
-        batchSize: 1,
-      }),
-    );
   }
 }
