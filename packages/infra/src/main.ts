@@ -10,6 +10,7 @@ import { TranscribeStack } from './stacks/transcribe-stack.js';
 import { WorkflowStack } from './stacks/workflow-stack.js';
 import { VpcStack } from './stacks/vpc-stack.js';
 import { WorkerStack } from './stacks/worker-stack.js';
+import { WebcrawlerStack } from './stacks/webcrawler-stack.js';
 import { WebsocketStack } from './stacks/websocket-stack.js';
 
 const app = new App();
@@ -51,6 +52,7 @@ websocketStack.addDependency(vpcStack);
 const mcpStack = new McpStack(app, 'IDP-V2-Mcp', { env });
 mcpStack.addDependency(storageStack);
 mcpStack.addDependency(websocketStack);
+mcpStack.addDependency(workflowStack);
 mcpStack.addDependency(vpcStack);
 
 const workerStack = new WorkerStack(app, 'IDP-V2-Worker', { env });
@@ -65,7 +67,11 @@ const agentStack = new AgentStack(app, 'IDP-V2-Agent', {
 agentStack.addDependency(storageStack);
 agentStack.addDependency(mcpStack);
 
-eventStack.addDependency(agentStack);
+const webcrawlerStack = new WebcrawlerStack(app, 'IDP-V2-Webcrawler', {
+  env,
+});
+webcrawlerStack.addDependency(eventStack);
+webcrawlerStack.addDependency(agentStack);
 
 const applicationStack = new ApplicationStack(app, 'IDP-V2-Application', {
   env,
@@ -94,6 +100,7 @@ applicationStack.addDependency(vpcStack);
 //   env,
 //   gateway: mcpStack.gateway,
 // });
+// new WebcrawlerStack(app, 'IDP-V2-Webcrawler', { env });
 // new ApplicationStack(app, 'IDP-V2-Application', {
 //   env,
 //   crossRegionReferences: true,
