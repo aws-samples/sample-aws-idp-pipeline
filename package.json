@@ -19,6 +19,7 @@
     "@aws-sdk/signature-v4": "^3.374.0",
     "@aws-sdk/util-format-url": "^3.972.1",
     "@aws/nx-plugin": "0.64.1",
+    "@fortune-sheet/react": "^1.0.4",
     "@hono/node-server": "^1.19.7",
     "@hono/standard-validator": "^0.2.1",
     "@hono/swagger-ui": "^0.5.3",
@@ -33,6 +34,7 @@
     "aws4fetch": "^1.0.20",
     "constructs": "10.4.3",
     "esbuild": "0.27.0",
+    "exceljs": "^4.4.0",
     "hono": "^4.11.7",
     "hono-openapi": "^1.1.2",
     "i18next": "^25.7.4",
@@ -53,8 +55,7 @@
     "remark-gfm": "^4.0.1",
     "source-map-support": "0.5.21",
     "tailwindcss": "4.1.17",
-    "valibot": "^1.2.0",
-    "exceljs": "^4.4.0"
+    "valibot": "^1.2.0"
   },
   "devDependencies": {
     "@aws-cdk/aws-bedrock-agentcore-alpha": "2.235.1-alpha.0",
