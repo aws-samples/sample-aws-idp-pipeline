@@ -22,7 +22,6 @@ export type { AttachedFile, StreamingBlock } from './types';
 
 export default function ChatPanel({
   projectName,
-  projectDescription,
   projectColor,
   messages,
   inputMessage,
@@ -252,7 +251,7 @@ export default function ChatPanel({
     if (scrollPositionRef && scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollPositionRef.current;
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scrollPositionRef]);
 
   // Save scroll position continuously
   useEffect(() => {
@@ -375,7 +374,6 @@ export default function ChatPanel({
             voiceChatPanel={voiceChatPanel}
             inputBox={inputBox}
             projectName={projectName}
-            projectDescription={projectDescription}
             projectColor={projectColor}
           />
         ) : (

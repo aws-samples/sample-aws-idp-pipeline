@@ -29,6 +29,7 @@ async def invoke(request: dict):
             document_id=req.document_id,
             project_id=req.project_id,
             file_uri=req.file_uri,
+            language=req.language,
         )
 
         yield {"type": "complete", "result": result}

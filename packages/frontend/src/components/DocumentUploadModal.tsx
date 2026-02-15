@@ -233,11 +233,19 @@ export default function DocumentUploadModal({
     } else {
       if (!webUrl) return;
       const webreqFile = createWebreqFile();
-      await onUpload([webreqFile], { use_bda: false });
+      await onUpload([webreqFile], { use_bda: false, language });
       setWebUrl('');
       setWebInstruction('');
     }
-  }, [activeTab, files, webUrl, onUpload, createWebreqFile, buildOptions]);
+  }, [
+    activeTab,
+    files,
+    webUrl,
+    language,
+    onUpload,
+    createWebreqFile,
+    buildOptions,
+  ]);
 
   const handleClose = useCallback(() => {
     if (!uploading) {
@@ -620,6 +628,29 @@ export default function DocumentUploadModal({
                     'Instructions help AI extract relevant content from the web page.',
                   )}
                 </p>
+              </div>
+
+              {/* Language */}
+              <div className="flex items-center gap-3 px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                <label
+                  htmlFor="web-language"
+                  className="text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap"
+                >
+                  {t('common.language')}
+                </label>
+                <select
+                  id="web-language"
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  disabled={uploading}
+                  className="flex-1 px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                >
+                  {LANGUAGES.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {t(`languages.${lang.code}`)}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Web Info */}
