@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import threading
 from datetime import datetime, timezone
 from typing import Callable
 from urllib.parse import urlparse
@@ -398,7 +399,6 @@ async def crawl_and_process(
 
         # Build the prompt for multi-page crawling
         prompt = f"""Start URL: {url}
-Language: {language} - Extract and analyze content in this language.
 
 {f'Instructions: {instruction}' if instruction else ''}
 
@@ -414,11 +414,27 @@ IMPORTANT:
 - Call save_page for EVERY page you extract
 - Use your judgment to decide which links are worth following based on the page type and instructions"""
 
-        # Execute the agent in a separate thread to avoid event loop conflicts
+        # Execute the agent in an isolated thread to avoid contextvars
+        # conflicts between asyncio.to_thread and Playwright in Python 3.13.
+        # Plain threading.Thread does not copy the parent context, preventing
+        # "cannot enter context: already entered" errors in Playwright's
+        # pipe transport callbacks.
         logger.warning(f"[TRACE] Executing agent with prompt: {prompt[:100]}...")
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+
+        def _run_agent():
+            try:
+                result = agent(prompt)
+                loop.call_soon_threadsafe(future.set_result, result)
+            except Exception as e:
+                loop.call_soon_threadsafe(future.set_exception, e)
+
+        agent_thread = threading.Thread(target=_run_agent, daemon=True)
+        agent_thread.start()
+
         try:
-            # Run synchronous agent call in thread pool
-            response = await asyncio.to_thread(agent, prompt)
+            response = await future
             logger.warning(f"[TRACE] Agent returned! Response type: {type(response)}")
         except Exception as agent_error:
             logger.warning(f"[TRACE] Agent exception: {agent_error}")

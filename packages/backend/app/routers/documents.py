@@ -275,18 +275,31 @@ def delete_document(project_id: str, document_id: str) -> DeleteDocumentResponse
 
     deleted_info = DeletedDocumentInfo(document_id=document_id, workflow_id=workflow_id)
 
-    # 1. Delete from LanceDB (per-project, if workflow exists)
-    if workflow_id and config.lancedb_express_bucket_name and config.lancedb_lock_table_name:
+    # 1. Delete from LanceDB via Lambda
+    if workflow_id and config.lancedb_function_name:
         try:
-            import lancedb
+            import json
 
-            db = lancedb.connect(
-                f"s3+ddb://{config.lancedb_express_bucket_name}?ddbTableName={config.lancedb_lock_table_name}"
+            import boto3
+
+            lambda_client = boto3.client("lambda", region_name=config.aws_region)
+            resp = lambda_client.invoke(
+                FunctionName=config.lancedb_function_name,
+                InvocationType="RequestResponse",
+                Payload=json.dumps(
+                    {
+                        "action": "delete_by_workflow",
+                        "params": {
+                            "project_id": project_id,
+                            "workflow_id": workflow_id,
+                        },
+                    }
+                ),
             )
-            # Table name is project_id
-            if project_id in db.table_names():
-                lance_table = db.open_table(project_id)
-                lance_table.delete(f"workflow_id = '{workflow_id}'")
+            payload = json.loads(resp["Payload"].read())
+            if resp.get("FunctionError") or payload.get("statusCode") != 200:
+                deleted_info.lancedb_error = payload.get("error", "Unknown error")
+            else:
                 deleted_info.lancedb_deleted = True
         except Exception as e:
             deleted_info.lancedb_error = str(e)
