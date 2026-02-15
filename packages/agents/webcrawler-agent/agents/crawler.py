@@ -356,6 +356,7 @@ async def crawl_and_process(
     document_id: str,
     project_id: str,
     file_uri: str,
+    language: str = 'en',
 ) -> dict:
     """Crawl web page and process content."""
     logger.warning(f"[TRACE] crawl_and_process started: workflow={workflow_id}")
@@ -397,6 +398,7 @@ async def crawl_and_process(
 
         # Build the prompt for multi-page crawling
         prompt = f"""Start URL: {url}
+Language: {language} - Extract and analyze content in this language.
 
 {f'Instructions: {instruction}' if instruction else ''}
 

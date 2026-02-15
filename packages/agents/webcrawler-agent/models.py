@@ -12,6 +12,7 @@ class WebCrawlRequest(BaseModel):
     document_id: str
     project_id: str
     file_uri: str
+    language: str = 'en'
 
 
 class WebCrawlResponse(BaseModel):
