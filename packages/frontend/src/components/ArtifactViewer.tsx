@@ -5,6 +5,7 @@ import {
   Download,
   Loader2,
   FileText,
+  FileSpreadsheet,
   Image as ImageIcon,
   Presentation,
 } from 'lucide-react';
@@ -13,6 +14,7 @@ import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import mammoth from 'mammoth';
 import { init as initPptxPreview } from 'pptx-preview';
+import ExcelViewer from './ExcelViewer';
 import { Artifact } from '../types/project';
 
 interface ArtifactViewerProps {
@@ -61,7 +63,14 @@ export default function ArtifactViewer({
     artifact.content_type ===
       'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
     artifact.filename.toLowerCase().endsWith('.pptx');
+  const isExcel =
+    artifact.content_type ===
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    artifact.content_type === 'application/vnd.ms-excel' ||
+    artifact.filename.toLowerCase().endsWith('.xlsx') ||
+    artifact.filename.toLowerCase().endsWith('.xls');
 
+  const [excelUrl, setExcelUrl] = useState<string | null>(null);
   const pptxContainerRef = useRef<HTMLDivElement>(null);
   const pptxLastWidthRef = useRef<number>(0);
 
@@ -112,7 +121,9 @@ export default function ArtifactViewer({
         artifact.s3_key,
       );
 
-      if (isImage || isPdf) {
+      if (isExcel) {
+        setExcelUrl(presignedUrl);
+      } else if (isImage || isPdf) {
         setImageUrl(presignedUrl);
       } else if (isPptx) {
         const response = await fetch(presignedUrl);
@@ -151,6 +162,7 @@ export default function ArtifactViewer({
   }, [
     artifact,
     getPresignedUrl,
+    isExcel,
     isImage,
     isPdf,
     isPptx,
@@ -216,10 +228,12 @@ export default function ArtifactViewer({
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-white/[0.03]">
         <div
-          className={`flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br ${isPptx ? 'from-orange-500 to-red-600' : 'from-blue-500 to-indigo-600'}`}
+          className={`flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br ${isExcel ? 'from-green-500 to-emerald-600' : isPptx ? 'from-orange-500 to-red-600' : 'from-blue-500 to-indigo-600'}`}
         >
           {isImage ? (
             <ImageIcon className="w-4 h-4 text-white" />
+          ) : isExcel ? (
+            <FileSpreadsheet className="w-4 h-4 text-white" />
           ) : isPptx ? (
             <Presentation className="w-4 h-4 text-white" />
           ) : (
@@ -269,6 +283,11 @@ export default function ArtifactViewer({
               {t('common.retry', 'Retry')}
             </button>
           </div>
+        ) : isExcel && excelUrl ? (
+          <ExcelViewer
+            url={excelUrl}
+            className="w-full h-full overflow-hidden -m-4"
+          />
         ) : isPdf && imageUrl ? (
           <iframe
             src={imageUrl}

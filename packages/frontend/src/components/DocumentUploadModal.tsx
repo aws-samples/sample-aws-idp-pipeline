@@ -53,7 +53,7 @@ export default function DocumentUploadModal({
   const [activeTab, setActiveTab] = useState<UploadTab>('file');
   const [files, setFiles] = useState<File[]>([]);
   const [useBda, setUseBda] = useState(false);
-  const [useOcr, setUseOcr] = useState(true);
+  const [useOcr, setUseOcr] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showBda, setShowBda] = useState(false);
@@ -226,7 +226,7 @@ export default function DocumentUploadModal({
       await onUpload(files, buildOptions());
       setFiles([]);
       setUseBda(false);
-      setUseOcr(true);
+      setUseOcr(false);
       setShowBda(false);
       setShowOcr(false);
       setShowPrompt(false);
@@ -251,7 +251,7 @@ export default function DocumentUploadModal({
     if (!uploading) {
       setFiles([]);
       setUseBda(false);
-      setUseOcr(true);
+      setUseOcr(false);
       setShowBda(false);
       setShowOcr(false);
       setShowPrompt(false);

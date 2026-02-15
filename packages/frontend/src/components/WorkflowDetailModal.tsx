@@ -1331,7 +1331,7 @@ export default function WorkflowDetailModal({
                     <ExcelViewer
                       url={excelUrl}
                       sheetIndex={currentSegmentIndex}
-                      className="w-full h-full bg-white dark:bg-white/[0.04] rounded-lg shadow-lg p-4"
+                      className="w-full h-full"
                     />
                   );
                 }

@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Workbook } from 'exceljs';
+import { Workbook as ExcelWorkbook } from 'exceljs';
+import { Workbook } from '@fortune-sheet/react';
+import '@fortune-sheet/react/dist/index.css';
 import { Loader2 } from 'lucide-react';
 
 interface ExcelViewerProps {
@@ -8,16 +10,38 @@ interface ExcelViewerProps {
   className?: string;
 }
 
-interface MergeInfo {
-  rowSpan?: number;
-  colSpan?: number;
-  hidden?: boolean;
+interface FSCell {
+  v?: string | number | boolean;
+  m?: string | number;
+  bg?: string;
+  fc?: string;
+  bl?: number;
+  it?: number;
+  fs?: number;
+  ff?: number | string;
+  ht?: number;
+  vt?: number;
+  mc?: { r: number; c: number; rs?: number; cs?: number };
 }
 
-interface ParsedSheet {
+interface FSCellData {
+  r: number;
+  c: number;
+  v: FSCell | null;
+}
+
+interface FSSheet {
   name: string;
-  rows: (string | number | boolean)[][];
-  mergeMap: Map<string, MergeInfo>;
+  id: string;
+  row: number;
+  column: number;
+  celldata: FSCellData[];
+  config: {
+    merge: Record<string, { r: number; c: number; rs: number; cs: number }>;
+    rowlen: Record<string, number>;
+    columnlen: Record<string, number>;
+  };
+  status: number;
 }
 
 function colToIndex(col: string): number {
@@ -34,8 +58,8 @@ function parseCellRef(ref: string): [row: number, col: number] {
   return [parseInt(m[2], 10) - 1, colToIndex(m[1])];
 }
 
-function resolveCellValue(v: unknown): string | number | boolean {
-  if (v == null) return '';
+function resolveCellValue(v: unknown): string | number | boolean | undefined {
+  if (v == null) return undefined;
   if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
     return v;
   if (v instanceof Date) return v.toLocaleDateString();
@@ -54,48 +78,197 @@ function resolveCellValue(v: unknown): string | number | boolean {
   return String(v);
 }
 
-function buildMergeMap(merges: string[]): Map<string, MergeInfo> {
-  const map = new Map<string, MergeInfo>();
-  for (const range of merges) {
-    const parts = range.split(':');
-    if (parts.length !== 2) continue;
-    const [sr, sc] = parseCellRef(parts[0]);
-    const [er, ec] = parseCellRef(parts[1]);
-    const rowSpan = er - sr + 1;
-    const colSpan = ec - sc + 1;
-
-    map.set(`${sr}:${sc}`, { rowSpan, colSpan });
-
-    for (let r = sr; r <= er; r++) {
-      for (let c = sc; c <= ec; c++) {
-        if (r === sr && c === sc) continue;
-        map.set(`${r}:${c}`, { hidden: true });
-      }
-    }
+function getAlignmentH(
+  h?:
+    | 'left'
+    | 'center'
+    | 'right'
+    | 'fill'
+    | 'justify'
+    | 'centerContinuous'
+    | 'distributed',
+): number | undefined {
+  switch (h) {
+    case 'left':
+      return 1;
+    case 'center':
+    case 'centerContinuous':
+      return 0;
+    case 'right':
+      return 2;
+    default:
+      return undefined;
   }
-  return map;
 }
 
-async function parseWorkbook(data: ArrayBuffer): Promise<ParsedSheet[]> {
-  // exceljs accepts ArrayBuffer at runtime despite Buffer type signature
+function getAlignmentV(
+  v?: 'top' | 'middle' | 'bottom' | 'justify' | 'distributed',
+): number | undefined {
+  switch (v) {
+    case 'top':
+      return 1;
+    case 'middle':
+      return 0;
+    case 'bottom':
+      return 2;
+    default:
+      return undefined;
+  }
+}
+
+function extractArgbColor(color?: {
+  argb?: string;
+  theme?: number;
+  tint?: number;
+}): string | undefined {
+  if (!color) return undefined;
+  if (color.argb) {
+    const hex = color.argb;
+    // ARGB format: first 2 chars = alpha, rest = RGB
+    if (hex.length === 8) return '#' + hex.substring(2);
+    if (hex.length === 6) return '#' + hex;
+  }
+  return undefined;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function convertCell(excelCell: any): FSCell | null {
+  const val = resolveCellValue(excelCell.value);
+  if (val === undefined) return null;
+
+  const cell: FSCell = {
+    v: val,
+    m: String(val),
+  };
+
+  const style = excelCell.style;
+  if (!style) return cell;
+
+  // Background color
+  if (style.fill) {
+    const fill = style.fill;
+    if (fill.type === 'pattern' && fill.fgColor) {
+      const bg = extractArgbColor(fill.fgColor);
+      if (bg) cell.bg = bg;
+    }
+  }
+
+  // Font styling
+  if (style.font) {
+    const font = style.font;
+    if (font.bold) cell.bl = 1;
+    if (font.italic) cell.it = 1;
+    if (font.size) cell.fs = font.size;
+    if (font.name) cell.ff = font.name;
+    if (font.color) {
+      const fc = extractArgbColor(font.color);
+      if (fc) cell.fc = fc;
+    }
+  }
+
+  // Alignment
+  if (style.alignment) {
+    const ht = getAlignmentH(style.alignment.horizontal);
+    if (ht !== undefined) cell.ht = ht;
+    const vt = getAlignmentV(style.alignment.vertical);
+    if (vt !== undefined) cell.vt = vt;
+  }
+
+  return cell;
+}
+
+async function convertWorkbookToSheets(data: ArrayBuffer): Promise<FSSheet[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const wb = await new Workbook().xlsx.load(data as any);
-  return wb.worksheets.map((ws) => {
+  const wb = await new ExcelWorkbook().xlsx.load(data as any);
+
+  return wb.worksheets.map((ws, idx) => {
     const rowCount = ws.rowCount;
     const colCount = ws.columnCount;
-    const rows: (string | number | boolean)[][] = [];
+    const celldata: FSCellData[] = [];
+    const merge: Record<
+      string,
+      { r: number; c: number; rs: number; cs: number }
+    > = {};
+    const rowlen: Record<string, number> = {};
+    const columnlen: Record<string, number> = {};
 
+    // Convert cells (exceljs is 1-indexed, FortuneSheet is 0-indexed)
     for (let r = 1; r <= rowCount; r++) {
       const row = ws.getRow(r);
-      const rowData: (string | number | boolean)[] = [];
-      for (let c = 1; c <= colCount; c++) {
-        rowData.push(resolveCellValue(row.getCell(c).value));
+      if (row.height) {
+        rowlen[String(r - 1)] = row.height * 1.33; // pt to px
       }
-      rows.push(rowData);
+
+      for (let c = 1; c <= colCount; c++) {
+        const cell = row.getCell(c);
+        const converted = convertCell(cell);
+        if (converted) {
+          celldata.push({ r: r - 1, c: c - 1, v: converted });
+        }
+      }
     }
 
+    // Convert column widths
+    for (let c = 1; c <= colCount; c++) {
+      const col = ws.getColumn(c);
+      if (col.width) {
+        columnlen[String(c - 1)] = col.width * 7.5; // char width to px
+      }
+    }
+
+    // Convert merges
     const merges = (ws.model?.merges ?? []) as string[];
-    return { name: ws.name, rows, mergeMap: buildMergeMap(merges) };
+    for (const mergeRange of merges) {
+      const parts = mergeRange.split(':');
+      if (parts.length !== 2) continue;
+      const [sr, sc] = parseCellRef(parts[0]);
+      const [er, ec] = parseCellRef(parts[1]);
+      const rs = er - sr + 1;
+      const cs = ec - sc + 1;
+
+      const key = `${sr}_${sc}`;
+      merge[key] = { r: sr, c: sc, rs, cs };
+
+      // Mark merged cells with mc property in celldata
+      for (let r = sr; r <= er; r++) {
+        for (let c = sc; c <= ec; c++) {
+          if (r === sr && c === sc) {
+            // Primary cell: find existing or create, add mc with span info
+            const existing = celldata.find((cd) => cd.r === sr && cd.c === sc);
+            if (existing && existing.v) {
+              existing.v.mc = { r: sr, c: sc, rs, cs };
+            } else {
+              celldata.push({
+                r: sr,
+                c: sc,
+                v: { v: '', m: '', mc: { r: sr, c: sc, rs, cs } },
+              });
+            }
+          } else {
+            // Covered cell: mc points to primary cell (no rs/cs)
+            celldata.push({
+              r,
+              c,
+              v: { mc: { r: sr, c: sc } },
+            });
+          }
+        }
+      }
+    }
+
+    return {
+      name: ws.name,
+      id: String(idx),
+      row: rowCount,
+      column: colCount,
+      celldata,
+      config: {
+        merge,
+        rowlen,
+        columnlen,
+      },
+      status: idx === 0 ? 1 : 0,
+    };
   });
 }
 
@@ -104,7 +277,7 @@ export default function ExcelViewer({
   sheetIndex = 0,
   className = '',
 }: ExcelViewerProps) {
-  const [sheets, setSheets] = useState<ParsedSheet[]>([]);
+  const [sheets, setSheets] = useState<FSSheet[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -126,8 +299,13 @@ export default function ExcelViewer({
       })
       .then(async (buf) => {
         if (controller.signal.aborted) return;
-        const parsed = await parseWorkbook(buf);
-        setSheets(parsed);
+        const converted = await convertWorkbookToSheets(buf);
+        // Set the active sheet based on sheetIndex
+        const clampedIdx = Math.min(sheetIndex, converted.length - 1);
+        for (let i = 0; i < converted.length; i++) {
+          converted[i].status = i === clampedIdx ? 1 : 0;
+        }
+        setSheets(converted);
         setLoading(false);
       })
       .catch((err) => {
@@ -140,7 +318,7 @@ export default function ExcelViewer({
     return () => {
       controller.abort();
     };
-  }, [url]);
+  }, [url, sheetIndex]);
 
   if (loading) {
     return (
@@ -161,44 +339,17 @@ export default function ExcelViewer({
     );
   }
 
-  if (sheets.length === 0) return null;
-
-  const clampedIndex = Math.min(sheetIndex, sheets.length - 1);
-  const sheet = sheets[clampedIndex];
+  if (!sheets || sheets.length === 0) return null;
 
   return (
-    <div className={`flex flex-col ${className}`}>
-      <div className="flex-shrink-0 px-3 py-1.5 bg-slate-50 border-b border-slate-200">
-        <span className="text-xs font-medium text-slate-500">{sheet.name}</span>
-      </div>
-
-      <div className="flex-1 overflow-auto">
-        <table className="border-collapse text-sm">
-          <tbody>
-            {sheet.rows.map((row, rowIdx) => (
-              <tr key={rowIdx}>
-                {row.map((cell, colIdx) => {
-                  const key = `${rowIdx}:${colIdx}`;
-                  const merge = sheet.mergeMap.get(key);
-
-                  if (merge?.hidden) return null;
-
-                  return (
-                    <td
-                      key={colIdx}
-                      rowSpan={merge?.rowSpan}
-                      colSpan={merge?.colSpan}
-                      className="border border-slate-300 px-2 py-1 whitespace-nowrap text-slate-700"
-                    >
-                      {cell != null ? String(cell) : ''}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className={`relative overflow-hidden bg-white ${className}`}>
+      <Workbook
+        data={sheets}
+        allowEdit={false}
+        showToolbar={false}
+        showFormulaBar={false}
+        showSheetTabs={sheets.length > 1}
+      />
     </div>
   );
 }
