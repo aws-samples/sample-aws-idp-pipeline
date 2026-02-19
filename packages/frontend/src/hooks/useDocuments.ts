@@ -57,6 +57,7 @@ export function useDocuments({
   const [loadingSourceKey, setLoadingSourceKey] = useState<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const progressFetchedRef = useRef(false);
+  const loadDocumentsTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
 
   const loadDocuments = useCallback(async () => {
     try {
@@ -165,6 +166,70 @@ export function useDocuments({
   loadWorkflowsRef.current = loadWorkflows;
   loadDocumentsRef.current = loadDocuments;
 
+  const debouncedLoadDocuments = useCallback(() => {
+    if (loadDocumentsTimerRef.current) {
+      clearTimeout(loadDocumentsTimerRef.current);
+    }
+    loadDocumentsTimerRef.current = setTimeout(() => {
+      loadDocumentsRef.current();
+    }, 500);
+  }, []);
+
+  // Reconcile progress: replace entire map from API, removing stale entries
+  const reconcileProgress = useCallback(async () => {
+    try {
+      const progressData = await fetchApi<
+        {
+          document_id: string;
+          workflow_id: string;
+          status: string;
+          current_step: string;
+          steps: Record<string, { status: string; label: string }>;
+        }[]
+      >(`projects/${projectId}/documents/progress`);
+
+      const newMap: Record<string, WorkflowProgress> = {};
+      for (const progress of progressData) {
+        const doc = documents.find(
+          (d) => d.document_id === progress.document_id,
+        );
+
+        const steps: Record<string, StepStatus> = {};
+        if (progress.steps) {
+          for (const [key, val] of Object.entries(progress.steps)) {
+            steps[key] = {
+              status: val.status as StepStatus['status'],
+              label: stepLabels[key] || val.label,
+            };
+          }
+        }
+
+        const currentStepLabel = progress.current_step
+          ? stepLabels[progress.current_step] || progress.current_step
+          : '';
+
+        newMap[progress.document_id] = {
+          workflowId: progress.workflow_id,
+          documentId: progress.document_id,
+          fileName: doc?.name || '',
+          status: progress.status as WorkflowProgress['status'],
+          currentStep: currentStepLabel,
+          stepMessage: '',
+          segmentProgress: null,
+          error: progress.status === 'failed' ? 'Workflow failed' : null,
+          steps,
+        };
+      }
+
+      setWorkflowProgressMap(newMap);
+    } catch {
+      fetchProgressRef.current();
+    }
+  }, [fetchApi, projectId, documents, stepLabels]);
+
+  const reconcileProgressRef = useRef(reconcileProgress);
+  reconcileProgressRef.current = reconcileProgress;
+
   // Sync state on WebSocket reconnect
   const prevWsStatusRef = useRef(wsStatus);
   const wsConnectedOnceRef = useRef(false);
@@ -174,8 +239,9 @@ export function useDocuments({
 
     if (wsStatus === 'connected') {
       if (wasDisconnected && wsConnectedOnceRef.current) {
-        fetchProgressRef.current();
+        loadDocumentsRef.current();
         loadWorkflowsRef.current();
+        reconcileProgressRef.current();
       }
       wsConnectedOnceRef.current = true;
     }
@@ -233,6 +299,13 @@ export function useDocuments({
               },
             ];
           });
+
+          debouncedLoadDocuments();
+
+          // Fetch step progress after a short delay so the API has data
+          setTimeout(() => {
+            fetchProgressRef.current();
+          }, 2000);
         } else if (data.status === 'completed' || data.status === 'failed') {
           setWorkflowProgressMap((prev) => {
             if (!prev[data.documentId]) return prev;
@@ -253,12 +326,12 @@ export function useDocuments({
         loadWorkflows();
       }
     },
-    [projectId, loadDocuments, loadWorkflows, t],
+    [projectId, loadDocuments, loadWorkflows, debouncedLoadDocuments, t],
   );
 
   useWebSocketMessage('workflow', handleWorkflowMessage);
 
-  // WebSocket step progress handler
+  // WebSocket step progress handler (uses ref to avoid resubscription on documents change)
   const handleStepMessage = useCallback(
     (data: {
       event: string;
@@ -273,13 +346,43 @@ export function useDocuments({
     }) => {
       if (data.projectId !== projectId) return;
       if (data.event === 'step_changed') {
-        fetchDocumentProgress();
+        fetchProgressRef.current();
       }
     },
-    [projectId, fetchDocumentProgress],
+    [projectId],
   );
 
   useWebSocketMessage('step', handleStepMessage);
+
+  // WebSocket document event handler (e.g. deleted by another user)
+  const handleDocumentMessage = useCallback(
+    (data: {
+      event: string;
+      documentId: string;
+      projectId: string;
+      timestamp: string;
+    }) => {
+      if (data.projectId !== projectId) return;
+
+      if (data.event === 'deleted') {
+        setDocuments((prev) =>
+          prev.filter((d) => d.document_id !== data.documentId),
+        );
+        setWorkflows((prev) =>
+          prev.filter((w) => w.document_id !== data.documentId),
+        );
+        setWorkflowProgressMap((prev) => {
+          if (!prev[data.documentId]) return prev;
+          const newMap = { ...prev };
+          delete newMap[data.documentId];
+          return newMap;
+        });
+      }
+    },
+    [projectId],
+  );
+
+  useWebSocketMessage('document', handleDocumentMessage);
 
   // Fetch real step progress for in-progress workflows on page load (once)
   const fetchProgressOnLoad = useCallback(
@@ -322,6 +425,31 @@ export function useDocuments({
     }, 5000);
     return () => clearTimeout(timeout);
   }, [workflowProgressMap]);
+
+  // Clean up progressMap when documents show completed/failed status
+  useEffect(() => {
+    setWorkflowProgressMap((prev) => {
+      const newMap = { ...prev };
+      let changed = false;
+      for (const docId of Object.keys(newMap)) {
+        const doc = documents.find((d) => d.document_id === docId);
+        if (doc && (doc.status === 'completed' || doc.status === 'failed')) {
+          delete newMap[docId];
+          changed = true;
+        }
+      }
+      return changed ? newMap : prev;
+    });
+  }, [documents]);
+
+  // Clean up debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (loadDocumentsTimerRef.current) {
+        clearTimeout(loadDocumentsTimerRef.current);
+      }
+    };
+  }, []);
 
   const processFiles = useCallback(
     async (files: File[], options: DocumentProcessingOptions) => {

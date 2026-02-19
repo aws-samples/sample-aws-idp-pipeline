@@ -213,10 +213,9 @@ def create_get_compressed_html_tool(browser_tool: AgentCoreBrowser) -> Callable:
         Returns:
             Compressed HTML with content structure preserved, plus compression stats
         """
-        try:
-            logger.info(f"get_compressed_html called for session: {session_name}")
+        import time
 
-            # Get raw HTML from browser
+        def _extract_html() -> str:
             html_result = browser_tool.browser(
                 browser_input={
                     "action": {
@@ -225,25 +224,54 @@ def create_get_compressed_html_tool(browser_tool: AgentCoreBrowser) -> Callable:
                     }
                 }
             )
-
-            # Extract HTML string from result
-            raw_html = ""
+            raw = ""
             if isinstance(html_result, dict):
                 content = html_result.get("content", [])
                 for item in content:
                     if isinstance(item, dict):
                         if "text" in item:
-                            raw_html = item["text"]
+                            raw = item["text"]
                             break
                         elif "html" in item:
-                            raw_html = item["html"]
+                            raw = item["html"]
                             break
+            if not raw:
+                raw = str(html_result)
+            return raw
 
-            if not raw_html:
-                raw_html = str(html_result)
+        try:
+            logger.info(f"get_compressed_html called for session: {session_name}")
 
+            raw_html = _extract_html()
             original_tokens = estimate_tokens(raw_html)
             logger.info(f"Raw HTML: ~{original_tokens} tokens")
+
+            # If HTML is too small, JS may not have finished rendering.
+            # Wait and retry up to 2 times.
+            for attempt in range(2):
+                if original_tokens >= 500:
+                    break
+                wait_secs = 3 * (attempt + 1)
+                logger.warning(
+                    f"HTML too small ({original_tokens} tokens), "
+                    f"waiting {wait_secs}s for JS to render (attempt {attempt + 1}/2)"
+                )
+                time.sleep(wait_secs)
+                raw_html = _extract_html()
+                original_tokens = estimate_tokens(raw_html)
+                logger.info(f"Retry HTML: ~{original_tokens} tokens")
+
+            if original_tokens < 100:
+                logger.warning(
+                    f"HTML still very small ({original_tokens} tokens) after retries. "
+                    "Page may require JS rendering or is behind a challenge page. "
+                    "Rely on screenshot for visual analysis instead."
+                )
+                return (
+                    f"[WARNING] Page HTML is very small (~{original_tokens} tokens). "
+                    "This usually means the page is JavaScript-heavy or behind a challenge. "
+                    "Use browser screenshot to visually analyze the page content instead."
+                )
 
             # Apply D2Snap compression
             result = D2Snap.compress(raw_html, max_tokens, 'hybrid')
@@ -384,6 +412,22 @@ async def crawl_and_process(
         browser_tool = AgentCoreBrowser(region=config.aws_region)
         logger.info("AgentCoreBrowser initialized")
 
+        # Serialize all browser operations with a lock.
+        # The Strands Agent may call browser(screenshot) and
+        # get_compressed_html (-> browser(get_html)) in parallel from
+        # separate threads, causing Python 3.13 contextvars conflicts
+        # in Playwright's pipe transport ("cannot enter context:
+        # already entered").  Locking _execute_async ensures only one
+        # Playwright action runs at a time.
+        _browser_lock = threading.Lock()
+        _orig_execute = browser_tool._execute_async
+
+        def _serialized_execute(action_coro):
+            with _browser_lock:
+                return _orig_execute(action_coro)
+
+        browser_tool._execute_async = _serialized_execute
+
         # Create custom tools with context
         save_page_tool, page_state = create_save_page_tool(file_uri)
         get_compressed_html_tool = create_get_compressed_html_tool(browser_tool)
@@ -423,6 +467,8 @@ IMPORTANT:
         loop = asyncio.get_running_loop()
         future = loop.create_future()
 
+        AGENT_TIMEOUT_SECS = int(os.environ.get("AGENT_TIMEOUT_SECS", "1800"))
+
         def _run_agent():
             try:
                 result = agent(prompt)
@@ -434,8 +480,16 @@ IMPORTANT:
         agent_thread.start()
 
         try:
-            response = await future
+            response = await asyncio.wait_for(future, timeout=AGENT_TIMEOUT_SECS)
             logger.warning(f"[TRACE] Agent returned! Response type: {type(response)}")
+        except asyncio.TimeoutError:
+            logger.error(
+                f"Agent execution timed out after {AGENT_TIMEOUT_SECS}s "
+                f"for workflow={workflow_id}"
+            )
+            raise TimeoutError(
+                f"Agent execution timed out after {AGENT_TIMEOUT_SECS}s"
+            )
         except Exception as agent_error:
             logger.warning(f"[TRACE] Agent exception: {agent_error}")
             logger.exception(f"Agent execution failed: {agent_error}")

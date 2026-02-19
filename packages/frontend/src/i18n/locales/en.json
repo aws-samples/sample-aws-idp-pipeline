@@ -137,6 +137,7 @@
     "segmentAiAnalysis": "Segment AI Analysis",
     "clickToView": "Click to view content",
     "noSegments": "No segments available",
+    "processingInProgress": "Document is being processed...",
     "loadingImage": "Loading image...",
     "noVideoAvailable": "No video available for this segment",
     "noImageAvailable": "No image available for this segment",

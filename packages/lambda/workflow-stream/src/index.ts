@@ -1,6 +1,6 @@
 import type { DynamoDBStreamHandler, DynamoDBRecord } from 'aws-lambda';
 import { getConnectionIdsByProject } from './valkey.js';
-import { sendToConnection, WorkflowMessage, StepMessage } from './websocket.js';
+import { sendToConnection, WorkflowMessage, StepMessage, DocumentMessage } from './websocket.js';
 
 interface WorkflowData {
   status?: { S: string };
@@ -221,7 +221,61 @@ async function processStepRecord(record: DynamoDBRecord): Promise<void> {
   }
 }
 
+async function processDocumentDeletion(record: DynamoDBRecord): Promise<void> {
+  const oldImage = record.dynamodb?.OldImage as StreamImage | undefined;
+  if (!oldImage) return;
+
+  const pk = oldImage.PK?.S || '';
+  const sk = oldImage.SK?.S || '';
+  const projectId = pk.startsWith('PROJ#') ? pk.slice(5) : '';
+  const documentId = sk.startsWith('DOC#') ? sk.slice(4) : '';
+
+  if (!projectId || !documentId) return;
+
+  console.log(`Document ${documentId} deleted from project ${projectId}`);
+
+  const connectionIds = await getConnectionIdsByProject(projectId);
+  if (connectionIds.length === 0) {
+    console.log(`No connections subscribed to project ${projectId}, skipping`);
+    return;
+  }
+
+  const message: DocumentMessage = {
+    action: 'document',
+    data: {
+      event: 'deleted',
+      documentId,
+      projectId,
+      timestamp: new Date().toISOString(),
+    },
+  };
+
+  const messageStr = JSON.stringify(message);
+  console.log(`Sending document deletion message to ${connectionIds.length} connections`);
+
+  await Promise.all(
+    connectionIds.map((connectionId) =>
+      sendToConnection(connectionId, messageStr, projectId),
+    ),
+  );
+}
+
+function isDocumentRecord(image: StreamImage | undefined): boolean {
+  if (!image) return false;
+  const pk = image.PK?.S || '';
+  const sk = image.SK?.S || '';
+  return pk.startsWith('PROJ#') && sk.startsWith('DOC#');
+}
+
 async function processRecord(record: DynamoDBRecord): Promise<void> {
+  if (record.eventName === 'REMOVE') {
+    const oldImage = record.dynamodb?.OldImage as StreamImage | undefined;
+    if (isDocumentRecord(oldImage)) {
+      await processDocumentDeletion(record);
+    }
+    return;
+  }
+
   const newImage = record.dynamodb?.NewImage as StreamImage | undefined;
   const recordType = getRecordType(newImage);
 
@@ -233,7 +287,7 @@ async function processRecord(record: DynamoDBRecord): Promise<void> {
       await processStepRecord(record);
       break;
     default:
-      console.log('Unknown record type, skipping');
+      break;
   }
 }
 

@@ -137,6 +137,7 @@
     "segmentAiAnalysis": "Segment AI Analysis",
     "clickToView": "클릭하여 내용 보기",
     "noSegments": "세그먼트가 없습니다",
+    "processingInProgress": "문서를 처리하고 있습니다...",
     "loadingImage": "이미지 로딩 중...",
     "noVideoAvailable": "이 세그먼트에 대한 동영상이 없습니다",
     "noImageAvailable": "이 세그먼트에 대한 이미지가 없습니다",

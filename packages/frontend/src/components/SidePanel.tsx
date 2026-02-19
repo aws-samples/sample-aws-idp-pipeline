@@ -47,6 +47,22 @@ import {
   getFileTypeCategory,
 } from '../lib/fileTypeUtils';
 
+const getIconHue = (fileType: string): number => {
+  if (fileType.includes('video') || fileType.includes('audio')) return 0;
+  if (fileType.includes('image')) return 270;
+  if (
+    fileType.includes('spreadsheet') ||
+    fileType.includes('excel') ||
+    fileType === 'text/csv'
+  )
+    return 140;
+  if (fileType.includes('webreq')) return 190;
+  return 220;
+};
+
+const ASCII_MINI =
+  'f(x){a=0;\nfor(i<n){\ns+=d[i]*w\nret p%2?1\n}b+=0x3f\nc&=~0xff\nif(k>m){\nout(0xbe)}';
+
 const getFileIcon = (fileType: string) => {
   if (fileType.includes('pdf')) {
     return <FileText className="h-5 w-5 text-blue-400" />;
@@ -749,13 +765,58 @@ export default function SidePanel({
                       }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <div
-                          className={`flex-shrink-0 p-1.5 rounded-lg doc-icon-bg ${
-                            isProcessing ? 'processing' : ''
-                          }`}
-                        >
-                          {getFileIcon(doc.file_type)}
-                        </div>
+                        {isProcessing ? (
+                          <div
+                            className="flex-shrink-0 w-8 h-8 rounded-lg relative overflow-hidden"
+                            style={{
+                              background: `linear-gradient(160deg, hsl(${getIconHue(doc.file_type)}, 35%, 14%), hsl(${getIconHue(doc.file_type)}, 40%, 8%))`,
+                            }}
+                          >
+                            <div
+                              className="absolute inset-0 flex items-center justify-center"
+                              style={{
+                                animation:
+                                  'ds-icon-fade 3.5s infinite ease-in-out',
+                              }}
+                            >
+                              {getFileIcon(doc.file_type)}
+                            </div>
+                            <div
+                              className="absolute inset-0 overflow-hidden rounded-lg"
+                              style={{
+                                animation:
+                                  'ds-reveal 3.5s infinite ease-in-out',
+                              }}
+                            >
+                              <div
+                                className="absolute inset-0"
+                                style={{
+                                  background: `linear-gradient(160deg, hsl(${getIconHue(doc.file_type)}, 40%, 10%), hsl(${getIconHue(doc.file_type)}, 45%, 5%))`,
+                                }}
+                              />
+                              <pre
+                                className="absolute inset-0 font-mono text-[5px] leading-[3.5px] overflow-hidden whitespace-pre p-0.5 m-0"
+                                style={{
+                                  color: `hsla(${getIconHue(doc.file_type)}, 50%, 70%, 0.6)`,
+                                }}
+                              >
+                                {ASCII_MINI}
+                              </pre>
+                            </div>
+                            <div
+                              className="absolute left-0 right-0 h-px z-10"
+                              style={{
+                                animation: 'ds-scan 3.5s infinite ease-in-out',
+                                background: `linear-gradient(to right, transparent 0%, hsl(${getIconHue(doc.file_type)}, 60%, 65%) 20%, hsl(${getIconHue(doc.file_type)}, 60%, 65%) 80%, transparent 100%)`,
+                                boxShadow: `0 0 4px hsl(${getIconHue(doc.file_type)}, 60%, 60%)`,
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex-shrink-0 p-1.5 rounded-lg doc-icon-bg">
+                            {getFileIcon(doc.file_type)}
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <p
                             className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate"

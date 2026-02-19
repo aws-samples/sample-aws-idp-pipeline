@@ -137,6 +137,7 @@
     "segmentAiAnalysis": "Segment AI Analysis",
     "clickToView": "クリックして内容を表示",
     "noSegments": "セグメントがありません",
+    "processingInProgress": "ドキュメントを処理しています...",
     "loadingImage": "画像を読み込み中...",
     "noVideoAvailable": "このセグメントの動画はありません",
     "noImageAvailable": "このセグメントの画像はありません",

@@ -33,6 +33,16 @@ export interface StepMessage {
   };
 }
 
+export interface DocumentMessage {
+  action: 'document';
+  data: {
+    event: 'deleted';
+    documentId: string;
+    projectId: string;
+    timestamp: string;
+  };
+}
+
 const client = new ApiGatewayManagementApiClient({
   endpoint: process.env.WEBSOCKET_CALLBACK_URL,
 });

@@ -10,21 +10,25 @@ import {
   Trash2,
   FileText,
   Globe,
+  Link,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
 } from 'lucide-react';
 import { WorkflowDetail, SegmentData, AnalysisPopup } from '../types/project';
 import ConfirmModal from './ConfirmModal';
 import { LANGUAGES, CARD_COLORS } from './ProjectSettingsModal';
 import OcrDocumentView from './OcrDocumentView';
-import PdfPageViewer from './PdfPageViewer';
 import ExcelViewer from './ExcelViewer';
+import DocumentScanner from './ui/document-scanner';
 import { useAwsClient } from '../hooks/useAwsClient';
 import { useModal } from '../hooks/useModal';
+import { useDragPan } from '../hooks/useDragPan';
 import {
   isTextFileType,
   isMarkdownFileType,
   isSpreadsheetFileType,
   isExcelFileType,
-  isPdfFileType,
   getFileTypeLabel,
 } from '../lib/fileTypeUtils';
 
@@ -60,6 +64,57 @@ const parseS3Uri = (uri: string): { bucket: string; key: string } | null => {
   const bucket = parts[0];
   const key = parts.slice(1).join('/');
   return { bucket, key };
+};
+
+const markdownComponents = {
+  h1: ({ children }: { children?: React.ReactNode }) => (
+    <h1 className="text-lg font-bold text-slate-900 dark:text-slate-50 mt-5 mb-3 pb-2 border-b border-slate-200 dark:border-white/[0.1]">
+      {children}
+    </h1>
+  ),
+  h2: ({ children }: { children?: React.ReactNode }) => (
+    <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 mt-5 mb-2 pl-3 border-l-[3px] border-blue-500 dark:border-blue-400">
+      {children}
+    </h2>
+  ),
+  h3: ({ children }: { children?: React.ReactNode }) => (
+    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mt-4 mb-1.5">
+      {children}
+    </h3>
+  ),
+  hr: () => (
+    <div className="my-4 flex items-center">
+      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent dark:via-white/[0.15]" />
+    </div>
+  ),
+  blockquote: ({ children }: { children?: React.ReactNode }) => (
+    <blockquote className="my-3 pl-4 py-2 border-l-[3px] border-blue-400 dark:border-blue-500 bg-blue-50/50 dark:bg-blue-900/10 rounded-r-lg not-italic [&>p]:my-1">
+      {children}
+    </blockquote>
+  ),
+  a: ({ children, href }: { children?: React.ReactNode; href?: string }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline decoration-blue-300/50 hover:decoration-blue-500 underline-offset-2 transition-colors"
+    >
+      {children}
+    </a>
+  ),
+  img: ({ src, alt }: { src?: string; alt?: string }) => (
+    <img
+      src={src}
+      alt={alt || ''}
+      className="max-w-full h-auto rounded-lg shadow-md my-4"
+      loading="lazy"
+    />
+  ),
+  pre: ({ children }: { children?: React.ReactNode }) => (
+    <pre className="my-3 p-4 bg-slate-50 dark:bg-black/30 rounded-xl overflow-x-auto text-sm leading-relaxed border border-slate-200 dark:border-white/[0.08]">
+      {children}
+    </pre>
+  ),
 };
 
 interface WorkflowDetailModalProps {
@@ -106,8 +161,6 @@ export default function WorkflowDetailModal({
   const [currentSegmentIndex, setCurrentSegmentIndex] =
     useState(initialSegmentIndex);
   const [imageLoading, setImageLoading] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [pdfUrlLoading, setPdfUrlLoading] = useState(false);
   const [analysisPopup, setAnalysisPopup] = useState<AnalysisPopup>({
     type: null,
     content: '',
@@ -134,43 +187,9 @@ export default function WorkflowDetailModal({
     null,
   );
   const videoRef = useRef<HTMLVideoElement>(null);
-
-  // Load PDF presigned URL for PDF files
-  const isPdf = isPdfFileType(workflow.file_type);
-  useEffect(() => {
-    if (!isPdf || !workflow.file_uri) {
-      setPdfUrl(null);
-      return;
-    }
-
-    const s3Info = parseS3Uri(workflow.file_uri);
-    if (!s3Info) {
-      setPdfUrl(null);
-      return;
-    }
-
-    let cancelled = false;
-    setPdfUrlLoading(true);
-
-    getPresignedDownloadUrl(s3Info.bucket, s3Info.key)
-      .then((url) => {
-        if (!cancelled) {
-          setPdfUrl(url);
-          setPdfUrlLoading(false);
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to get PDF presigned URL:', err);
-        if (!cancelled) {
-          setPdfUrl(null);
-          setPdfUrlLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isPdf, workflow.file_uri, getPresignedDownloadUrl]);
+  const [imageZoom, setImageZoom] = useState(1);
+  const imageScrollRef = useDragPan<HTMLDivElement>();
+  const [imageNaturalWidth, setImageNaturalWidth] = useState(0);
 
   // Load Excel presigned URL for Excel files
   const isExcel = isExcelFileType(workflow.file_type);
@@ -245,6 +264,35 @@ export default function WorkflowDetailModal({
     },
     [onLoadSegment],
   );
+
+  // Reset image zoom and base size on segment change
+  useEffect(() => {
+    setImageZoom(1);
+    setImageNaturalWidth(0);
+  }, [currentSegmentIndex]);
+
+  // Ctrl/Cmd + wheel zoom for image (ref callback to handle conditional rendering)
+  const wheelListenerRef = useRef<(() => void) | null>(null);
+  const imageContainerRef = useCallback((node: HTMLDivElement | null) => {
+    if (wheelListenerRef.current) {
+      wheelListenerRef.current();
+      wheelListenerRef.current = null;
+    }
+    if (!node) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      setImageZoom((prev) => {
+        const delta = e.deltaY > 0 ? -0.25 : 0.25;
+        return Math.min(3, Math.max(0.5, prev + delta));
+      });
+    };
+
+    node.addEventListener('wheel', handleWheel, { passive: false });
+    wheelListenerRef.current = () =>
+      node.removeEventListener('wheel', handleWheel);
+  }, []);
 
   // Fetch current segment on index change
   useEffect(() => {
@@ -393,6 +441,9 @@ export default function WorkflowDetailModal({
     }
   };
 
+  const isProcessing =
+    workflow.status !== 'completed' && workflow.status !== 'failed';
+
   const canReanalyze =
     onReanalyze &&
     (workflow.status === 'completed' || workflow.status === 'failed');
@@ -464,7 +515,7 @@ export default function WorkflowDetailModal({
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 p-2 bg-white dark:bg-white/10 hover:bg-slate-100 dark:hover:bg-white/20 rounded-lg transition-colors shadow-md"
+          className="absolute top-3 right-3 z-10 p-2 bg-white dark:bg-white/10 hover:bg-slate-100 dark:hover:bg-white/20 rounded-lg transition-colors border border-slate-200 dark:border-white/[0.12]"
         >
           <svg
             className="h-5 w-5 text-slate-600 dark:text-slate-300"
@@ -776,19 +827,10 @@ export default function WorkflowDetailModal({
                                     </span>
                                   </div>
                                 ) : (
-                                  <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-table:border-collapse prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2">
+                                  <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-p:my-1.5 prose-headings:mt-3 prose-headings:mb-1 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-hr:my-3 prose-hr:border-slate-300 dark:prose-hr:border-white/[0.12] prose-table:border-collapse prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2">
                                     <Markdown
                                       remarkPlugins={[remarkGfm]}
-                                      components={{
-                                        img: ({ src, alt }) => (
-                                          <img
-                                            src={src}
-                                            alt={alt || ''}
-                                            className="max-w-full h-auto rounded-lg shadow-md my-4"
-                                            loading="lazy"
-                                          />
-                                        ),
-                                      }}
+                                      components={markdownComponents}
                                       urlTransform={(url) => url}
                                     >
                                       {item.answer}
@@ -832,36 +874,29 @@ export default function WorkflowDetailModal({
                       {(currentSegment?.source_url ||
                         currentSegment?.page_title) && (
                         <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/30 rounded-lg">
-                          {currentSegment?.page_title && (
-                            <p className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-1">
-                              {currentSegment.page_title}
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate flex-1">
+                              {currentSegment?.page_title ||
+                                currentSegment?.source_url}
                             </p>
-                          )}
-                          {currentSegment?.source_url && (
-                            <a
-                              href={currentSegment.source_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline break-all"
-                            >
-                              {currentSegment.source_url}
-                            </a>
-                          )}
+                            {currentSegment?.source_url && (
+                              <a
+                                href={currentSegment.source_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-shrink-0 p-1 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                                title={currentSegment.source_url}
+                              >
+                                <Link className="h-4 w-4" />
+                              </a>
+                            )}
+                          </div>
                         </div>
                       )}
-                      <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-table:border-collapse prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2">
+                      <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-p:my-1.5 prose-headings:mt-3 prose-headings:mb-1 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-hr:my-3 prose-hr:border-slate-300 dark:prose-hr:border-white/[0.12] prose-table:border-collapse prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2">
                         <Markdown
                           remarkPlugins={[remarkGfm]}
-                          components={{
-                            img: ({ src, alt }) => (
-                              <img
-                                src={src}
-                                alt={alt || ''}
-                                className="max-w-full h-auto rounded-lg shadow-md my-4"
-                                loading="lazy"
-                              />
-                            ),
-                          }}
+                          components={markdownComponents}
                           urlTransform={(url) => url}
                         >
                           {analysisPopup.content}
@@ -873,45 +908,46 @@ export default function WorkflowDetailModal({
                     <div className="flex-1 overflow-auto">
                       <div className="overflow-x-auto">
                         <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-table:border-collapse prose-table:w-max prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-th:whitespace-nowrap prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2 prose-td:whitespace-nowrap">
-                          <Markdown remarkPlugins={[remarkGfm]}>
+                          <Markdown
+                            remarkPlugins={[remarkGfm]}
+                            components={markdownComponents}
+                          >
                             {sanitizeMarkdownTable(analysisPopup.content)}
                           </Markdown>
                         </div>
                       </div>
                     </div>
                   ) : !analysisPopup.content ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
-                      <svg
-                        className="h-12 w-12 mb-3"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.5}
-                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                      </svg>
-                      <p className="text-sm font-medium">
-                        {t('workflow.noContent')}
-                      </p>
-                    </div>
+                    isProcessing ? (
+                      <DocumentScanner
+                        fileType={workflow.file_type}
+                        label={t('workflow.processingInProgress')}
+                      />
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
+                        <svg
+                          className="h-12 w-12 mb-3"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.5}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                        <p className="text-sm font-medium">
+                          {t('workflow.noContent')}
+                        </p>
+                      </div>
+                    )
                   ) : (
-                    <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-table:border-collapse prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2">
+                    <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-p:my-1.5 prose-headings:mt-3 prose-headings:mb-1 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-hr:my-3 prose-hr:border-slate-300 dark:prose-hr:border-white/[0.12] prose-table:border-collapse prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2">
                       <Markdown
                         remarkPlugins={[remarkGfm]}
-                        components={{
-                          img: ({ src, alt }) => (
-                            <img
-                              src={src}
-                              alt={alt || ''}
-                              className="max-w-full h-auto rounded-lg shadow-md my-4"
-                              loading="lazy"
-                            />
-                          ),
-                        }}
+                        components={markdownComponents}
                         urlTransform={(url) => url}
                       >
                         {analysisPopup.content}
@@ -1193,7 +1229,7 @@ export default function WorkflowDetailModal({
         {/* Right Panel - Image Viewer */}
         <div className="flex-1 flex flex-col bg-slate-100 dark:bg-white/[0.02] min-w-0">
           {/* Segment Navigation */}
-          <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-white/[0.08] bg-white dark:bg-transparent">
+          <div className="flex items-center justify-between p-4 pr-16 border-b border-slate-200 dark:border-white/[0.08] bg-white dark:bg-transparent">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
@@ -1266,12 +1302,49 @@ export default function WorkflowDetailModal({
                 </svg>
               </button>
             </div>
+
+            {/* Zoom Controls */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() =>
+                  setImageZoom((prev) => Math.max(0.5, prev - 0.25))
+                }
+                disabled={imageZoom <= 0.5}
+                className="p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ZoomOut className="h-4 w-4" />
+              </button>
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-300 min-w-[3rem] text-center">
+                {Math.round(imageZoom * 100)}%
+              </span>
+              <button
+                onClick={() => setImageZoom((prev) => Math.min(3, prev + 0.25))}
+                disabled={imageZoom >= 3}
+                className="p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ZoomIn className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setImageZoom(1)}
+                disabled={imageZoom === 1}
+                className="p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
 
           {/* Media Display */}
           <div className="flex-1 flex items-center justify-center p-6 overflow-auto relative min-w-0">
             {workflow.total_segments === 0 ? (
-              <div className="text-slate-500">{t('workflow.noSegments')}</div>
+              isProcessing ? (
+                <DocumentScanner
+                  fileType={workflow.file_type}
+                  label={t('workflow.processingInProgress')}
+                />
+              ) : (
+                <div className="text-slate-500">{t('workflow.noSegments')}</div>
+              )
             ) : segmentLoading && !currentSegment ? (
               <div className="flex flex-col items-center gap-3">
                 <svg
@@ -1368,7 +1441,10 @@ export default function WorkflowDetailModal({
                         isMarkdownFile || isSpreadsheet ? (
                           <div className="overflow-x-auto">
                             <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-table:border-collapse prose-table:w-max prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-th:whitespace-nowrap prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2 prose-td:whitespace-nowrap">
-                              <Markdown remarkPlugins={[remarkGfm]}>
+                              <Markdown
+                                remarkPlugins={[remarkGfm]}
+                                components={markdownComponents}
+                              >
                                 {isSpreadsheet
                                   ? sanitizeMarkdownTable(textContent)
                                   : textContent}
@@ -1402,42 +1478,37 @@ export default function WorkflowDetailModal({
                     <div className="w-full h-full overflow-auto bg-white dark:bg-white/[0.04] rounded-lg shadow-lg p-6">
                       <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-200 dark:border-white/[0.08]">
                         <Globe className="h-5 w-5 text-blue-500 dark:text-blue-400" />
-                        <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                        <span className="text-sm font-medium text-slate-600 dark:text-slate-300 truncate">
                           {currentSegment?.page_title ||
                             `${t('workflow.segment')} ${currentSegmentIndex + 1}`}
                         </span>
-                      </div>
-                      {currentSegment?.source_url && (
-                        <div className="mb-4">
+                        {currentSegment?.source_url && (
                           <a
                             href={currentSegment.source_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:text-blue-800 hover:underline break-all"
+                            className="flex-shrink-0 p-1 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                            title={currentSegment.source_url}
                           >
-                            {currentSegment.source_url}
+                            <Link className="h-4 w-4" />
                           </a>
-                        </div>
-                      )}
+                        )}
+                      </div>
                       {webContent ? (
-                        <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-table:border-collapse prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2">
+                        <div className="prose prose-slate dark:prose-invert prose-sm max-w-none prose-p:my-1.5 prose-headings:mt-3 prose-headings:mb-1 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-hr:my-3 prose-hr:border-slate-300 dark:prose-hr:border-white/[0.12] prose-table:border-collapse prose-th:border prose-th:border-slate-300 dark:prose-th:border-white/[0.12] prose-th:bg-slate-100 dark:prose-th:bg-white/[0.06] prose-th:p-2 prose-td:border prose-td:border-slate-300 dark:prose-td:border-white/[0.12] prose-td:p-2">
                           <Markdown
                             remarkPlugins={[remarkGfm]}
-                            components={{
-                              img: ({ src, alt }) => (
-                                <img
-                                  src={src}
-                                  alt={alt || ''}
-                                  className="max-w-full h-auto rounded-lg shadow-md my-4"
-                                  loading="lazy"
-                                />
-                              ),
-                            }}
+                            components={markdownComponents}
                             urlTransform={(url) => url}
                           >
                             {webContent}
                           </Markdown>
                         </div>
+                      ) : isProcessing ? (
+                        <DocumentScanner
+                          fileType={workflow.file_type}
+                          label={t('workflow.processingInProgress')}
+                        />
                       ) : (
                         <div className="flex flex-col items-center justify-center h-full text-slate-400">
                           <Globe className="h-12 w-12 mb-3" />
@@ -1453,65 +1524,58 @@ export default function WorkflowDetailModal({
                   );
                 }
 
-                // PDF document preview using PDF.js
-                if (isPdf && pdfUrl) {
-                  return (
-                    <PdfPageViewer
-                      pdfUrl={pdfUrl}
-                      pageNumber={currentSegmentIndex + 1}
-                      className="w-full h-full"
-                    />
-                  );
-                }
-
-                // PDF loading state
-                if (isPdf && pdfUrlLoading) {
-                  return (
-                    <div className="flex flex-col items-center gap-3">
-                      <Loader2 className="h-8 w-8 text-slate-400 animate-spin" />
-                      <p className="text-sm text-slate-500">Loading PDF...</p>
-                    </div>
-                  );
-                }
-
                 if (currentSegment?.image_url) {
                   return (
-                    <>
+                    <div
+                      ref={imageContainerRef}
+                      className="w-full h-full relative flex flex-col"
+                    >
                       {imageLoading && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-slate-100 dark:bg-white/[0.04]">
+                        <div className="absolute inset-0 flex items-center justify-center bg-slate-100 dark:bg-white/[0.04] z-20">
                           <div className="flex flex-col items-center gap-3">
-                            <svg
-                              className="h-8 w-8 text-slate-400 animate-spin"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                            >
-                              <circle
-                                className="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                strokeWidth="4"
-                              />
-                              <path
-                                className="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                              />
-                            </svg>
+                            <Loader2 className="h-8 w-8 text-slate-400 animate-spin" />
                             <p className="text-sm text-slate-500">
                               {t('workflow.loadingImage')}
                             </p>
                           </div>
                         </div>
                       )}
-                      <img
-                        src={currentSegment.image_url}
-                        alt={`Segment ${currentSegmentIndex + 1}`}
-                        className={`max-w-full max-h-full object-contain rounded-lg shadow-lg transition-opacity ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
-                        onLoad={() => setImageLoading(false)}
-                      />
-                    </>
+
+                      <div
+                        ref={imageScrollRef}
+                        className={`flex-1 overflow-auto ${imageZoom > 1 ? 'cursor-grab' : ''}`}
+                      >
+                        <div className="inline-flex min-w-full min-h-full items-center justify-center">
+                          <img
+                            src={currentSegment.image_url}
+                            alt={`Segment ${currentSegmentIndex + 1}`}
+                            className={`rounded-lg shadow-lg transition-opacity ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
+                            style={{
+                              width:
+                                imageNaturalWidth > 0
+                                  ? `${imageNaturalWidth * imageZoom}px`
+                                  : undefined,
+                              maxWidth: imageZoom <= 1 ? '100%' : 'none',
+                              maxHeight: imageZoom <= 1 ? '100%' : 'none',
+                              objectFit: 'contain',
+                            }}
+                            onLoad={(e) => {
+                              setImageNaturalWidth(e.currentTarget.clientWidth);
+                              setImageLoading(false);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (isProcessing) {
+                  return (
+                    <DocumentScanner
+                      fileType={workflow.file_type}
+                      label={t('workflow.processingInProgress')}
+                    />
                   );
                 }
 
