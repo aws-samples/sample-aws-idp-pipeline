@@ -59,7 +59,7 @@ aws logs tail /aws/codebuild/sample-aws-idp-pipeline-deploy --since 10m
 
 ```json
 {
-  "analysis": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+  "analysis": "global.anthropic.claude-sonnet-4-6",
   "summarizer": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
   "embedding": "amazon.nova-2-multimodal-embeddings-v1:0",
   "videoAnalysis": "us.twelvelabs.pegasus-1-2-v1:0"

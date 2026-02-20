@@ -173,7 +173,7 @@ export class AgentStack extends Stack {
       sessionStorageBucket,
       backendTable,
       gateway,
-      bedrockModelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+      bedrockModelId: 'global.anthropic.claude-sonnet-4-6',
       agentStorageBucket,
       websocketMessageQueue,
     });
