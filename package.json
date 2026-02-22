@@ -114,7 +114,8 @@
       "tar": ">=7.5.4",
       "@modelcontextprotocol/sdk": ">=1.25.2",
       "lodash": ">=4.17.23",
-      "diff": ">=8.0.3"
+      "diff": ">=8.0.3",
+      "fast-xml-parser": ">=5.3.6"
     },
     "onlyBuiltDependencies": [
       "duckdb"
