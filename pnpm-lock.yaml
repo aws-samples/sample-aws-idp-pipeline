@@ -10,6 +10,7 @@ overrides:
   '@modelcontextprotocol/sdk': '>=1.25.2'
   lodash: '>=4.17.23'
   diff: '>=8.0.3'
+  fast-xml-parser: '>=5.3.6'
 
 importers:
 
@@ -5613,8 +5614,8 @@ packages:
   fast-uri@3.1.0:
     resolution: {integrity: sha512-iPeeDKJSWf4IEOasVVrknXpaBV0IApz/gp7S2bb7Z4Lljbl2MGJRqInZiUrQwV16cpzw/D3S5j5Julj/gT52AA==}
 
-  fast-xml-parser@5.3.4:
-    resolution: {integrity: sha512-EFd6afGmXlCx8H8WTZHhAoDaWaGyuIBoZJ2mknrNxug+aZKjkp0a0dlars9Izl+jF+7Gu1/5f/2h68cQpe0IiA==}
+  fast-xml-parser@5.3.7:
+    resolution: {integrity: sha512-JzVLro9NQv92pOM/jTCR6mHlJh2FGwtomH8ZQjhFj/R29P2Fnj38OgPJVtcvYw6SuKClhgYuwUZf5b3rd8u2mA==}
     hasBin: true
 
   fastq@1.20.1:
@@ -10281,7 +10282,7 @@ snapshots:
   '@aws-sdk/xml-builder@3.972.4':
     dependencies:
       '@smithy/types': 4.12.0
-      fast-xml-parser: 5.3.4
+      fast-xml-parser: 5.3.7
       tslib: 2.8.1
 
   '@aws/lambda-invoke-store@0.2.3': {}
@@ -16268,7 +16269,7 @@ snapshots:
 
   fast-uri@3.1.0: {}
 
-  fast-xml-parser@5.3.4:
+  fast-xml-parser@5.3.7:
     dependencies:
       strnum: 2.1.2
 
