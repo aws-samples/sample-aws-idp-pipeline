@@ -90,7 +90,7 @@ class PreprocessType:
     ALL = ['ocr', 'bda', 'transcribe', 'webcrawler']
 
 
-def determine_preprocess_required(file_type: str, use_bda: bool = False, use_ocr: bool = True) -> dict:
+def determine_preprocess_required(file_type: str, use_bda: bool = False, use_ocr: bool = True, use_transcribe: bool = False) -> dict:
     """Determine which preprocessors are required based on file type and options.
 
     Note: Parser is handled in Step Functions workflow, not as async preprocessing.
@@ -128,8 +128,8 @@ def determine_preprocess_required(file_type: str, use_bda: bool = False, use_ocr
             'status': PreprocessStatus.PENDING if (use_bda and not is_webreq) else PreprocessStatus.SKIPPED
         },
         PreprocessType.TRANSCRIBE: {
-            'required': (is_video or is_audio) and not is_webreq,
-            'status': PreprocessStatus.PENDING if ((is_video or is_audio) and not is_webreq) else PreprocessStatus.SKIPPED
+            'required': (is_video or is_audio) and not is_webreq and use_transcribe,
+            'status': PreprocessStatus.PENDING if ((is_video or is_audio) and not is_webreq and use_transcribe) else PreprocessStatus.SKIPPED
         },
         PreprocessType.WEBCRAWLER: {
             'required': is_webreq,
@@ -185,6 +185,7 @@ def create_workflow(
     language: str = 'en',
     use_bda: bool = False,
     use_ocr: bool = True,
+    use_transcribe: bool = False,
     document_prompt: str = '',
     source_url: str = '',
     crawl_instruction: str = '',
@@ -196,7 +197,7 @@ def create_workflow(
     entity_prefix = get_entity_prefix(file_type)
 
     # Determine required preprocessors based on file type and options
-    preprocess = determine_preprocess_required(file_type, use_bda, use_ocr)
+    preprocess = determine_preprocess_required(file_type, use_bda, use_ocr, use_transcribe)
 
     # Add webcrawler metadata if provided
     if source_url:
@@ -237,7 +238,7 @@ def create_workflow(
     skip_conditions = {
         StepName.BDA_PROCESSOR: not use_bda or is_webreq,
         StepName.PADDLEOCR_PROCESSOR: not (is_pdf or is_image) or is_webreq or not use_ocr,
-        StepName.TRANSCRIBE: not (is_video or is_audio) or is_webreq,
+        StepName.TRANSCRIBE: not (is_video or is_audio) or is_webreq or not use_transcribe,
         StepName.FORMAT_PARSER: not is_pdf or is_webreq,
         StepName.WEBCRAWLER: not is_webreq,
         StepName.SEGMENT_ANALYZER: False,

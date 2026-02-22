@@ -283,6 +283,7 @@
     "viewDetails": "View details",
     "toolResultDetail": "Tool Result Details",
     "documentSearch": "Document Search",
+    "documentOverview": "Document Overview",
     "webSearch": "Web Search",
     "webSearchResults": "{{count}} search results",
     "fetchContent": "Fetching Content",

@@ -617,6 +617,7 @@ export class WorkflowStack extends Stack {
           'format_parser.$': '$[1].format_parser',
           'is_reanalysis.$': '$$.Execution.Input.is_reanalysis',
           'use_bda.$': '$$.Execution.Input.use_bda',
+          'use_transcribe.$': '$$.Execution.Input.use_transcribe',
         },
       },
     );

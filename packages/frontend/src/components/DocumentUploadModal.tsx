@@ -19,6 +19,7 @@ type UploadTab = 'file' | 'web';
 export interface DocumentProcessingOptions {
   use_bda: boolean;
   use_ocr?: boolean;
+  use_transcribe?: boolean;
   ocr_model?: string;
   ocr_options?: Record<string, unknown>;
   document_prompt?: string;
@@ -54,10 +55,12 @@ export default function DocumentUploadModal({
   const [files, setFiles] = useState<File[]>([]);
   const [useBda, setUseBda] = useState(false);
   const [useOcr, setUseOcr] = useState(false);
+  const [useTranscribe, setUseTranscribe] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showBda, setShowBda] = useState(false);
   const [showOcr, setShowOcr] = useState(false);
+  const [showTranscribe, setShowTranscribe] = useState(false);
   const [language, setLanguage] = useState(projectLanguage || 'en');
 
   const hasOcrEligibleFiles = useMemo(
@@ -65,6 +68,14 @@ export default function DocumentUploadModal({
       files.length === 0 ||
       files.some(
         (f) => f.type === 'application/pdf' || f.type.startsWith('image/'),
+      ),
+    [files],
+  );
+  const hasTranscribeEligibleFiles = useMemo(
+    () =>
+      files.length === 0 ||
+      files.some(
+        (f) => f.type.startsWith('video/') || f.type.startsWith('audio/'),
       ),
     [files],
   );
@@ -198,6 +209,7 @@ export default function DocumentUploadModal({
     const opts: DocumentProcessingOptions = {
       use_bda: useBda,
       use_ocr: useOcr,
+      use_transcribe: useTranscribe,
     };
 
     if (useOcr) {
@@ -218,7 +230,7 @@ export default function DocumentUploadModal({
     opts.language = language;
 
     return opts;
-  }, [useBda, useOcr, ocrSettings, documentPrompt, language]);
+  }, [useBda, useOcr, useTranscribe, ocrSettings, documentPrompt, language]);
 
   const handleUpload = useCallback(async () => {
     if (activeTab === 'file') {
@@ -227,8 +239,10 @@ export default function DocumentUploadModal({
       setFiles([]);
       setUseBda(false);
       setUseOcr(false);
+      setUseTranscribe(false);
       setShowBda(false);
       setShowOcr(false);
+      setShowTranscribe(false);
       setShowPrompt(false);
     } else {
       if (!webUrl) return;
@@ -252,8 +266,10 @@ export default function DocumentUploadModal({
       setFiles([]);
       setUseBda(false);
       setUseOcr(false);
+      setUseTranscribe(false);
       setShowBda(false);
       setShowOcr(false);
+      setShowTranscribe(false);
       setShowPrompt(false);
       setWebUrl('');
       setWebInstruction('');
@@ -539,6 +555,48 @@ export default function DocumentUploadModal({
                         onChange={setOcrSettings}
                         variant="compact"
                       />
+                    </div>
+                  )}
+                </div>
+
+                {/* Transcribe */}
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-slate-800/50">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={useTranscribe}
+                        onChange={(e) => setUseTranscribe(e.target.checked)}
+                        disabled={uploading || !hasTranscribeEligibleFiles}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                      />
+                      <span
+                        className={`text-sm font-medium ${hasTranscribeEligibleFiles ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500'}`}
+                      >
+                        {t('documents.transcribe', 'Transcribe (STT)')}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowTranscribe(!showTranscribe)}
+                      disabled={uploading}
+                      className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-50"
+                    >
+                      {showTranscribe ? (
+                        <ChevronUp className="h-4 w-4 text-slate-400" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-slate-400" />
+                      )}
+                    </button>
+                  </div>
+                  {showTranscribe && (
+                    <div className="px-3 py-3 border-t border-slate-200 dark:border-slate-700">
+                      <p className="text-xs text-slate-500">
+                        {t(
+                          'documents.useTranscribeDescription',
+                          'Transcribe audio/video files to text using Amazon Transcribe.',
+                        )}
+                      </p>
                     </div>
                   )}
                 </div>

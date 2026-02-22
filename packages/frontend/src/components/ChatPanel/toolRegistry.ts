@@ -25,6 +25,11 @@ const TOOL_REGISTRY: Record<string, ToolRegistryEntry> = {
     resultLabel: 'chat.documentSearch',
     loadingLabel: 'chat.documentSearch',
   },
+  search___overview: {
+    icon: BookOpen,
+    resultLabel: 'chat.documentOverview',
+    loadingLabel: 'chat.documentOverview',
+  },
   fetch_content: {
     icon: Globe,
     resultLabel: 'chat.webContent',
