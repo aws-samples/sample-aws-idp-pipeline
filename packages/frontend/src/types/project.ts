@@ -5,6 +5,7 @@ export interface Document {
   file_size: number;
   status: string;
   use_bda: boolean;
+  use_transcribe?: boolean;
   ocr_model?: string;
   ocr_options?: Record<string, unknown>;
   document_prompt?: string;

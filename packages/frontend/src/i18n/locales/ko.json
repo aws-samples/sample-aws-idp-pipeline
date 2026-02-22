@@ -283,6 +283,7 @@
     "viewDetails": "자세히 보기",
     "toolResultDetail": "도구 실행 결과 상세",
     "documentSearch": "문서 검색",
+    "documentOverview": "문서 개요",
     "webSearch": "웹 검색",
     "webSearchResults": "검색 결과 {{count}}건",
     "fetchContent": "콘텐츠 가져오는 중",

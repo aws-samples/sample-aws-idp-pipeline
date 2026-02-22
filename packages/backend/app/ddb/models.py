@@ -37,6 +37,7 @@ class DocumentData(BaseModel):
     s3_key: str
     use_bda: bool = False
     use_ocr: bool | None = None
+    use_transcribe: bool = False
     ocr_model: str | None = None
     ocr_options: dict[str, Any] | None = None
     document_prompt: str | None = None

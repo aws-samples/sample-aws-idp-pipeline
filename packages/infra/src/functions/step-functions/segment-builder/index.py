@@ -550,6 +550,7 @@ def handler(event, _context):
     file_uri = event.get('file_uri')
     file_type = event.get('file_type', '')
     use_bda = event.get('use_bda', False)
+    use_transcribe = event.get('use_transcribe', False)
     bda_metadata_uri = event.get('bda_metadata_uri', '')
     bda_output_uri = event.get('bda_output_uri', '')
 
@@ -606,9 +607,9 @@ def handler(event, _context):
             else:
                 print(f'Parser: {len(parser_results)} pages')
 
-        # 5. Read transcribe results (for video/audio)
+        # 5. Read transcribe results (for video/audio when transcribe enabled)
         transcribe_data = {}
-        if is_media:
+        if is_media and use_transcribe:
             print('Reading transcribe results...')
             transcribe_data = parse_transcribe_result(file_uri)
             if transcribe_data:

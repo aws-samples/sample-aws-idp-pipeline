@@ -283,6 +283,7 @@
     "viewDetails": "詳細を見る",
     "toolResultDetail": "ツール実行結果の詳細",
     "documentSearch": "ドキュメント検索",
+    "documentOverview": "ドキュメント概要",
     "webSearch": "ウェブ検索",
     "webSearchResults": "検索結果 {{count}}件",
     "fetchContent": "コンテンツ取得中",

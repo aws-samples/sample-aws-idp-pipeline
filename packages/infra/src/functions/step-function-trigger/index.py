@@ -44,6 +44,7 @@ def handler(event, context):
             file_type = body.get('file_type')
             language = body.get('language', 'en')
             use_bda = body.get('use_bda', False)
+            use_transcribe = body.get('use_transcribe', False)
             processing_type = body.get('processing_type', 'document')
             document_prompt = body.get('document_prompt', '')
 
@@ -74,6 +75,7 @@ def handler(event, context):
                 'processing_type': processing_type,
                 'language': language,
                 'use_bda': use_bda,
+                'use_transcribe': use_transcribe,
                 'document_prompt': document_prompt,
                 'is_reanalysis': False,
                 'triggered_at': datetime.utcnow().isoformat()

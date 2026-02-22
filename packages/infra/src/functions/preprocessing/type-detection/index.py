@@ -199,6 +199,7 @@ def distribute_to_queues(
     language: str,
     use_bda: bool,
     use_ocr: bool = True,
+    use_transcribe: bool = False,
     ocr_model: str = 'paddleocr-vl',
     ocr_options: dict | None = None,
     document_prompt: str = '',
@@ -269,8 +270,8 @@ def distribute_to_queues(
         queues_sent.append('bda')
         print(f'Sent to BDA queue: {workflow_id}')
 
-    # Transcribe Queue (Video or Audio, but not .webreq)
-    if (is_video or is_audio) and not is_webreq:
+    # Transcribe Queue (Video or Audio, but not .webreq, and transcribe enabled)
+    if (is_video or is_audio) and not is_webreq and use_transcribe:
         send_to_queue(TRANSCRIBE_QUEUE_URL, {
             **base_message,
             'processor': PreprocessType.TRANSCRIBE,
@@ -327,6 +328,7 @@ def handler(event, context):
 
             use_bda = document.get('use_bda', False) if document else False
             use_ocr = document.get('use_ocr', True) if document else True
+            use_transcribe = document.get('use_transcribe', False) if document else False
 
             # Resolve OCR settings: document override > project default
             project_ocr = get_project_ocr_settings(project_id)
@@ -365,6 +367,7 @@ def handler(event, context):
                 language=language,
                 use_bda=use_bda,
                 use_ocr=use_ocr,
+                use_transcribe=use_transcribe,
                 document_prompt=document_prompt,
                 source_url=source_url,
                 crawl_instruction=crawl_instruction,
@@ -382,6 +385,7 @@ def handler(event, context):
                 language=language,
                 use_bda=use_bda,
                 use_ocr=use_ocr,
+                use_transcribe=use_transcribe,
                 ocr_model=ocr_model,
                 ocr_options=ocr_options,
                 document_prompt=document_prompt,
