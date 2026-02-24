@@ -190,8 +190,18 @@ for row in table.rows:
 
 ### Images
 
+When creating documents, use `image___search_image` to find relevant images, then download and embed them. Choose an appropriate number of images based on the document content, but do NOT exceed 5 images per document.
+
+1. **Before** `code_interpreter`, call `image___search_image` to get image URLs.
+2. **Inside** `code_interpreter`, download the URLs and add to the document:
+
 ```python
-doc.add_picture('image.png', width=Inches(4))
+import requests
+from io import BytesIO
+
+# Download image from URL (obtained via image___search_image)
+resp = requests.get(image_url)
+doc.add_picture(BytesIO(resp.content), width=Inches(4))
 ```
 
 ### Page Breaks
