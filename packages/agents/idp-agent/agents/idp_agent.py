@@ -8,11 +8,13 @@ from strands.models import BedrockModel
 from strands.session import S3SessionManager
 from strands.tools.mcp.mcp_client import MCPClient
 from strands_tools import calculator, current_time, file_read, generate_image, http_request, shell, use_llm
+from strands_tools.code_interpreter import AgentCoreCodeInterpreter
 
 from agentcore_mcp_client import AgentCoreGatewayMCPClient
 from config import get_config
 from helpers import get_project_language
 from prompts import build_system_prompt
+from tools.artifact import create_artifact_path_tool
 
 from .image_artifact_saver_hook import ImageArtifactSaverHook
 from .tool_parameter_enforcer_hook import ToolParameterEnforcerHook
@@ -89,7 +91,24 @@ def get_agent(
     mcp_client = get_mcp_client()
     duckduckgo_client = get_duckduckgo_mcp_client()
 
-    tools = [calculator, current_time, generate_image, http_request, file_read, shell, use_llm]
+    config = get_config()
+
+    interpreter = AgentCoreCodeInterpreter(
+        region=config.aws_region,
+        session_name=session_id,
+        identifier=config.code_interpreter_identifier or None,
+    )
+
+    tools = [
+        calculator,
+        current_time,
+        generate_image,
+        http_request,
+        file_read,
+        shell,
+        use_llm,
+        interpreter.code_interpreter,
+    ]
 
     config = get_config()
     if config.is_agentcore:

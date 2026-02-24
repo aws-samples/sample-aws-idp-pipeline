@@ -56,10 +56,12 @@ STAGE 1 — DISCOVERY (provided below)
 A registry of available skills with name, description, and file path.
 Use descriptions to decide which skill is relevant to the current task.
 
-STAGE 2 — LOADING (MANDATORY)
-You MUST read the SKILL.md file using the file_read tool BEFORE starting the task.
-Do NOT produce any output or write any code until you have loaded all relevant skill files.
-This step is NOT optional — skipping it will result in significantly degraded output quality.
+STAGE 2 — LOADING (MANDATORY — ALL relevant skills)
+You MUST read EVERY relevant SKILL.md file using the file_read tool BEFORE starting the task.
+If multiple skills are relevant, read ALL of them — do NOT skip any.
+Call file_read for each skill file in parallel if possible.
+Do NOT produce any output or write any code until ALL relevant skill files have been fully loaded.
+This step is NOT optional — skipping even one skill will result in significantly degraded output quality.
 
 STAGE 3 — EXECUTION (internal resources)
 Skill files may reference helper scripts, templates, or assets using relative paths.

@@ -167,6 +167,13 @@ export class AgentStack extends Stack {
       });
     }
 
+    // Create Code Interpreter for IDP Agent
+    const idpCodeInterpreter = new CodeInterpreterCustom(this, 'IdpCodeInterpreter', {
+      codeInterpreterCustomName: 'idp_agent_interpreter',
+      description: 'Code interpreter for IDP agent',
+    });
+    agentStorageBucket.grantReadWrite(idpCodeInterpreter.executionRole);
+
     const idpAgent = new IdpAgent(this, 'IdpAgent', {
       agentPath: path.resolve(process.cwd(), '../../packages/agents/idp-agent'),
       agentName: 'idp_agent',
@@ -176,7 +183,10 @@ export class AgentStack extends Stack {
       bedrockModelId: 'global.anthropic.claude-sonnet-4-6',
       agentStorageBucket,
       websocketMessageQueue,
+      codeInterpreterIdentifier: idpCodeInterpreter.codeInterpreterId,
     });
+
+    idpCodeInterpreter.grantUse(idpAgent.runtime.role);
 
     // Create Code Interpreter for Research Agent
     const codeInterpreter = new CodeInterpreterCustom(this, 'CodeInterpreter', {

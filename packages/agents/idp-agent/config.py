@@ -14,6 +14,7 @@ class Config(BaseSettings):
     backend_table_name: str = ""
     websocket_message_queue_url: str = ""
     bedrock_model_id: str = "global.anthropic.claude-sonnet-4-6"
+    code_interpreter_identifier: str = ""
 
     @property
     def is_agentcore(self) -> bool:
