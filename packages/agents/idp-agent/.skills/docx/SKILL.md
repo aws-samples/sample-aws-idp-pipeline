@@ -11,6 +11,7 @@ description: "Use this skill whenever the user wants to create, read, edit, or m
 - **Generate the COMPLETE document and upload to S3 in a SINGLE `code_interpreter` call.** Do NOT split into multiple calls.
 - Before calling `code_interpreter`, call `artifact_path(filename="report.docx")` to get the S3 bucket and key.
 - After completion, report the `artifact_ref` to the user.
+- **If `code_interpreter` fails with an error, do NOT retry automatically.** Report the error to the user and ask for clarification or guidance. Do not make multiple retry attempts without user input.
 
 ### Workflow
 

@@ -142,6 +142,7 @@ def get_agent(
             hooks=hooks,
             session_manager=session_manager,
             agent_id=agent_id or "default",
+            max_iterations=20,
         )
 
     with ExitStack() as stack:
