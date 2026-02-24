@@ -52,6 +52,8 @@ export default function ChatPanel({
   const inputRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messageCountRef = useRef(messages.length);
+  const userScrolledUpRef = useRef(false);
+  const [showScrollDown, setShowScrollDown] = useState(false);
 
   // Attached files state (shared between orchestrator and ChatInputBox)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
@@ -131,6 +133,8 @@ export default function ChatPanel({
     useState(false);
   const [showResearchDisableConfirm, setShowResearchDisableConfirm] =
     useState(false);
+  const [showVoiceChatEnableConfirm, setShowVoiceChatEnableConfirm] =
+    useState(false);
   const [pendingAgentChange, setPendingAgentChange] = useState<
     string | null | undefined
   >(undefined);
@@ -166,6 +170,23 @@ export default function ChatPanel({
     setResearchMode(false);
     onNewChat();
   }, [setResearchMode, onNewChat]);
+
+  // Handle Voice Chat mode enable with confirmation if messages exist
+  const handleNovaSonicEnable = useCallback(() => {
+    if (messages.length > 0) {
+      setShowVoiceChatEnableConfirm(true);
+    } else {
+      voiceChat?.onModelSelect?.('nova_sonic');
+      setNovaSonicMode(true);
+    }
+  }, [messages.length, voiceChat, setNovaSonicMode]);
+
+  const confirmNovaSonicEnable = useCallback(() => {
+    setShowVoiceChatEnableConfirm(false);
+    onNewChat();
+    voiceChat?.onModelSelect?.('nova_sonic');
+    setNovaSonicMode(true);
+  }, [onNewChat, voiceChat, setNovaSonicMode]);
 
   // Artifact download
   const handleArtifactDownload = useCallback(
@@ -253,12 +274,19 @@ export default function ChatPanel({
     }
   }, [scrollPositionRef]);
 
-  // Save scroll position continuously
+  // Save scroll position continuously & detect user scroll-up
   useEffect(() => {
     const el = scrollContainerRef.current;
-    if (!el || !scrollPositionRef) return;
+    if (!el) return;
     const handleScroll = () => {
-      scrollPositionRef.current = el.scrollTop;
+      if (scrollPositionRef) {
+        scrollPositionRef.current = el.scrollTop;
+      }
+      const distanceFromBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight;
+      const scrolledUp = distanceFromBottom > 100;
+      userScrolledUpRef.current = scrolledUp;
+      setShowScrollDown(scrolledUp);
     };
     el.addEventListener('scroll', handleScroll, { passive: true });
     return () => el.removeEventListener('scroll', handleScroll);
@@ -266,17 +294,34 @@ export default function ChatPanel({
 
   // Smooth-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (messages.length > messageCountRef.current) {
+    if (
+      messages.length > messageCountRef.current &&
+      !userScrolledUpRef.current
+    ) {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
     messageCountRef.current = messages.length;
   }, [messages]);
 
   useEffect(() => {
-    if (streamingBlocks.length > 0) {
+    if (streamingBlocks.length > 0 && !userScrolledUpRef.current) {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [streamingBlocks]);
+
+  // Reset scroll lock when streaming ends
+  useEffect(() => {
+    if (streamingBlocks.length === 0 && !sending) {
+      userScrolledUpRef.current = false;
+      setShowScrollDown(false);
+    }
+  }, [streamingBlocks.length, sending]);
+
+  const scrollToBottom = useCallback(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    userScrolledUpRef.current = false;
+    setShowScrollDown(false);
+  }, []);
 
   const hasMessages = messages.length > 0 || sending;
 
@@ -323,6 +368,7 @@ export default function ChatPanel({
         onDisconnect: voiceChat?.onDisconnect,
         setMode: setNovaSonicMode,
         handleDisable: handleNovaSonicDisable,
+        handleEnable: handleNovaSonicEnable,
       }}
       research={{
         mode: researchMode,
@@ -400,6 +446,30 @@ export default function ChatPanel({
         )}
       </div>
 
+      {/* Scroll to bottom button */}
+      {showScrollDown && hasMessages && (
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-24 z-10">
+          <button
+            type="button"
+            onClick={scrollToBottom}
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-white/80 dark:bg-slate-700/80 border border-slate-200/60 dark:border-slate-600 shadow-md backdrop-blur-sm text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700 transition-all"
+          >
+            <svg
+              className="w-4 h-4"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Bottom Input */}
       {hasMessages && (
         <div className="p-4">
@@ -454,6 +524,15 @@ export default function ChatPanel({
         onClose={() => setShowResearchDisableConfirm(false)}
         onConfirm={confirmResearchDisable}
         title={t('chat.research')}
+        message={t('chat.removeAgentConfirm')}
+        confirmText={t('agent.startNewChat')}
+        variant="warning"
+      />
+      <ConfirmModal
+        isOpen={showVoiceChatEnableConfirm}
+        onClose={() => setShowVoiceChatEnableConfirm(false)}
+        onConfirm={confirmNovaSonicEnable}
+        title={t('voiceChat.title')}
         message={t('chat.removeAgentConfirm')}
         confirmText={t('agent.startNewChat')}
         variant="warning"

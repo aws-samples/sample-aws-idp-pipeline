@@ -28,6 +28,23 @@
   --color-accent-light: #eff6ff;
   --color-accent-hover: #1d4ed8;
 
+  /* Document scanner (light) */
+  --ds-icon-l1: 88%;
+  --ds-icon-l2: 92%;
+  --ds-icon-sat: 22%;
+  --ds-icon-sat2: 25%;
+  --ds-ascii-l1: 85%;
+  --ds-ascii-l2: 90%;
+  --ds-ascii-sat: 25%;
+  --ds-ascii-sat2: 28%;
+  --ds-text-l: 45%;
+  --ds-text-sat: 30%;
+  --ds-line-l: 55%;
+  --ds-line-l2: 55%;
+  --ds-line-sat: 50%;
+  --ds-shimmer-l: 40%;
+  --ds-shimmer-l2: 50%;
+
   background-color: var(--color-bg-secondary);
   color: var(--color-text-primary);
 }
@@ -49,6 +66,23 @@
   --color-accent: #3b82f6;
   --color-accent-light: rgba(59, 130, 246, 0.1);
   --color-accent-hover: #60a5fa;
+
+  /* Document scanner (dark) */
+  --ds-icon-l1: 14%;
+  --ds-icon-l2: 8%;
+  --ds-icon-sat: 35%;
+  --ds-icon-sat2: 40%;
+  --ds-ascii-l1: 10%;
+  --ds-ascii-l2: 5%;
+  --ds-ascii-sat: 40%;
+  --ds-ascii-sat2: 45%;
+  --ds-text-l: 70%;
+  --ds-text-sat: 50%;
+  --ds-line-l: 65%;
+  --ds-line-l2: 60%;
+  --ds-line-sat: 60%;
+  --ds-shimmer-l: 55%;
+  --ds-shimmer-l2: 75%;
 }
 
 * {
@@ -68,6 +102,7 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
 
 .app-shell {
   height: 100vh;
@@ -626,7 +661,7 @@ a {
   padding: 0.5rem 0.75rem;
   font-size: 0.6875rem;
   font-weight: 600;
-  text-transform: uppercase;
+
   letter-spacing: 0.03em;
   color: var(--color-text-muted);
   border-bottom: 1px solid var(--color-border);
@@ -708,7 +743,7 @@ a {
   color: var(--color-text-muted);
   font-size: 0.6875rem;
   font-weight: 600;
-  text-transform: uppercase;
+
   letter-spacing: 0.05em;
   cursor: pointer;
   transition: color 0.15s;
@@ -1385,7 +1420,7 @@ a {
   padding: 0.25rem 0.75rem 0.25rem 0;
   font-size: 0.6875rem;
   font-weight: 500;
-  text-transform: uppercase;
+
   letter-spacing: 0.4em;
   color: var(--color-text-secondary);
 }
@@ -2550,8 +2585,12 @@ a {
 }
 
 .card .prose code {
-  background: var(--color-bg-tertiary);
+  background: #dce4f0;
   color: var(--color-text-primary);
+}
+
+:root.dark .card .prose code {
+  background: rgba(30, 41, 59, 0.8);
 }
 
 .card .prose pre {
@@ -2582,7 +2621,7 @@ a {
   text-align: left;
   white-space: nowrap;
   color: #1e293b;
-  text-transform: uppercase;
+
   letter-spacing: 0.025em;
 }
 
@@ -2960,23 +2999,23 @@ a {
 .tool-result-card {
   background: linear-gradient(
     135deg,
-    rgba(238, 235, 248, 0.7) 0%,
+    rgba(220, 228, 240, 0.7) 0%,
     rgba(228, 234, 244, 0.6) 50%,
-    rgba(238, 241, 247, 0.7) 100%
+    rgba(232, 237, 245, 0.7) 100%
   );
 }
 
 :root.dark .tool-result-card {
-  background: rgba(30, 27, 50, 0.7);
+  background: rgba(30, 41, 59, 0.7);
 }
 
 /* Tool Result Header - consistent across all browsers */
 .tool-result-header {
-  background: rgba(139, 92, 246, 0.06);
+  background: rgba(208, 218, 235, 0.3);
 }
 
 :root.dark .tool-result-header {
-  background: rgba(139, 92, 246, 0.2);
+  background: rgba(59, 130, 246, 0.1);
 }
 
 /* Indeterminate progress bar animation */
@@ -2991,7 +3030,7 @@ a {
 
 /* Document Icon Background - consistent across all browsers */
 .doc-icon-bg {
-  background: #f1f5f9;
+  background: #e2e8f0;
 }
 
 .doc-icon-bg.processing {
@@ -3097,7 +3136,7 @@ a {
   font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+
   color: var(--color-text-muted);
   transition: color 0.2s;
   flex: 1;

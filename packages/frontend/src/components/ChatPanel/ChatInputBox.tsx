@@ -32,6 +32,7 @@ interface InputBoxVoiceChat {
   onDisconnect?: () => void;
   setMode: (mode: boolean) => void;
   handleDisable: () => void;
+  handleEnable: () => void;
 }
 
 interface InputBoxResearch {
@@ -164,7 +165,7 @@ export default function ChatInputBox({
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         const el = node as HTMLElement;
         if (el.dataset.artifactId) {
-          result += `[artifact:${el.dataset.artifactId}](${el.dataset.artifactFilename})`;
+          result += `[artifact:${el.dataset.artifactId}](${el.dataset.artifactS3 || el.dataset.artifactFilename})`;
         } else if (el.dataset.documentId) {
           result += `[document:${el.dataset.documentId}](${el.dataset.documentFilename})`;
         } else if (el.tagName === 'BR') {
@@ -242,6 +243,7 @@ export default function ChatInputBox({
     chip.contentEditable = 'false';
     chip.dataset.artifactId = artifact.artifact_id;
     chip.dataset.artifactFilename = artifact.filename;
+    chip.dataset.artifactS3 = `s3://${artifact.s3_bucket}/${artifact.s3_key}`;
     chip.className =
       'inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 bg-violet-100 dark:bg-violet-900/40 border border-violet-200 dark:border-violet-700 rounded text-xs font-medium text-violet-700 dark:text-violet-300 align-middle';
     chip.innerHTML = `<svg class="w-3 h-3 text-violet-500 dark:text-violet-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg><span class="max-w-24 truncate">${artifact.filename}</span>`;
@@ -382,8 +384,14 @@ export default function ChatInputBox({
     const artifactData = e.dataTransfer.getData('application/x-artifact');
     if (artifactData) {
       try {
-        const { artifact_id, filename } = JSON.parse(artifactData);
-        const chip = createArtifactChip({ artifact_id, filename } as Artifact);
+        const { artifact_id, filename, s3_bucket, s3_key } =
+          JSON.parse(artifactData);
+        const chip = createArtifactChip({
+          artifact_id,
+          filename,
+          s3_bucket,
+          s3_key,
+        } as Artifact);
         insertChipAtEnd(chip);
       } catch {
         /* ignore */
@@ -623,6 +631,7 @@ export default function ChatInputBox({
                         selectedModel: voiceChat.selectedModel,
                         onModelSelect: voiceChat.onModelSelect,
                         onDisable: voiceChat.handleDisable,
+                        onEnable: voiceChat.handleEnable,
                         setMode: voiceChat.setMode,
                         onDisconnect: voiceChat.onDisconnect,
                       }}

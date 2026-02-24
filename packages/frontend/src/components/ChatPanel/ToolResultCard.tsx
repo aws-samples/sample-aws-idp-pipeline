@@ -15,6 +15,7 @@ import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import { getToolEntry } from './toolRegistry';
 import {
+  formatToolDisplayName,
   prepareMarkdown,
   parseWebSearchResults,
   getDomainFromUrl,
@@ -76,19 +77,19 @@ export default function ToolResultCard({
   return (
     <div className="tool-result-card glass-panel relative overflow-hidden rounded-2xl border border-black/[0.08] dark:border-white/[0.06] shadow-sm">
       {/* Decorative background elements */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-violet-400/[0.06] dark:from-violet-400/10 to-transparent rounded-full -translate-y-1/2 translate-x-1/2" />
-      <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-fuchsia-400/[0.06] dark:from-fuchsia-400/10 to-transparent rounded-full translate-y-1/2 -translate-x-1/2" />
+      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-slate-400/[0.06] dark:from-blue-400/10 to-transparent rounded-full -translate-y-1/2 translate-x-1/2" />
+      <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-slate-400/[0.06] dark:from-indigo-400/10 to-transparent rounded-full translate-y-1/2 -translate-x-1/2" />
 
       {/* Header */}
       <div className="tool-result-header relative flex items-center gap-2 px-4 py-2.5 border-b border-black/[0.06] dark:border-white/[0.06]">
-        <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm">
+        <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-gradient-to-br from-slate-500 to-blue-500 dark:from-blue-500 dark:to-indigo-600 shadow-sm">
           <Icon className="w-3.5 h-3.5 text-white" />
         </div>
-        <span className="text-xs font-semibold text-[#475569] dark:text-violet-300">
-          {t(entry.resultLabel, entry.resultLabel)}
+        <span className="text-xs font-semibold text-[#475569] dark:text-blue-300">
+          {toolName ? formatToolDisplayName(toolName) : 'Tool Result'}
         </span>
         <div className="flex-1" />
-        <Sparkles className="w-4 h-4 text-violet-300 dark:text-violet-400/50" />
+        <Sparkles className="w-4 h-4 text-slate-300 dark:text-blue-400/50" />
       </div>
 
       {/* Content */}
@@ -148,12 +149,12 @@ export default function ToolResultCard({
                       alt: attachment.name,
                     })
                   }
-                  className="relative group overflow-hidden rounded-xl shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2"
+                  className="relative group overflow-hidden rounded-xl shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-blue-500 focus:ring-offset-2"
                 >
                   <img
                     src={attachment.preview}
                     alt={attachment.name}
-                    className="max-w-80 max-h-80 object-contain bg-gray-50 dark:bg-violet-950/50"
+                    className="max-w-80 max-h-80 object-contain bg-gray-50 dark:bg-slate-900/50"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-3">
                     <span className="text-xs text-white font-medium">
@@ -174,12 +175,12 @@ export default function ToolResultCard({
                 key={imgIdx}
                 type="button"
                 onClick={() => onImageClick?.(img)}
-                className="relative group overflow-hidden rounded-xl shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2"
+                className="relative group overflow-hidden rounded-xl shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-blue-500 focus:ring-offset-2"
               >
                 <img
                   src={img.src}
                   alt={img.alt}
-                  className="max-w-80 max-h-80 object-contain bg-gray-50 dark:bg-violet-950/50"
+                  className="max-w-80 max-h-80 object-contain bg-gray-50 dark:bg-slate-900/50"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-3">
                   <span className="text-xs text-white font-medium">
@@ -227,7 +228,7 @@ export default function ToolResultCard({
 
         {/* Agent full content (research, plan, handoff) */}
         {entry.renderAsMarkdown && content && (
-          <div className="px-1 prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-emerald-100 [&_strong]:!text-inherit [&_a]:text-violet-600 dark:[&_a]:text-violet-400 [&_a]:underline [&_a]:underline-offset-2">
+          <div className="px-1 prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-emerald-100 [&_strong]:!text-inherit [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_a]:underline [&_a]:underline-offset-2">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw]}
@@ -244,7 +245,7 @@ export default function ToolResultCard({
           !entry.renderAsMarkdown && (
             <button
               onClick={() => onViewDetails?.(content)}
-              className="flex items-center gap-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-blue-400 hover:text-slate-800 dark:hover:text-blue-300 transition-colors"
             >
               <Eye className="w-3.5 h-3.5" />
               {t('chat.viewDetails', 'View details')}
@@ -257,7 +258,7 @@ export default function ToolResultCard({
           !parseWebSearchResults(content) && (
             <button
               onClick={() => onViewDetails?.(content)}
-              className="flex items-center gap-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-blue-400 hover:text-slate-800 dark:hover:text-blue-300 transition-colors"
             >
               <Eye className="w-3.5 h-3.5" />
               {t('chat.viewDetails', 'View details')}
@@ -343,7 +344,7 @@ function CollapsibleSources({
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors text-left ${
                   isLoading
                     ? 'border-blue-300/60 dark:border-blue-500/60 bg-blue-50/50 dark:bg-blue-900/30'
-                    : 'border-black/[0.08] dark:border-white/[0.06] bg-white/50 dark:bg-slate-800/50 hover:bg-white/70 dark:hover:bg-slate-700/50'
+                    : 'border-black/[0.08] dark:border-white/[0.06] bg-[#e4eaf4]/50 dark:bg-slate-800/50 hover:bg-[#dce4f0]/70 dark:hover:bg-slate-700/50'
                 } disabled:cursor-wait`}
               >
                 <div className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/40 flex-shrink-0">
@@ -424,7 +425,7 @@ function WebSearchSection({
               href={result.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full flex items-start gap-3 px-3 py-2.5 rounded-lg border border-black/[0.08] dark:border-white/[0.06] bg-white/50 dark:bg-slate-800/50 hover:bg-white/70 dark:hover:bg-slate-700/50 transition-colors text-left"
+              className="w-full flex items-start gap-3 px-3 py-2.5 rounded-lg border border-black/[0.08] dark:border-white/[0.06] bg-[#e4eaf4]/50 dark:bg-slate-800/50 hover:bg-[#dce4f0]/70 dark:hover:bg-slate-700/50 transition-colors text-left"
             >
               <div className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/40 flex-shrink-0 mt-0.5">
                 <Globe className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
@@ -484,13 +485,13 @@ function FetchPreviewSection({
         </span>
       </button>
       {isExpanded && (
-        <div className="mt-2 px-3 py-2.5 rounded-lg border border-black/[0.08] dark:border-white/[0.06] bg-white/50 dark:bg-slate-800/50">
+        <div className="mt-2 px-3 py-2.5 rounded-lg border border-black/[0.08] dark:border-white/[0.06] bg-[#e4eaf4]/50 dark:bg-slate-800/50">
           <p className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap">
             {preview.snippet}
           </p>
           <button
             onClick={() => onViewDetails?.(content)}
-            className="mt-2 flex items-center gap-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+            className="mt-2 flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-blue-400 hover:text-slate-800 dark:hover:text-blue-300 transition-colors"
           >
             <Eye className="w-3.5 h-3.5" />
             {t('chat.viewDetails', 'View details')}

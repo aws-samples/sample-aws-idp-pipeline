@@ -2,10 +2,7 @@ import DOMPurify from 'isomorphic-dompurify';
 import type { WebSearchResult, FetchContentPreview } from './types';
 export { formatFileSize, getFileTypeInfo } from '../../lib/fileTypeUtils';
 
-export const formatToolDisplayName = (rawName: string): string => {
-  const base = rawName.split('___')[0];
-  return base.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-};
+export const formatToolDisplayName = (rawName: string): string => rawName;
 
 export const parseWebSearchResults = (
   text: string,

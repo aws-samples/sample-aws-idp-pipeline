@@ -44,33 +44,44 @@ if not config.mcp_gateway_url:
     sys.exit(1)
 
 
-def filter_stream_event(event: dict) -> dict | None:
+def filter_stream_event(event: dict) -> list[dict]:
     if "data" in event:
-        return {"type": "text", "content": event["data"]}
+        return [{"type": "text", "content": event["data"]}]
 
     if "current_tool_use" in event:
         tool_use = event["current_tool_use"]
         if tool_use.get("name"):
-            return {"type": "tool_use", "name": tool_use["name"]}
+            return [
+                {
+                    "type": "tool_use",
+                    "name": tool_use["name"],
+                    "tool_use_id": tool_use.get("toolUseId", ""),
+                }
+            ]
 
     if "message" in event and event["message"].get("role") == "user":
+        results = []
         content = event["message"].get("content", [])
         for block in content:
             if "toolResult" in block:
                 tool_result = block["toolResult"]
                 raw_content = tool_result.get("content", [])
                 serialized_content = serialize_tool_result_content(raw_content)
-                return {
-                    "type": "tool_result",
-                    "tool_use_id": tool_result.get("toolUseId"),
-                    "content": serialized_content,
-                    "status": tool_result.get("status"),
-                }
+                results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_result.get("toolUseId"),
+                        "content": serialized_content,
+                        "status": tool_result.get("status"),
+                    }
+                )
+        if results:
+            return results
 
     if event.get("complete"):
-        return {"type": "complete"}
+        return [{"type": "complete"}]
 
-    return None
+    return []
 
 
 @app.entrypoint
@@ -86,8 +97,7 @@ async def invoke(request: dict):
         content = [block.to_strands() for block in req.prompt]
         stream = agent.stream_async(content)
         async for event in stream:
-            filtered = filter_stream_event(event)
-            if filtered:
+            for filtered in filter_stream_event(event):
                 yield filtered
 
 

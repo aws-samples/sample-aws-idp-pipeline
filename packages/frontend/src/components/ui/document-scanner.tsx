@@ -92,7 +92,7 @@ export default function DocumentScanner({
         <div
           className="absolute inset-0 rounded-2xl"
           style={{
-            boxShadow: `inset 0 0 0 1px hsla(${hue}, 40%, 50%, 0.2)`,
+            boxShadow: `inset 0 0 0 1px hsla(${hue}, var(--ds-line-sat), var(--ds-line-l), 0.2)`,
             animation: 'ds-glow 2s infinite ease-in-out',
           }}
         />
@@ -101,7 +101,7 @@ export default function DocumentScanner({
         <div
           className="absolute inset-0 flex items-center justify-center"
           style={{
-            background: `linear-gradient(160deg, hsl(${hue}, 35%, 14%), hsl(${hue}, 40%, 8%))`,
+            background: `linear-gradient(160deg, hsl(${hue}, var(--ds-icon-sat), var(--ds-icon-l1)), hsl(${hue}, var(--ds-icon-sat2), var(--ds-icon-l2)))`,
             animation: 'ds-icon-fade 3.5s infinite ease-in-out',
           }}
         >
@@ -111,7 +111,9 @@ export default function DocumentScanner({
           />
           <Icon
             className="w-9 h-9 relative z-10"
-            style={{ color: config.iconColor }}
+            style={{
+              color: `hsla(${hue}, var(--ds-text-sat), var(--ds-text-l), 0.8)`,
+            }}
             strokeWidth={1.5}
           />
         </div>
@@ -124,12 +126,14 @@ export default function DocumentScanner({
           <div
             className="absolute inset-0"
             style={{
-              background: `linear-gradient(160deg, hsl(${hue}, 40%, 10%), hsl(${hue}, 45%, 5%))`,
+              background: `linear-gradient(160deg, hsl(${hue}, var(--ds-ascii-sat), var(--ds-ascii-l1)), hsl(${hue}, var(--ds-ascii-sat2), var(--ds-ascii-l2)))`,
             }}
           />
           <pre
             className="absolute inset-0 font-mono text-[9px] leading-[12px] overflow-hidden whitespace-pre p-2 m-0"
-            style={{ color: `hsla(${hue}, 50%, 70%, 0.6)` }}
+            style={{
+              color: `hsla(${hue}, var(--ds-text-sat), var(--ds-text-l), 0.6)`,
+            }}
           >
             {ascii}
           </pre>
@@ -140,8 +144,8 @@ export default function DocumentScanner({
           className="absolute left-0 right-0 h-[2px] z-10"
           style={{
             animation: 'ds-scan 3.5s infinite ease-in-out',
-            background: `linear-gradient(to right, transparent 0%, hsl(${hue}, 60%, 65%) 20%, hsl(${hue}, 60%, 65%) 80%, transparent 100%)`,
-            boxShadow: `0 0 6px hsl(${hue}, 60%, 60%), 0 0 12px hsla(${hue}, 60%, 50%, 0.5)`,
+            background: `linear-gradient(to right, transparent 0%, hsl(${hue}, var(--ds-line-sat), var(--ds-line-l)) 20%, hsl(${hue}, var(--ds-line-sat), var(--ds-line-l)) 80%, transparent 100%)`,
+            boxShadow: `0 0 6px hsl(${hue}, var(--ds-line-sat), var(--ds-line-l2)), 0 0 12px hsla(${hue}, var(--ds-line-sat), var(--ds-line-l2), 0.5)`,
           }}
         />
       </div>
@@ -151,7 +155,7 @@ export default function DocumentScanner({
           className="text-sm font-medium bg-clip-text"
           style={{
             color: 'transparent',
-            backgroundImage: `linear-gradient(90deg, hsla(${hue}, 30%, 55%, 0.6) 0%, hsla(${hue}, 50%, 75%, 1) 50%, hsla(${hue}, 30%, 55%, 0.6) 100%)`,
+            backgroundImage: `linear-gradient(90deg, hsla(${hue}, 30%, var(--ds-shimmer-l), 0.6) 0%, hsla(${hue}, 50%, var(--ds-shimmer-l2), 1) 50%, hsla(${hue}, 30%, var(--ds-shimmer-l), 0.6) 100%)`,
             backgroundSize: '200% 100%',
             animation: 'ds-shimmer 2.5s infinite linear',
             WebkitBackgroundClip: 'text',

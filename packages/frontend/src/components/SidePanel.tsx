@@ -786,7 +786,7 @@ export default function SidePanel({
                           <div
                             className="flex-shrink-0 w-8 h-8 rounded-lg relative overflow-hidden"
                             style={{
-                              background: `linear-gradient(160deg, hsl(${getIconHue(doc.file_type)}, 35%, 14%), hsl(${getIconHue(doc.file_type)}, 40%, 8%))`,
+                              background: `linear-gradient(160deg, hsl(${getIconHue(doc.file_type)}, var(--ds-icon-sat, 35%), var(--ds-icon-l1, 14%)), hsl(${getIconHue(doc.file_type)}, var(--ds-icon-sat2, 40%), var(--ds-icon-l2, 8%)))`,
                             }}
                           >
                             <div
@@ -808,13 +808,13 @@ export default function SidePanel({
                               <div
                                 className="absolute inset-0"
                                 style={{
-                                  background: `linear-gradient(160deg, hsl(${getIconHue(doc.file_type)}, 40%, 10%), hsl(${getIconHue(doc.file_type)}, 45%, 5%))`,
+                                  background: `linear-gradient(160deg, hsl(${getIconHue(doc.file_type)}, var(--ds-ascii-sat, 40%), var(--ds-ascii-l1, 10%)), hsl(${getIconHue(doc.file_type)}, var(--ds-ascii-sat2, 45%), var(--ds-ascii-l2, 5%)))`,
                                 }}
                               />
                               <pre
                                 className="absolute inset-0 font-mono text-[5px] leading-[3.5px] overflow-hidden whitespace-pre p-0.5 m-0"
                                 style={{
-                                  color: `hsla(${getIconHue(doc.file_type)}, 50%, 70%, 0.6)`,
+                                  color: `hsla(${getIconHue(doc.file_type)}, var(--ds-text-sat, 50%), var(--ds-text-l, 70%), 0.6)`,
                                 }}
                               >
                                 {ASCII_MINI}
@@ -824,8 +824,8 @@ export default function SidePanel({
                               className="absolute left-0 right-0 h-px z-10"
                               style={{
                                 animation: 'ds-scan 3.5s infinite ease-in-out',
-                                background: `linear-gradient(to right, transparent 0%, hsl(${getIconHue(doc.file_type)}, 60%, 65%) 20%, hsl(${getIconHue(doc.file_type)}, 60%, 65%) 80%, transparent 100%)`,
-                                boxShadow: `0 0 4px hsl(${getIconHue(doc.file_type)}, 60%, 60%)`,
+                                background: `linear-gradient(to right, transparent 0%, hsl(${getIconHue(doc.file_type)}, var(--ds-line-sat, 60%), var(--ds-line-l, 65%)) 20%, hsl(${getIconHue(doc.file_type)}, var(--ds-line-sat, 60%), var(--ds-line-l, 65%)) 80%, transparent 100%)`,
+                                boxShadow: `0 0 4px hsl(${getIconHue(doc.file_type)}, var(--ds-line-sat, 60%), var(--ds-line-l2, 60%))`,
                               }}
                             />
                           </div>
@@ -1008,6 +1008,8 @@ export default function SidePanel({
                           JSON.stringify({
                             artifact_id: artifact.artifact_id,
                             filename: artifact.filename,
+                            s3_bucket: artifact.s3_bucket,
+                            s3_key: artifact.s3_key,
                           }),
                         );
                         e.dataTransfer.effectAllowed = 'copy';

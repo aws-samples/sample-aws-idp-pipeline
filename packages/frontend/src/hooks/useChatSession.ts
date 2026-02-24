@@ -21,6 +21,42 @@ import type {
 } from '../components/ChatPanel/types';
 import type { BidiModelType } from './useVoiceChat';
 
+/** Convert streaming blocks to ChatMessage array (fallback when pendingMessagesRef is empty) */
+function blocksToMessages(blocks: StreamingBlock[]): ChatMessage[] {
+  const msgs: ChatMessage[] = [];
+  for (const block of blocks) {
+    if (block.type === 'text') {
+      msgs.push({
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: block.content,
+        timestamp: new Date(),
+      });
+    } else if (block.type === 'tool_result') {
+      msgs.push({
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: block.content || '',
+        timestamp: new Date(),
+        isToolResult: true,
+        toolResultType: block.resultType,
+        sources: block.sources,
+        toolName: block.toolName,
+      });
+    } else if (block.type === 'stage_complete') {
+      msgs.push({
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: block.result,
+        timestamp: new Date(),
+        isStageResult: true,
+        stageName: block.stage,
+      });
+    }
+  }
+  return msgs;
+}
+
 interface UseChatSessionOptions {
   projectId: string;
 }
@@ -44,8 +80,10 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [researchMode, setResearchMode] = useState(false);
   const pendingMessagesRef = useRef<ChatMessage[]>([]);
-  const toolUseNameStackRef = useRef<string[]>([]);
+  const toolUseMapRef = useRef<Map<string, string>>(new Map());
+  const forceNewTextBlockRef = useRef(false);
   const chatScrollPositionRef = useRef(0);
+  const streamingBlocksRef = useRef<StreamingBlock[]>([]);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -196,6 +234,7 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
               source?: string;
               s3_url?: string | null;
               name?: string;
+              tool_use_id?: string;
               content?: {
                 type: string;
                 text?: string;
@@ -214,158 +253,168 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
           );
           setCurrentSessionId(nanoid(33));
         } else {
-          const loadedMessages: ChatMessage[] = response.messages.map(
-            (msg, idx) => {
-              const toolResultItem = msg.content.find(
-                (item) => item.type === 'tool_result',
-              );
+          // Build tool_use_id → name map from all messages
+          const HIDDEN_TOOLS = [
+            'file_read',
+            'file_write',
+            'file_list',
+            'shell',
+          ];
+          const toolIdToName = new Map<string, string>();
+          for (const msg of response.messages) {
+            for (const item of msg.content) {
+              if (item.type === 'tool_use' && item.tool_use_id && item.name) {
+                toolIdToName.set(item.tool_use_id, item.name);
+              }
+            }
+          }
 
-              if (
-                toolResultItem?.content?.length === 1 &&
-                toolResultItem.content[0].type === 'text' &&
-                toolResultItem.content[0].text &&
-                !toolResultItem.content[0].text.includes('\n') &&
-                toolResultItem.content[0].text.length < 100
-              ) {
-                const voiceToolName = toolResultItem.content[0].text;
+          const loadedMessages: (ChatMessage | null)[] = response.messages.map(
+            (msg, idx) => {
+              // --- assistant message with tool_use items ---
+              const toolUseItems = msg.content.filter(
+                (item) => item.type === 'tool_use',
+              );
+              if (msg.role === 'assistant' && toolUseItems.length > 0) {
+                // Check if ALL tool_use items are hidden
+                const allHidden = toolUseItems.every((t) =>
+                  HIDDEN_TOOLS.includes(t.name || ''),
+                );
+                // Extract text content alongside tool_use
+                const textContent = msg.content
+                  .filter((item) => item.type === 'text' && item.text)
+                  .map((item) => item.text)
+                  .join('\n');
+                if (allHidden && !textContent) return null;
+                // Show text only (tool indicators are shown via tool_result)
+                if (!textContent) return null;
                 return {
                   id: `history-${idx}`,
                   role: 'assistant' as const,
-                  content: voiceToolName,
+                  content: textContent,
                   timestamp: new Date(),
-                  isToolUse: true,
-                  toolUseName: voiceToolName,
-                  toolUseStatus: 'success',
                 };
               }
 
-              if (toolResultItem && toolResultItem.content) {
-                const nestedContent = toolResultItem.content;
+              // --- user message with tool_result items ---
+              const toolResultItems = msg.content.filter(
+                (item) => item.type === 'tool_result',
+              );
+              if (msg.role === 'user' && toolResultItems.length > 0) {
+                const results: ChatMessage[] = [];
+                for (const toolResultItem of toolResultItems) {
+                  const toolName =
+                    toolIdToName.get(toolResultItem.tool_use_id || '') || '';
 
-                const textContent = nestedContent
-                  .filter(
-                    (item) =>
-                      (item.type === 'text' || (!item.type && item.text)) &&
-                      item.text,
-                  )
-                  .map((item) => item.text)
-                  .join('\n');
+                  // Skip hidden tools
+                  if (HIDDEN_TOOLS.includes(toolName)) continue;
 
-                let artifact = undefined;
-                let toolResultType: 'image' | 'artifact' | 'text' = 'text';
-                let sources:
-                  | { document_id: string; segment_id: string }[]
-                  | undefined = undefined;
+                  const nestedContent = toolResultItem.content || [];
+                  const textContent = nestedContent
+                    .filter(
+                      (item) =>
+                        (item.type === 'text' || (!item.type && item.text)) &&
+                        item.text,
+                    )
+                    .map((item) => item.text)
+                    .join('\n');
 
-                try {
-                  const parsed = JSON.parse(textContent);
-                  if (parsed.artifact_id && parsed.filename) {
-                    artifact = {
-                      artifact_id: parsed.artifact_id,
-                      filename: parsed.filename,
-                      url: parsed.url || '',
-                      s3_key: parsed.s3_key,
-                      s3_bucket: parsed.s3_bucket,
-                      created_at: parsed.created_at,
-                    };
-                    toolResultType = 'artifact';
-                  } else if (parsed.answer && Array.isArray(parsed.sources)) {
-                    const referencedIds = new Set<string>();
-                    const idPattern = /document_id[=:]?\s*([0-9a-f-]{36})/gi;
-                    let m;
-                    while ((m = idPattern.exec(parsed.answer)) !== null) {
-                      referencedIds.add(m[1]);
-                    }
-                    sources =
-                      referencedIds.size > 0
-                        ? parsed.sources.filter((s: { document_id: string }) =>
-                            referencedIds.has(s.document_id),
-                          )
-                        : parsed.sources;
-                  }
-                } catch {
-                  // Not JSON
-                }
+                  let artifact = undefined;
+                  let toolResultType: 'image' | 'artifact' | 'text' = 'text';
+                  let sources:
+                    | { document_id: string; segment_id: string }[]
+                    | undefined = undefined;
 
-                const imageAttachments: ChatAttachment[] = nestedContent
-                  .filter(
-                    (item) =>
-                      item.type === 'image' && (item.s3_url || item.source),
-                  )
-                  .map((item, imgIdx) => ({
-                    id: `history-${idx}-tool-img-${imgIdx}`,
-                    type: 'image' as const,
-                    name: `generated-${imgIdx + 1}.${item.format || 'png'}`,
-                    preview: item.s3_url
-                      ? item.s3_url
-                      : `data:image/${item.format || 'png'};base64,${item.source}`,
-                  }));
-
-                if (imageAttachments.length > 0) {
-                  toolResultType = 'image';
-                }
-
-                let historyDisplayContent = textContent;
-                if (sources) {
                   try {
                     const parsed = JSON.parse(textContent);
-                    historyDisplayContent = parsed.answer || textContent;
+                    if (parsed.artifact_id && parsed.filename) {
+                      artifact = {
+                        artifact_id: parsed.artifact_id,
+                        filename: parsed.filename,
+                        url: parsed.url || '',
+                        s3_key: parsed.s3_key,
+                        s3_bucket: parsed.s3_bucket,
+                        created_at: parsed.created_at,
+                      };
+                      toolResultType = 'artifact';
+                    } else if (parsed.answer && Array.isArray(parsed.sources)) {
+                      const referencedIds = new Set<string>();
+                      const idPattern = /document_id[=:]?\s*([0-9a-f-]{36})/gi;
+                      let m;
+                      while ((m = idPattern.exec(parsed.answer)) !== null) {
+                        referencedIds.add(m[1]);
+                      }
+                      sources =
+                        referencedIds.size > 0
+                          ? parsed.sources.filter(
+                              (s: { document_id: string }) =>
+                                referencedIds.has(s.document_id),
+                            )
+                          : parsed.sources;
+                    }
                   } catch {
                     // Not JSON
                   }
-                }
 
-                let inferredToolName: string | undefined;
-                if (sources) {
-                  inferredToolName = 'search___summarize';
-                } else if (
-                  textContent.startsWith('Found') &&
-                  textContent.includes('search results')
-                ) {
-                  inferredToolName = 'search';
-                } else if (toolResultType === 'image') {
-                  inferredToolName = 'generate_image';
-                } else if (
-                  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(textContent.trim())
-                ) {
-                  inferredToolName = 'current_time';
-                } else if (textContent.trim().startsWith('Result:')) {
-                  inferredToolName = 'calculator';
-                } else if (textContent.startsWith('Agent handoff completed')) {
-                  inferredToolName = 'handoff_to_user';
-                } else if (
-                  toolResultType === 'text' &&
-                  !artifact &&
-                  textContent.length > 500 &&
-                  !textContent.startsWith('{') &&
-                  (textContent.match(/^#{1,3}\s/gm) || []).length >= 2
-                ) {
-                  inferredToolName = 'research_agent';
-                } else if (
-                  toolResultType === 'text' &&
-                  !artifact &&
-                  textContent.length > 500 &&
-                  !textContent.startsWith('{')
-                ) {
-                  inferredToolName = 'fetch_content';
-                }
+                  const imageAttachments: ChatAttachment[] = nestedContent
+                    .filter(
+                      (item) =>
+                        item.type === 'image' && (item.s3_url || item.source),
+                    )
+                    .map((item, imgIdx) => ({
+                      id: `history-${idx}-tool-img-${imgIdx}`,
+                      type: 'image' as const,
+                      name: `generated-${imgIdx + 1}.${item.format || 'png'}`,
+                      preview: item.s3_url
+                        ? item.s3_url
+                        : `data:image/${item.format || 'png'};base64,${item.source}`,
+                    }));
 
-                return {
-                  id: `history-${idx}`,
-                  role: 'assistant' as const,
-                  content:
-                    toolResultType === 'artifact' ? '' : historyDisplayContent,
-                  attachments:
-                    imageAttachments.length > 0 ? imageAttachments : undefined,
-                  timestamp: new Date(),
-                  isToolResult: true,
-                  toolResultType,
-                  artifact,
-                  sources,
-                  toolName: inferredToolName,
-                };
+                  if (imageAttachments.length > 0) {
+                    toolResultType = 'image';
+                  }
+
+                  let displayContent = textContent;
+                  if (sources) {
+                    try {
+                      const parsed = JSON.parse(textContent);
+                      displayContent = parsed.answer || textContent;
+                    } catch {
+                      // Not JSON
+                    }
+                  }
+
+                  if (!displayContent && imageAttachments.length === 0)
+                    continue;
+
+                  results.push({
+                    id: `history-${idx}-tr-${toolResultItem.tool_use_id || ''}`,
+                    role: 'assistant' as const,
+                    content:
+                      toolResultType === 'artifact' ? '' : displayContent,
+                    attachments:
+                      imageAttachments.length > 0
+                        ? imageAttachments
+                        : undefined,
+                    timestamp: new Date(),
+                    isToolResult: true,
+                    toolResultType,
+                    artifact,
+                    sources,
+                    toolName: toolName || undefined,
+                  });
+                }
+                // Return first result (others handled via flatMap below)
+                if (results.length === 0) return null;
+                if (results.length === 1) return results[0];
+                // Store extras for flatMap expansion
+                (
+                  results[0] as ChatMessage & { _extras?: ChatMessage[] }
+                )._extras = results.slice(1);
+                return results[0];
               }
 
+              // --- Regular text / image / document message ---
               const textContent = msg.content
                 .filter((item) => item.type === 'text' && item.text)
                 .map((item) => item.text)
@@ -418,8 +467,22 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
             },
           );
 
+          // Expand messages with multiple tool_results
+          const expandedMessages: (ChatMessage | null)[] =
+            loadedMessages.flatMap((msg) => {
+              if (!msg) return [null];
+              const extras = (msg as ChatMessage & { _extras?: ChatMessage[] })
+                ._extras;
+              if (extras) {
+                delete (msg as ChatMessage & { _extras?: ChatMessage[] })
+                  ._extras;
+                return [msg, ...extras];
+              }
+              return [msg];
+            });
+
           const merged: ChatMessage[] = [];
-          for (const msg of loadedMessages) {
+          for (const msg of expandedMessages.filter(Boolean) as ChatMessage[]) {
             const prev = merged[merged.length - 1];
             if (
               prev &&
@@ -494,13 +557,26 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
   );
 
   const handleStreamEvent = useCallback((event: StreamEvent) => {
+    // Helper: update both streamingBlocks state and ref in sync
+    const updateBlocks = (
+      updater: (prev: StreamingBlock[]) => StreamingBlock[],
+    ) => {
+      setStreamingBlocks((prev) => {
+        const next = updater(prev);
+        streamingBlocksRef.current = next;
+        return next;
+      });
+    };
+
     switch (event.type) {
       case 'text':
         if (event.content && typeof event.content === 'string') {
           const text = event.content;
-          setStreamingBlocks((prev) => {
+          const forceNew = forceNewTextBlockRef.current;
+          forceNewTextBlockRef.current = false;
+          updateBlocks((prev) => {
             const last = prev[prev.length - 1];
-            if (last?.type === 'text') {
+            if (last?.type === 'text' && !forceNew) {
               return [
                 ...prev.slice(0, -1),
                 { type: 'text', content: last.content + text },
@@ -508,31 +584,66 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
             }
             return [...prev, { type: 'text', content: text }];
           });
+          // Also accumulate in pending messages to preserve order
+          const pending = pendingMessagesRef.current;
+          const lastPending = pending[pending.length - 1];
+          if (
+            lastPending &&
+            !lastPending.isToolResult &&
+            !lastPending.isStageResult &&
+            !lastPending.isToolUse &&
+            !forceNew
+          ) {
+            lastPending.content += text;
+          } else {
+            pending.push({
+              id: crypto.randomUUID(),
+              role: 'assistant',
+              content: text,
+              timestamp: new Date(),
+            });
+          }
         }
         break;
       case 'tool_use': {
         const toolName = event.name ?? '';
-        toolUseNameStackRef.current.push(toolName);
+        const toolUseId = event.tool_use_id ?? '';
+
+        // Track tool_use_id → name mapping
+        if (toolUseId) {
+          toolUseMapRef.current.set(toolUseId, toolName);
+        }
 
         // Hide internal tools from the UI
         const HIDDEN_TOOLS = ['file_read', 'file_write', 'file_list'];
-        if (HIDDEN_TOOLS.includes(toolName)) break;
+        if (HIDDEN_TOOLS.includes(toolName)) {
+          forceNewTextBlockRef.current = true;
+          break;
+        }
 
-        setStreamingBlocks((prev) => {
-          // Skip if same tool already shown as pending (no duplicate indicators)
-          if (prev.some((b) => b.type === 'tool_use' && b.name === toolName))
+        forceNewTextBlockRef.current = true;
+        updateBlocks((prev) => {
+          // Skip if same toolUseId already shown
+          if (
+            toolUseId &&
+            prev.some((b) => b.type === 'tool_use' && b.toolUseId === toolUseId)
+          )
             return prev;
-          return [...prev, { type: 'tool_use', name: toolName }];
+          return [...prev, { type: 'tool_use', name: toolName, toolUseId }];
         });
         break;
       }
       case 'tool_result': {
-        // FIFO: first tool_use gets the first tool_result
-        const capturedToolName = toolUseNameStackRef.current.shift() || '';
+        const resultToolUseId = event.tool_use_id ?? '';
+        const capturedToolName =
+          toolUseMapRef.current.get(resultToolUseId) || '';
 
         // Skip results from hidden internal tools
         const HIDDEN_RESULT_TOOLS = ['file_read', 'file_write', 'file_list'];
-        if (HIDDEN_RESULT_TOOLS.includes(capturedToolName)) break;
+        if (HIDDEN_RESULT_TOOLS.includes(capturedToolName)) {
+          forceNewTextBlockRef.current = true;
+          break;
+        }
 
         if (!Array.isArray(event.content)) break;
         const contents = event.content as ToolResultContent[];
@@ -617,21 +728,16 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
           displayContent = textContent;
         }
 
-        setStreamingBlocks((prev) => {
-          // FIFO: replace the first pending tool_use indicator
-          let firstToolIdx = -1;
-          for (let i = 0; i < prev.length; i++) {
-            if (prev[i].type === 'tool_use') {
-              firstToolIdx = i;
-              break;
-            }
-          }
+        updateBlocks((prev) => {
+          // Find matching tool_use by toolUseId
+          const matchIdx = resultToolUseId
+            ? prev.findIndex(
+                (b) => b.type === 'tool_use' && b.toolUseId === resultToolUseId,
+              )
+            : -1;
           const withoutToolUse =
-            firstToolIdx >= 0
-              ? [
-                  ...prev.slice(0, firstToolIdx),
-                  ...prev.slice(firstToolIdx + 1),
-                ]
+            matchIdx >= 0
+              ? [...prev.slice(0, matchIdx), ...prev.slice(matchIdx + 1)]
               : prev;
           return [
             ...withoutToolUse,
@@ -650,6 +756,7 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
                   : undefined,
               sources,
               toolName: capturedToolName || undefined,
+              toolUseId: resultToolUseId || undefined,
             },
           ];
         });
@@ -673,7 +780,7 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
       }
       case 'stage_start': {
         const stage = event.stage ?? '';
-        setStreamingBlocks((prev) => [...prev, { type: 'stage_start', stage }]);
+        updateBlocks((prev) => [...prev, { type: 'stage_start', stage }]);
         break;
       }
       case 'stage_complete': {
@@ -687,7 +794,7 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
           isStageResult: true,
           stageName: stage,
         });
-        setStreamingBlocks((prev) => {
+        updateBlocks((prev) => {
           const idx = prev.findIndex(
             (b) => b.type === 'stage_start' && b.stage === stage,
           );
@@ -703,7 +810,7 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
         break;
       }
       case 'complete':
-        setStreamingBlocks((prev) =>
+        updateBlocks((prev) =>
           prev.filter((b) => b.type !== 'tool_use' && b.type !== 'stage_start'),
         );
         break;
@@ -738,7 +845,10 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
       setInputMessage('');
       setSending(true);
       setStreamingBlocks([]);
+      streamingBlocksRef.current = [];
       pendingMessagesRef.current = [];
+      toolUseMapRef.current.clear();
+      forceNewTextBlockRef.current = false;
 
       try {
         const contentBlocks: ContentBlock[] = [];
@@ -795,7 +905,7 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
           contentBlocks.push({ text: userMessage.content });
         }
 
-        const response = await invokeAgent(
+        await invokeAgent(
           contentBlocks,
           currentSessionId,
           projectId,
@@ -803,29 +913,35 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
           selectedAgent?.agent_id,
         );
 
-        const pending = pendingMessagesRef.current;
+        // pending has all messages in order (text + tool_result + stage)
+        let pending = pendingMessagesRef.current;
         pendingMessagesRef.current = [];
 
-        const assistantMessage: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: response,
-          timestamp: new Date(),
-        };
+        // Fallback: if pending is empty, rebuild from streaming blocks ref
+        if (pending.length === 0 && streamingBlocksRef.current.length > 0) {
+          pending = blocksToMessages(streamingBlocksRef.current);
+        }
 
-        setMessages((prev) => [...prev, ...pending, assistantMessage]);
+        setMessages((prev) => [...prev, ...pending]);
       } catch (error) {
         console.error('Failed to send message:', error);
+        // Preserve any content accumulated before the error
+        let partial = pendingMessagesRef.current;
+        pendingMessagesRef.current = [];
+        if (partial.length === 0 && streamingBlocksRef.current.length > 0) {
+          partial = blocksToMessages(streamingBlocksRef.current);
+        }
         const errorMessage: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
           content: `Failed to get response: ${error instanceof Error ? error.message : 'Unknown error'}`,
           timestamp: new Date(),
         };
-        setMessages((prev) => [...prev, errorMessage]);
+        setMessages((prev) => [...prev, ...partial, errorMessage]);
       }
       setSending(false);
       setStreamingBlocks([]);
+      streamingBlocksRef.current = [];
       loadSessions();
     },
     [
@@ -872,7 +988,10 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
       setInputMessage('');
       setSending(true);
       setStreamingBlocks([]);
+      streamingBlocksRef.current = [];
       pendingMessagesRef.current = [];
+      toolUseMapRef.current.clear();
+      forceNewTextBlockRef.current = false;
 
       try {
         const contentBlocks: ContentBlock[] = [];
@@ -929,7 +1048,7 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
           contentBlocks.push({ text: userMessage.content });
         }
 
-        const response = await invokeAgent(
+        await invokeAgent(
           contentBlocks,
           currentSessionId,
           projectId,
@@ -938,29 +1057,33 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
           researchAgentRuntimeArn,
         );
 
-        const pending = pendingMessagesRef.current;
+        let pending = pendingMessagesRef.current;
         pendingMessagesRef.current = [];
 
-        const assistantMessage: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: response,
-          timestamp: new Date(),
-        };
+        // Fallback: if pending is empty, rebuild from streaming blocks ref
+        if (pending.length === 0 && streamingBlocksRef.current.length > 0) {
+          pending = blocksToMessages(streamingBlocksRef.current);
+        }
 
-        setMessages((prev) => [...prev, ...pending, assistantMessage]);
+        setMessages((prev) => [...prev, ...pending]);
       } catch (error) {
         console.error('Failed to send research message:', error);
+        let partial = pendingMessagesRef.current;
+        pendingMessagesRef.current = [];
+        if (partial.length === 0 && streamingBlocksRef.current.length > 0) {
+          partial = blocksToMessages(streamingBlocksRef.current);
+        }
         const errorMessage: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
           content: `Failed to get response: ${error instanceof Error ? error.message : 'Unknown error'}`,
           timestamp: new Date(),
         };
-        setMessages((prev) => [...prev, errorMessage]);
+        setMessages((prev) => [...prev, ...partial, errorMessage]);
       }
       setSending(false);
       setStreamingBlocks([]);
+      streamingBlocksRef.current = [];
       loadSessions();
     },
     [

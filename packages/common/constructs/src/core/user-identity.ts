@@ -324,6 +324,28 @@ export class UserIdentity extends Construct {
             lightMode: { borderColor: 'f59e0bff' },
             darkMode: { borderColor: 'f59e0bff' },
           },
+          optionControls: {
+            lightMode: {
+              defaults: {
+                backgroundColor: 'ffffffff',
+                borderColor: 'cbd5e1ff',
+              },
+              selected: {
+                backgroundColor: 'f59e0bff',
+                foregroundColor: '0f172aff',
+              },
+            },
+            darkMode: {
+              defaults: {
+                backgroundColor: 'ffffffff',
+                borderColor: 'cbd5e1ff',
+              },
+              selected: {
+                backgroundColor: 'f59e0bff',
+                foregroundColor: '0f172aff',
+              },
+            },
+          },
         },
         categories: {
           form: {

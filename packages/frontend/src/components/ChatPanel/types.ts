@@ -28,7 +28,12 @@ export interface ToolResultSource {
 
 export type StreamingBlock =
   | { type: 'text'; content: string }
-  | { type: 'tool_use'; name: string; status?: 'running' | 'success' | 'error' }
+  | {
+      type: 'tool_use';
+      name: string;
+      toolUseId?: string;
+      status?: 'running' | 'success' | 'error';
+    }
   | {
       type: 'tool_result';
       resultType: 'image' | 'artifact' | 'text';
@@ -36,6 +41,7 @@ export type StreamingBlock =
       images?: ToolResultImage[];
       sources?: ToolResultSource[];
       toolName?: string;
+      toolUseId?: string;
     }
   | { type: 'stage_start'; stage: string }
   | { type: 'stage_complete'; stage: string; result: string }

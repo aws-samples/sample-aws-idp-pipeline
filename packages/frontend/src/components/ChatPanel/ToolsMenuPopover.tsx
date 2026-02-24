@@ -16,6 +16,7 @@ interface ToolsMenuVoiceChat {
   selectedModel?: BidiModelType;
   onModelSelect?: (modelType: BidiModelType) => void;
   onDisable: () => void;
+  onEnable: () => void;
   setMode: (mode: boolean) => void;
   onDisconnect?: () => void;
 }
@@ -112,8 +113,7 @@ export default function ToolsMenuPopover({
               if (research.mode) {
                 research.setMode(false);
               }
-              voiceChat.onModelSelect?.('nova_sonic');
-              voiceChat.setMode(true);
+              voiceChat.onEnable();
             }
             onClose();
           }}

@@ -281,7 +281,7 @@ function UserMessage({ message }: { message: ChatMessage }) {
         )}
         {/* Text content */}
         {message.content && (
-          <div className="px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-white">
+          <div className="px-4 py-2.5 rounded-2xl bg-white/60 backdrop-blur-sm border border-slate-200/60 shadow-sm dark:bg-slate-700 dark:border-transparent dark:shadow-none text-slate-800 dark:text-white">
             <p className="text-sm">
               {renderMessageWithMentions(message.content)}
             </p>

@@ -28,12 +28,19 @@ class DocumentContent(BaseModel):
 ToolResultContentItem = TextContent | ImageContent | DocumentContent
 
 
+class ToolUseContent(BaseModel):
+    type: str = "tool_use"
+    tool_use_id: str
+    name: str
+
+
 class ToolResultContent(BaseModel):
     type: str = "tool_result"
+    tool_use_id: str | None = None
     content: list[ToolResultContentItem]
 
 
-ContentItem = TextContent | ImageContent | DocumentContent | ToolResultContent
+ContentItem = TextContent | ImageContent | DocumentContent | ToolUseContent | ToolResultContent
 
 
 BytesEncoded = TypedDict("BytesEncoded", {"__bytes_encoded__": bool, "data": str}, total=False)
@@ -99,7 +106,14 @@ class ToolResultSubItemDict(TypedDict, total=False):
     document: DocumentDict
 
 
+class ToolUseDict(TypedDict, total=False):
+    toolUseId: str
+    name: str
+    input: dict
+
+
 class ToolResultDict(TypedDict, total=False):
+    toolUseId: str
     content: list[ToolResultSubItemDict]
 
 
@@ -107,6 +121,7 @@ class ContentItemDict(TypedDict, total=False):
     text: str
     image: ImageDict
     document: DocumentDict
+    toolUse: ToolUseDict
     toolResult: ToolResultDict
 
 
@@ -119,6 +134,14 @@ def parse_content_items(content_items: list[ContentItemDict]) -> list[ContentIte
             parsed.append(parse_image(item["image"]))
         elif "document" in item and item["document"]:
             parsed.append(parse_document(item["document"]))
+        elif "toolUse" in item and item["toolUse"]:
+            tool_use = item["toolUse"]
+            parsed.append(
+                ToolUseContent(
+                    tool_use_id=tool_use.get("toolUseId", ""),
+                    name=tool_use.get("name", ""),
+                )
+            )
         elif "toolResult" in item and item["toolResult"]:
             tool_result = item["toolResult"]
             sub_contents: list[ToolResultContentItem] = []
@@ -130,5 +153,10 @@ def parse_content_items(content_items: list[ContentItemDict]) -> list[ContentIte
                 elif "document" in sub_item and sub_item["document"]:
                     sub_contents.append(parse_document(sub_item["document"]))
             if sub_contents:
-                parsed.append(ToolResultContent(content=sub_contents))
+                parsed.append(
+                    ToolResultContent(
+                        tool_use_id=tool_result.get("toolUseId"),
+                        content=sub_contents,
+                    )
+                )
     return parsed

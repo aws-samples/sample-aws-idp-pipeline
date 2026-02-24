@@ -28,21 +28,21 @@ export default function ToolResultDetailModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl mx-4 rounded-2xl border border-violet-200 dark:border-violet-500/40 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+        className="w-full max-w-3xl mx-4 rounded-2xl border border-slate-200 dark:border-blue-500/30 bg-[#e8edf5] dark:bg-slate-900 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
         style={{ maxHeight: '85vh' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-violet-100 dark:border-violet-500/30 bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20">
-          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm">
+        <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-200/80 dark:border-blue-500/20 bg-gradient-to-r from-[#dce4f0] to-[#e4eaf4] dark:from-blue-900/20 dark:to-indigo-900/20">
+          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-slate-500 to-blue-500 dark:from-blue-500 dark:to-indigo-600 shadow-sm">
             <Sparkles className="w-3.5 h-3.5 text-white" />
           </div>
-          <span className="text-sm font-semibold text-slate-700 dark:text-violet-200">
+          <span className="text-sm font-semibold text-slate-700 dark:text-blue-200">
             {t('chat.toolResultDetail', 'Tool Result Details')}
           </span>
           <div className="flex-1" />
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-800/40 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-[#d0daeb] dark:hover:bg-blue-800/40 transition-colors"
           >
             <X className="w-4.5 h-4.5 text-slate-500 dark:text-slate-400" />
           </button>
