@@ -2,12 +2,12 @@ POST http://localhost:8080/invocations
 Content-Type: application/json
 
 {
-    "session_id": "test15",
-    "project_id": "proj_aoGa4kFiCpVmy8MBslZUY",
+    "session_id": "test20",
+    "project_id": "proj_cnxQzigXN85_goVsOW05x",
     "user_id": "drskur",
     "prompt": [
         {
-            "text": "떡볶이 레시피 정리해서 pptx로 생성"
+            "text": "떡복이 레시피 검색해줄래?"
         }
     ]
 }

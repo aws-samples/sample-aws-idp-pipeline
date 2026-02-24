@@ -1,17 +1,18 @@
-from contextlib import contextmanager, ExitStack
+from contextlib import ExitStack, contextmanager
+
 import boto3
-from strands.tools.mcp.mcp_client import MCPClient
 from mcp import StdioServerParameters, stdio_client
 from strands import Agent
 from strands.hooks.registry import HookProvider
 from strands.models import BedrockModel
 from strands.session import S3SessionManager
-from strands_tools import calculator, current_time, generate_image, http_request
+from strands.tools.mcp.mcp_client import MCPClient
+from strands_tools import calculator, current_time, file_read, generate_image, http_request, shell, use_llm
 
 from agentcore_mcp_client import AgentCoreGatewayMCPClient
 from config import get_config
 from helpers import get_project_language
-from prompts import DEFAULT_SYSTEM_PROMPT, fetch_custom_agent_prompt, fetch_system_prompt
+from prompts import build_system_prompt
 
 from .image_artifact_saver_hook import ImageArtifactSaverHook
 from .tool_parameter_enforcer_hook import ToolParameterEnforcerHook
@@ -88,7 +89,7 @@ def get_agent(
     mcp_client = get_mcp_client()
     duckduckgo_client = get_duckduckgo_mcp_client()
 
-    tools = [calculator, current_time, generate_image, http_request]
+    tools = [calculator, current_time, generate_image, http_request, file_read, shell, use_llm]
 
     config = get_config()
     if config.is_agentcore:
@@ -96,38 +97,13 @@ def get_agent(
 
         tools.append(code_interpreter)
 
-    system_prompt = fetch_system_prompt() or DEFAULT_SYSTEM_PROMPT
-
-    if agent_id and user_id and project_id:
-        custom_prompt = fetch_custom_agent_prompt(user_id, project_id, agent_id)
-        if custom_prompt:
-            system_prompt += f"""
-
-## Custom Instructions
-{custom_prompt}
-"""
-
-    if project_id:
-        language_code = get_project_language(project_id) or "en"
-
-        system_prompt += f"""
-You MUST respond in the language corresponding to code: {language_code}.
-"""
-
-    system_prompt += """
-## Tool Parameter Notice
-When using MCP tools, `user_id` and `project_id` parameters are automatically injected by the system.
-You MUST NOT specify these parameters in tool calls - they will be overwritten by the system for security.
-
-## Web Search Guidelines (MANDATORY)
-When performing web searches, you MUST follow these rules strictly:
-1. Search with max_results of 10 to get diverse sources
-2. You MUST call fetch_content on AT LEAST 3 different URLs - this is a hard requirement, not optional
-3. If a website returns an error (403, timeout, etc.), try another URL until you have successfully fetched 3+ pages
-4. Do NOT stop after fetching only 1-2 websites - always continue until you have 3+ successful fetches
-5. Synthesize information from all fetched sources before responding
-6. Always cite the sources you used with their URLs
-"""
+    language_code = get_project_language(project_id) if project_id else None
+    system_prompt = build_system_prompt(
+        project_id=project_id,
+        user_id=user_id,
+        agent_id=agent_id,
+        language_code=language_code,
+    )
 
     bedrock_model = BedrockModel(
         model_id=config.bedrock_model_id,

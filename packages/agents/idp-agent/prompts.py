@@ -4,6 +4,7 @@ import logging
 import boto3
 
 from config import get_config
+from skills import build_skills_registry
 
 logger = logging.getLogger(__name__)
 
@@ -16,32 +17,7 @@ DEFAULT_SYSTEM_PROMPT = """You are an Intelligent Document Processing (IDP) assi
 3. **Citation required**: Always cite sources when presenting information from documents or the web.
 4. **Concise and clear**: Provide well-structured answers. Use headings, bullet points, and tables when they improve readability.
 
-## Search Strategy (MANDATORY)
-
-Follow this search priority strictly:
-
-### Step 1: Document Search
-- When the user asks about a specific document (by name or ID), what documents are uploaded, or wants a summary/overview of documents, use `search___overview` first.
-- For factual questions that require searching document content, use `search___summarize`.
-- Use clear, specific search queries. If one query doesn't return results, try alternative keywords or phrasings before giving up.
-- When the user's question is broad, break it into multiple focused search queries.
-
-### Step 2: Evaluate Results
-- If document search returns relevant results: answer based on those results with citations.
-- If document search returns no results or irrelevant results: inform the user that the information was not found in their documents, then offer to search the web.
-- If the user explicitly asks for web information or the question is clearly about general/current knowledge (e.g., today's date, weather, news): proceed directly to web search.
-
-### Step 3: Web Search (Fallback)
-- Use `search` (DuckDuckGo) for web queries when documents don't have the answer.
-- Use `fetch_content` to retrieve full page content from promising search results.
-- Clearly distinguish between information from the user's documents vs. the web.
-
 ## Response Guidelines
-
-### Citations
-- When citing document search results, reference the source document name and relevant section.
-- When citing web sources, include the URL.
-- Use inline citations naturally within the text, not just a list at the end.
 
 ### Formatting
 - Use markdown for formatting (headings, bold, lists, tables, code blocks).
@@ -57,24 +33,98 @@ Follow this search priority strictly:
 - Remember context from earlier in the conversation.
 - When the user asks follow-up questions, leverage previous search results when relevant rather than re-searching for the same information.
 
-## Tool Usage
-
-- `search___summarize`: Search uploaded documents. Use this FIRST for any factual query.
-- `search___overview`: Get an overview of all documents in a project. Use when the user asks what documents are uploaded, what a specific document is about, or wants a summary of their documents.
-- `search`: Web search via DuckDuckGo. Use as fallback when documents lack the answer.
-- `fetch_content`: Fetch full content from a web URL. Use after web search to get detailed information.
-- `calculator`: Perform mathematical calculations. Use for any arithmetic, unit conversions, or numerical analysis.
-- `current_time`: Get the current date and time.
-- `generate_image`: Generate images based on text descriptions.
-- `http_request`: Make HTTP requests to APIs or web services.
-
 ## What NOT to Do
 
-- Do NOT make up information or citations that don't exist in search results.
-- Do NOT skip document search and go straight to web search (unless the question is clearly about general/current knowledge).
 - Do NOT provide overly long responses when a brief answer suffices.
 - Do NOT repeat the user's question back to them unnecessarily.
 """
+
+TOOL_PARAMETER_NOTICE = """
+## Tool Parameter Notice
+When using MCP tools, `user_id` and `project_id` parameters are automatically injected by the system.
+You MUST NOT specify these parameters in tool calls - they will be overwritten by the system for security.
+"""
+
+SKILLS_SYSTEM_PROMPT = """
+<skills_system>
+You have access to a skills system that extends your capabilities through dynamically loaded instruction files. Skills are text-based guides (not running services) that teach you best practices for specific tasks.
+
+<how_skills_work>
+Skills follow a 3-stage loading pattern:
+
+STAGE 1 — DISCOVERY (provided below)
+A registry of available skills with name, description, and file path.
+Use descriptions to decide which skill is relevant to the current task.
+
+STAGE 2 — LOADING (MANDATORY)
+You MUST read the SKILL.md file using the file_read tool BEFORE starting the task.
+Do NOT produce any output or write any code until you have loaded all relevant skill files.
+This step is NOT optional — skipping it will result in significantly degraded output quality.
+
+STAGE 3 — EXECUTION (internal resources)
+Skill files may reference helper scripts, templates, or assets using relative paths.
+Resolve these relative to the skill's directory (the parent directory of SKILL.md).
+Example: if skill path is `/skills/docx/SKILL.md` and it references `scripts/validate.py`,
+the full path is `/skills/docx/scripts/validate.py`.
+</how_skills_work>
+
+<skill_selection_rules>
+- Read the SKILL.md BEFORE writing any code or producing any output for the task.
+- Multiple skills may be relevant — read all applicable ones.
+- If no skill matches the task, proceed with your general knowledge.
+- If a skill's instructions conflict with the user's explicit request, follow the user.
+- Skills are read-only. Never modify skill files.
+</skill_selection_rules>
+
+<available_skills>
+{{SKILLS_REGISTRY}}
+</available_skills>
+</skills_system>
+"""
+
+
+def build_system_prompt(
+    project_id: str | None = None,
+    user_id: str | None = None,
+    agent_id: str | None = None,
+    language_code: str | None = None,
+) -> str:
+    """Build the complete system prompt with all components.
+
+    Args:
+        project_id: Project ID for custom agent prompt
+        user_id: User ID for custom agent prompt
+        agent_id: Custom agent ID for prompt injection
+        language_code: Language code for response language
+
+    Returns:
+        Complete system prompt string
+    """
+    system_prompt = fetch_system_prompt() or DEFAULT_SYSTEM_PROMPT
+
+    # Skills registry 삽입
+    skills_registry = build_skills_registry()
+    if skills_registry:
+        skills_prompt = SKILLS_SYSTEM_PROMPT.replace("{{SKILLS_REGISTRY}}", skills_registry)
+        system_prompt += skills_prompt
+
+    if agent_id and user_id and project_id:
+        custom_prompt = fetch_custom_agent_prompt(user_id, project_id, agent_id)
+        if custom_prompt:
+            system_prompt += f"""
+
+## Custom Instructions
+{custom_prompt}
+"""
+
+    if language_code:
+        system_prompt += f"""
+You MUST respond in the language corresponding to code: {language_code}.
+"""
+
+    system_prompt += TOOL_PARAMETER_NOTICE
+
+    return system_prompt
 
 
 def fetch_system_prompt() -> str | None:
