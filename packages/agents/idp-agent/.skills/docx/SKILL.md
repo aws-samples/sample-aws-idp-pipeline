@@ -1,6 +1,6 @@
 ---
 name: docx
-description: "Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx files). Triggers include: any mention of \"Word doc\", \"word document\", \".docx\", or requests to produce professional documents with formatting like tables of contents, headings, page numbers, or letterheads. Also use when extracting or reorganizing content from .docx files, inserting or replacing images in documents, performing find-and-replace in Word files, working with tracked changes or comments, or converting content into a polished Word document. If the user asks for a \"report\", \"memo\", \"letter\", \"template\", or similar deliverable as a Word or .docx file, use this skill. Do NOT use for PDFs, spreadsheets, Google Docs, or general coding tasks unrelated to document generation."
+description: "Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx files). Triggers include: any mention of \"Word doc\", \"word document\", \".docx\", or requests to produce professional documents with formatting like tables of contents, headings, page numbers, or letterheads. Also use when extracting or reorganizing content from .docx files, inserting or replacing images in documents, performing find-and-replace in Word files, working with tracked changes or comments, or converting content into a polished Word document. If the user asks for a \"report\", \"memo\", \"letter\", \"template\", or similar deliverable as a Word or .docx file, use this skill. When an S3 URI (s3://...) with a .docx extension is provided, use this skill to process that file. Do NOT use for PDFs, spreadsheets, Google Docs, or general coding tasks unrelated to document generation."
 ---
 
 # DOCX creation, editing, and analysis
@@ -48,8 +48,7 @@ A .docx file is a ZIP archive containing XML files.
 
 | Task | Approach |
 |------|----------|
-| Read/extract text | Use `docx___extract_text` tool |
-| Read/extract tables | Use `docx___extract_tables` tool |
+| Read/analyze content | Download from S3 → `python-docx` in code_interpreter |
 | Create new document | Use `python-docx` in code_interpreter |
 | Edit existing document | Unpack → edit XML → repack in code_interpreter |
 
@@ -57,10 +56,28 @@ A .docx file is a ZIP archive containing XML files.
 
 ## Reading Documents
 
-Use the dedicated tools to read and extract content from .docx files. Do NOT use `code_interpreter` for reading.
+Read .docx files by downloading from the given S3 path and using `python-docx` in `code_interpreter`.
 
-- **`docx___extract_text`** — Extracts all text content from a .docx file.
-- **`docx___extract_tables`** — Extracts all tables from a .docx file.
+```python
+!pip install python-docx
+
+import boto3
+from docx import Document
+from io import BytesIO
+
+s3 = boto3.client('s3')
+obj = s3.get_object(Bucket=bucket, Key=key)
+doc = Document(BytesIO(obj['Body'].read()))
+
+# Extract all text
+for para in doc.paragraphs:
+    print(para.text)
+
+# Extract tables
+for table in doc.tables:
+    for row in table.rows:
+        print([cell.text for cell in row.cells])
+```
 
 ---
 
@@ -206,12 +223,17 @@ footer.paragraphs[0].text = 'Page Footer'
 
 ## Editing Existing Documents
 
-Use code_interpreter for all steps.
+Use code_interpreter for all steps. Download the file from the given S3 path first.
 
-### Step 1: Unpack
+### Step 1: Download and Unpack
 ```python
 import zipfile
 import os
+import boto3
+
+# Download from S3
+s3 = boto3.client('s3')
+s3.download_file(bucket, key, 'document.docx')
 
 with zipfile.ZipFile('document.docx', 'r') as z:
     z.extractall('unpacked/')

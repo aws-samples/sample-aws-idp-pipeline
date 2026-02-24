@@ -139,23 +139,6 @@ export class McpStack extends Stack {
     this.pdfMcp.function.grantInvoke(this.gateway.role);
     pdfTarget.node.addDependency(this.gateway.role);
 
-    const docxTarget = this.gateway.addLambdaTarget('DocxMcpTarget', {
-      gatewayTargetName: 'docx',
-      description:
-        'DOCX processing tools: extract text and extract tables from Word documents. Use these tools when working with DOCX documents.',
-      lambdaFunction: this.docxMcp.function,
-      toolSchema: agentcore.ToolSchema.fromLocalAsset(
-        path.resolve(
-          process.cwd(),
-          '../../packages/lambda/docx-mcp/schema.json',
-        ),
-      ),
-    });
-
-    // Workaround: CDK timing issue - explicitly grant and add dependency
-    this.docxMcp.function.grantInvoke(this.gateway.role);
-    docxTarget.node.addDependency(this.gateway.role);
-
     const pptxTarget = this.gateway.addLambdaTarget('PptxMcpTarget', {
       gatewayTargetName: 'pptx',
       description:

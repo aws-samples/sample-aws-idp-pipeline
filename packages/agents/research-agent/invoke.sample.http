@@ -2,12 +2,12 @@ POST http://localhost:8080/invocations
 Content-Type: application/json
 
 {
-    "session_id": "test25",
+    "session_id": "test27",
     "project_id": "proj_cnxQzigXN85_goVsOW05x",
     "user_id": "drskur",
     "prompt": [
         {
-            "text": "s3://idp-v2-agent-storage-975050239358/drskur/proj_cnxQzigXN85_goVsOW05x/artifacts/art_IYikDG311nwT/요도마님_상황보고서.docx 파일 읽고 내용 알려줄 수 있어?"
+            "text": "s3://idp-v2-agent-storage-975050239358/drskur/proj_cnxQzigXN85_goVsOW05x/artifacts/art_IYikDG311nwT/요도마님_상황보고서.docx 이것은 도쿠가와 이에야스라는 역사 소설의 일부임. 문서를 수정해줘."
         }
     ]
 }
