@@ -23,14 +23,16 @@ def create_artifact_path_tool(
             filename: The filename to upload (e.g., "report.docx")
 
         Returns:
-            Dictionary with bucket, key, and artifact markdown reference.
+            Dictionary with s3_uri, bucket, key, and artifact markdown reference.
         """
         config = get_config()
         artifact_id = f"art_{nanoid_generate(NANOID_ALPHABET, 12)}"
+        bucket = config.agent_storage_bucket_name
         key = f"{user_id}/{project_id}/artifacts/{artifact_id}/{filename}"
 
         return {
-            "bucket": config.agent_storage_bucket_name,
+            "s3_uri": f"s3://{bucket}/{key}",
+            "bucket": bucket,
             "key": key,
             "artifact_ref": f"[artifact:{artifact_id}]({filename})",
         }
