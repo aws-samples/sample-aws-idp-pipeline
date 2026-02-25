@@ -23,15 +23,19 @@ def parse_skill_frontmatter(skill_md_path: Path) -> dict[str, str]:
     return result
 
 
-def build_skills_registry() -> str:
+def build_skills_registry(exclude: set[str] | None = None) -> str:
     """스킬 디렉토리를 스캔해서 레지스트리 XML 생성."""
     if not SKILLS_DIR.exists():
         return ""
+
+    exclude = exclude or set()
 
     registry = []
     for skill_md in SKILLS_DIR.glob("*/SKILL.md"):
         frontmatter = parse_skill_frontmatter(skill_md)
         skill_name = frontmatter.get("name", skill_md.parent.name)
+        if skill_name in exclude:
+            continue
         description = frontmatter.get("description", "")
         when_to_use = frontmatter.get("whenToUse", "")
 

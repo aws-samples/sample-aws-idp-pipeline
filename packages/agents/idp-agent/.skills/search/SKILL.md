@@ -1,32 +1,39 @@
 ---
 name: search
-description: "Document and web search strategy guide for finding information."
-whenToUse: "Use when users ask questions about documents, need to search for information in uploaded documents, or need web search as a fallback. Also use when the user asks what documents are uploaded or wants a summary of their documents."
+description: "Search strategy guide for finding information from any source."
+whenToUse: "Use for ALL search queries — whether the user needs to find information in uploaded documents, search the web, look up facts, or answer any question that requires searching. This skill should be activated whenever a search is needed, regardless of the source."
 ---
 
 # Search Skill
 
+## CRITICAL RULE: Document Search is MANDATORY
+
+You MUST ALWAYS perform document search FIRST, regardless of the query type. This is non-negotiable.
+- Even if the question seems like general knowledge, search documents first.
+- Even if the user asks for web search, search documents first.
+- NEVER skip document search. NEVER go directly to web search.
+
+Web search is ONLY a supplementary fallback after document search has been performed and found insufficient results.
+
 ## Search Strategy (MANDATORY)
 
-Follow this search priority strictly:
-
-### Step 1: Document Search
-- When the user asks about a specific document (by name or ID), what documents are uploaded, or wants a summary/overview of documents, use `search___overview` first.
-- For factual questions that require searching document content, use `search___summarize`.
+### Step 1: Document Search (ALWAYS REQUIRED)
+- For EVERY query, start by searching uploaded documents using `search___summarize`.
+- When the user asks about a specific document (by name or ID), what documents are uploaded, or wants a summary/overview, use `search___overview` first.
 - Use clear, specific search queries. If one query doesn't return results, try alternative keywords or phrasings before giving up.
 - When the user's question is broad, break it into multiple focused search queries.
 
 ### Step 2: Evaluate Results
-- If document search returns relevant results: answer based on those results with citations.
-- If document search returns no results or irrelevant results: inform the user that the information was not found in their documents, then offer to search the web.
-- If the user explicitly asks for web information or the question is clearly about general/current knowledge (e.g., today's date, weather, news): proceed directly to web search.
+- If document search returns relevant results: answer based on those results with citations. Do NOT proceed to web search.
+- If document search returns no results or irrelevant results: inform the user that the information was not found in their documents, then proceed to web search as a supplement.
 
-### Step 3: Web Search (Fallback)
+### Step 3: Web Search (Supplementary Fallback ONLY)
+- ONLY use web search AFTER document search has been performed and returned insufficient results.
 - Use `search` (DuckDuckGo) for web queries when documents don't have the answer.
 - Use `fetch_content` to retrieve full page content from promising search results.
 - Clearly distinguish between information from the user's documents vs. the web.
 
-## Web Search Guidelines (MANDATORY)
+## Web Search Guidelines
 
 When performing web searches, you MUST follow these rules strictly:
 1. Search with max_results of 10 to get diverse sources
@@ -38,9 +45,9 @@ When performing web searches, you MUST follow these rules strictly:
 
 ## Search Tools
 
-- `search___summarize`: Search uploaded documents. Use this FIRST for any factual query.
+- `search___summarize`: Search uploaded documents. Use this FIRST for ANY query.
 - `search___overview`: Get an overview of all documents in a project. Use when the user asks what documents are uploaded, what a specific document is about, or wants a summary of their documents.
-- `search`: Web search via DuckDuckGo. Use as fallback when documents lack the answer.
+- `search`: Web search via DuckDuckGo. ONLY use as fallback after document search.
 - `fetch_content`: Fetch full content from a web URL. Use after web search to get detailed information.
 
 ## Citations
@@ -51,5 +58,6 @@ When performing web searches, you MUST follow these rules strictly:
 
 ## What NOT to Do
 
+- Do NOT skip document search for any reason.
+- Do NOT go directly to web search without performing document search first.
 - Do NOT make up information or citations that don't exist in search results.
-- Do NOT skip document search and go straight to web search (unless the question is clearly about general/current knowledge).
