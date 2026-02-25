@@ -10,7 +10,6 @@ whenToUse: "Use when the user wants to create structural or process diagrams —
 
 - **Return Mermaid code directly** — do NOT render to PNG or SVG. The frontend handles rendering.
 - Wrap the Mermaid code in a fenced code block with the `mermaid` language tag.
-- No `code_interpreter`, no `artifact_path`, no S3 upload needed.
 
 ### Workflow
 
