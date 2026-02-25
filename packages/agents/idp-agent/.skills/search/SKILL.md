@@ -1,7 +1,7 @@
 ---
 name: search
 description: "Search strategy guide for finding information from any source."
-whenToUse: "Use for ALL search queries — whether the user needs to find information in uploaded documents, search the web, look up facts, or answer any question that requires searching. This skill should be activated whenever a search is needed, regardless of the source."
+whenToUse: "MANDATORY. Use for ALL user questions and requests that require information lookup — including questions about uploaded documents, factual questions, explanations, summaries, comparisons, or any query where the answer might exist in the user's documents. Triggers include: asking about document content, asking 'what is', 'tell me about', 'explain', 'how does', 'compare', 'summarize', searching the web, or any question that is not purely about creating/editing files. When in doubt, activate this skill."
 ---
 
 # Search Skill

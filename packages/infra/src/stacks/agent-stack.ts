@@ -74,6 +74,18 @@ export class AgentStack extends Stack {
       websocketMessageQueueArn,
     );
 
+    // Get document storage bucket from SSM
+    const documentBucketName = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.DOCUMENT_STORAGE_BUCKET_NAME,
+    );
+
+    const documentBucket = Bucket.fromBucketName(
+      this,
+      'DocumentBucket',
+      documentBucketName,
+    );
+
     // Initialize prompt files in S3 on first deployment
     const promptSeeds: { id: string; localPath: string; s3Key: string }[] = [
       {
@@ -177,6 +189,7 @@ export class AgentStack extends Stack {
       },
     );
     agentStorageBucket.grantReadWrite(idpCodeInterpreter.executionRole);
+    documentBucket.grantDelete(idpCodeInterpreter.executionRole);
 
     const idpAgent = new IdpAgent(this, 'IdpAgent', {
       agentPath: path.resolve(process.cwd(), '../../packages/agents/idp-agent'),
@@ -199,21 +212,6 @@ export class AgentStack extends Stack {
     });
     agentStorageBucket.grantReadWrite(codeInterpreter.executionRole);
 
-    const researchAgent = new IdpAgent(this, 'ResearchAgent', {
-      agentPath: path.resolve(
-        process.cwd(),
-        '../../packages/agents/research-agent',
-      ),
-      agentName: 'research_agent',
-      sessionStorageBucket,
-      backendTable,
-      gateway,
-      agentStorageBucket,
-      codeInterpreterIdentifier: codeInterpreter.codeInterpreterId,
-    });
-
-    codeInterpreter.grantUse(researchAgent.runtime.role);
-
     this.agentCoreRuntime = idpAgent.runtime;
 
     // Store Agent Runtime ARN in SSM for cross-stack reference
@@ -221,12 +219,6 @@ export class AgentStack extends Stack {
       parameterName: SSM_KEYS.AGENT_RUNTIME_ARN,
       stringValue: this.agentCoreRuntime.agentRuntimeArn,
       description: 'ARN of the IDP Agent Runtime',
-    });
-
-    new StringParameter(this, 'ResearchAgentRuntimeArnParam', {
-      parameterName: SSM_KEYS.RESEARCH_AGENT_RUNTIME_ARN,
-      stringValue: researchAgent.runtime.agentRuntimeArn,
-      description: 'ARN of the Research Agent Runtime',
     });
 
     const bidiAgent = new IdpAgent(this, 'BidiAgent', {
@@ -246,18 +238,6 @@ export class AgentStack extends Stack {
       stringValue: bidiAgent.runtime.agentRuntimeArn,
       description: 'ARN of the Bidi Agent Runtime',
     });
-
-    // Get document storage bucket from SSM
-    const documentBucketName = StringParameter.valueForStringParameter(
-      this,
-      SSM_KEYS.DOCUMENT_STORAGE_BUCKET_NAME,
-    );
-
-    const documentBucket = Bucket.fromBucketName(
-      this,
-      'DocumentBucket',
-      documentBucketName,
-    );
 
     // WebCrawler Agent - crawls web pages using AgentCore Browser
     const webcrawlerAgent = new IdpAgent(this, 'WebCrawlerAgent', {

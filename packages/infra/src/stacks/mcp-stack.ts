@@ -8,8 +8,6 @@ import {
   SearchMcp,
   MdMcp,
   PdfMcp,
-  DocxMcp,
-  PptxMcp,
   ImageMcp,
   SSM_KEYS,
 } from ':idp-v2/common-constructs';
@@ -20,8 +18,6 @@ export class McpStack extends Stack {
   public readonly searchMcp: SearchMcp;
   public readonly mdMcp: MdMcp;
   public readonly pdfMcp: PdfMcp;
-  public readonly docxMcp: DocxMcp;
-  public readonly pptxMcp: PptxMcp;
   public readonly imageMcp?: ImageMcp;
   public readonly gateway: agentcore.Gateway;
 
@@ -68,15 +64,6 @@ export class McpStack extends Stack {
       backendTable,
       storageBucket: agentStorageBucket,
       websocketMessageQueue,
-    });
-    this.docxMcp = new DocxMcp(this, 'DocxMcp', {
-      backendTable,
-      storageBucket: agentStorageBucket,
-      websocketMessageQueue,
-    });
-    this.pptxMcp = new PptxMcp(this, 'PptxMcp', {
-      backendTable,
-      storageBucket: agentStorageBucket,
     });
 
     this.gateway = new agentcore.Gateway(this, 'McpGateway', {
@@ -138,23 +125,6 @@ export class McpStack extends Stack {
     // Workaround: CDK timing issue - explicitly grant and add dependency
     this.pdfMcp.function.grantInvoke(this.gateway.role);
     pdfTarget.node.addDependency(this.gateway.role);
-
-    const pptxTarget = this.gateway.addLambdaTarget('PptxMcpTarget', {
-      gatewayTargetName: 'pptx',
-      description:
-        'PPTX processing tools: extract text and extract tables from PowerPoint presentations. Use these tools when working with PPTX documents.',
-      lambdaFunction: this.pptxMcp.function,
-      toolSchema: agentcore.ToolSchema.fromLocalAsset(
-        path.resolve(
-          process.cwd(),
-          '../../packages/lambda/pptx-mcp/schema.json',
-        ),
-      ),
-    });
-
-    // Workaround: CDK timing issue - explicitly grant and add dependency
-    this.pptxMcp.function.grantInvoke(this.gateway.role);
-    pptxTarget.node.addDependency(this.gateway.role);
 
     // ImageMcp is optional - enable with context: enableImageMcp=true in cdk.json
     if (this.node.tryGetContext('enableImageMcp')) {

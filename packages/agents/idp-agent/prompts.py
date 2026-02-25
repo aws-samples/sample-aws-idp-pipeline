@@ -101,8 +101,9 @@ the full path is `/skills/docx/scripts/validate.py`.
 </how_skills_work>
 
 <skill_selection_rules>
+- The "search" skill is the DEFAULT skill. When the user asks any question, requests information, or needs to look something up, ALWAYS load and follow the search skill FIRST — even if you think you already know the answer. The user's documents are the primary source of truth.
 - Match the user's request against each skill's <whenToUse> field first. If <whenToUse> is present and matches, select that skill.
-- If multiple skills could match, prefer the one whose <whenToUse> is most specific to the user's request.
+- If multiple skills could match, prefer the one whose <whenToUse> is most specific to the user's request. The search skill can be used alongside other skills.
 - Read the SKILL.md BEFORE writing any code or producing any output for the step that needs it.
 - If no skill matches the task, proceed with your general knowledge.
 - If a skill's instructions conflict with the user's explicit request, follow the user.
