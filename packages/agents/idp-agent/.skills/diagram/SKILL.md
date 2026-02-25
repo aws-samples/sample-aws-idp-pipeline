@@ -8,77 +8,26 @@ whenToUse: "Use when the user wants to create structural or process diagrams —
 
 ## Execution Rules
 
-- **ALL code execution MUST use the `code_interpreter` tool.** Do NOT use the `shell` tool.
-- **Generate the diagram and upload to S3 in a SINGLE `code_interpreter` call.** Do NOT split into multiple calls.
-- Before calling `code_interpreter`, call `artifact_path(filename="diagram.png")` to get the S3 bucket and key.
-- After completion, report the `artifact_ref` to the user.
-- **If `code_interpreter` fails with an error, do NOT retry automatically.** Report the error to the user and ask for clarification or guidance.
+- **Return Mermaid code directly** — do NOT render to PNG or SVG. The frontend handles rendering.
+- Wrap the Mermaid code in a fenced code block with the `mermaid` language tag.
 
 ### Workflow
 
-1. Call `artifact_path(filename="diagram.png")` — returns `{ s3_uri, bucket, key, artifact_ref }`
-2. **Copy the actual `s3_uri` string value** from the artifact_path result and **hardcode it as a string literal** in your code_interpreter script.
-3. Call `code_interpreter` ONCE with a single script that writes the Mermaid definition, renders it to PNG, and uploads to S3.
+1. Understand what the user wants to visualize.
+2. Choose the appropriate diagram type.
+3. Write valid Mermaid syntax.
+4. Return the Mermaid code in a fenced code block:
 
-```python
-!pip install mmdc
-
-import subprocess
-import boto3
-
-# IMPORTANT: Replace with the ACTUAL s3_uri value returned by artifact_path
-S3_URI = "s3://my-bucket/user123/proj456/artifacts/art_abc123/diagram.png"  # <- paste the actual s3_uri here
-
-# Parse S3 URI into bucket and key
-BUCKET, KEY = S3_URI.replace("s3://", "").split("/", 1)
-
-# Write Mermaid definition
-mermaid_code = """
+````
+```mermaid
 flowchart TD
     A[Start] --> B{Decision}
     B -->|Yes| C[Action 1]
     B -->|No| D[Action 2]
     C --> E[End]
     D --> E
-"""
-
-with open('diagram.mmd', 'w') as f:
-    f.write(mermaid_code)
-
-# Render to PNG
-subprocess.run(['mmdc', '-i', 'diagram.mmd', '-o', 'diagram.png', '-s', '3', '-b', 'white'], check=True)
-
-# Upload to S3
-s3 = boto3.client('s3')
-with open('./diagram.png', 'rb') as f:
-    s3.upload_fileobj(
-        f, BUCKET, KEY,
-        ExtraArgs={'ContentType': 'image/png'}
-    )
 ```
-4. Report the `artifact_ref` to the user
-
----
-
-## Rendering Options
-
-```bash
-mmdc -i diagram.mmd -o output.png -s 3 -b white       # PNG, 3x scale, white bg
-mmdc -i diagram.mmd -o output.svg                       # SVG (vector)
-mmdc -i diagram.mmd -o output.png -t dark -b transparent # Dark theme, transparent bg
-```
-
-| Flag | Description |
-|------|-------------|
-| `-i` | Input .mmd file |
-| `-o` | Output file (.png, .svg, .pdf) |
-| `-s` | Scale factor (default 1, use 2-3 for high-res PNG) |
-| `-b` | Background color (`white`, `transparent`, `#F0F0F0`) |
-| `-t` | Theme: `default`, `forest`, `dark`, `neutral` |
-| `-w` | Width in pixels (default 800) |
-| `-H` | Height in pixels (default 600) |
-
-**Always use `-s 3 -b white`** for production PNG output — ensures high resolution and clean background.
+````
 
 ---
 
@@ -359,6 +308,14 @@ timeline
 
 ### Built-in Themes
 
+Apply themes using the `init` directive at the top of the diagram:
+
+```mermaid
+%%{init: {'theme': 'forest'}}%%
+flowchart TD
+    A --> B --> C
+```
+
 | Theme | Description |
 |-------|-------------|
 | `default` | Clean, standard colors |
@@ -366,7 +323,7 @@ timeline
 | `dark` | Dark background, light text |
 | `neutral` | Grayscale, minimal |
 
-### Custom Styling (in Mermaid syntax)
+### Custom Styling (classDef)
 
 ```mermaid
 flowchart TD
@@ -380,63 +337,28 @@ flowchart TD
     classDef danger fill:#F44336,stroke:#C62828,color:#fff
 ```
 
-### Style via Config File
+### Custom Theme Variables
 
-```python
-import json
-
-config = {
-    "theme": "default",
-    "themeVariables": {
-        "primaryColor": "#2196F3",
-        "primaryTextColor": "#ffffff",
-        "primaryBorderColor": "#1565C0",
-        "lineColor": "#333333",
-        "secondaryColor": "#4CAF50",
-        "tertiaryColor": "#FF9800",
-        "fontSize": "14px"
-    }
-}
-
-with open('mermaid-config.json', 'w') as f:
-    json.dump(config, f)
-
-# Then render with config
-subprocess.run(['mmdc', '-i', 'diagram.mmd', '-o', 'diagram.png', '-c', 'mermaid-config.json', '-s', '3', '-b', 'white'])
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#2196F3', 'primaryTextColor': '#fff', 'primaryBorderColor': '#1565C0', 'lineColor': '#333', 'secondaryColor': '#4CAF50', 'tertiaryColor': '#FF9800'}}}%%
+flowchart TD
+    A --> B --> C
 ```
-
----
-
-## Embedding in Other Documents
-
-Diagrams render to PNG images that can be embedded in:
-
-- **PPTX** — use the pptx skill's `add_picture()` with the diagram image
-- **DOCX** — use the docx skill's `doc.add_picture()` with the diagram image
-- **Markdown** — embed mermaid code blocks directly (renderers support it), or use image reference `![Diagram](image_url)`
 
 ---
 
 ## Common Pitfalls
 
-- **Always use `-s 3`** for PNG output — default scale produces blurry images
-- **Use `-b white`** for document embedding — transparent backgrounds render poorly in some contexts
 - **Keep diagrams focused** — split complex systems into multiple diagrams rather than one massive diagram
 - **Test syntax incrementally** — Mermaid syntax errors are hard to debug in large diagrams
 - **Use `participant` aliases** in sequence diagrams — `participant U as User` keeps the diagram readable
 - **Direction matters** — `LR` (left-right) works better for wide processes, `TD` (top-down) for hierarchical structures
 - **Quote special characters** — labels with special characters need quotes: `A["Label with (parens)"]`
+- **Escape hash in labels** — use `#35;` instead of `#` inside node labels
+- **No empty lines inside diagram** — Mermaid may break on unexpected blank lines within a diagram block
 
 ---
 
 ## Dependencies
 
-All dependencies should be installed within code_interpreter:
-```python
-!pip install mmdc
-```
-
-If `mmdc` Python package is not available, use Node.js alternative:
-```python
-!npm install -g @mermaid-js/mermaid-cli
-```
+None. Mermaid code is returned as text — the frontend handles rendering.
