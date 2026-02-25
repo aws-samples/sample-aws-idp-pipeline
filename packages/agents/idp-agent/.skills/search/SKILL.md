@@ -1,6 +1,7 @@
 ---
 name: search
-description: Document and web search strategy guide. Use this when users ask questions about documents or need to search for information.
+description: "Document and web search strategy guide for finding information."
+whenToUse: "Use when users ask questions about documents, need to search for information in uploaded documents, or need web search as a fallback. Also use when the user asks what documents are uploaded or wants a summary of their documents."
 ---
 
 # Search Skill

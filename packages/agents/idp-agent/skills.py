@@ -33,14 +33,21 @@ def build_skills_registry() -> str:
         frontmatter = parse_skill_frontmatter(skill_md)
         skill_name = frontmatter.get("name", skill_md.parent.name)
         description = frontmatter.get("description", "")
+        when_to_use = frontmatter.get("whenToUse", "")
 
         logger.info(f"Registered skill: {skill_name}")
-        registry.append(
+        skill_xml = (
             f"<skill>\n"
             f"  <name>{skill_name}</name>\n"
             f"  <description>{description}</description>\n"
+        )
+        if when_to_use:
+            skill_xml += f"  <whenToUse>{when_to_use}</whenToUse>\n"
+        skill_xml += (
             f"  <location>{skill_md.resolve()}</location>\n"
+            f"  <base_directory>{skill_md.parent.resolve()}</base_directory>\n"
             f"</skill>"
         )
+        registry.append(skill_xml)
 
     return "\n".join(registry)
