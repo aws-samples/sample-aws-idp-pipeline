@@ -152,6 +152,34 @@ Choose colors that match your topic — don't default to generic blue. Use these
 - Icons in small colored circles next to section headers
 - Italic accent text for key stats or taglines
 
+### Images
+
+Presentations are visual — use real images to make slides compelling. Use `image___search_image` to find relevant images *before* calling `code_interpreter`.
+
+**Workflow:**
+1. **Before** `code_interpreter`, plan which slides need images and call `image___search_image` for each topic.
+2. Collect the returned image URLs.
+3. **Inside** `code_interpreter`, download each URL and embed with `add_picture()`.
+
+```python
+import requests
+from io import BytesIO
+from pptx.util import Inches
+
+# Download image from URL (obtained via image___search_image)
+resp = requests.get(image_url)
+slide.shapes.add_picture(BytesIO(resp.content), Inches(5.2), Inches(1.2), Inches(4.5), Inches(3))
+```
+
+**Guidelines:**
+- Use images on slides with `image_right`, `image_left`, or `image_center` layouts
+- Match image content to the slide's topic — generic stock photos weaken the message
+- **Max 1 image per slide** — multiple images per slide cause clutter
+- **Max 8 images per presentation** — too many slows download and increases file size
+- Always specify both width and height, or use aspect ratio preservation (see python-pptx.md)
+- If `image___search_image` returns no good results, use `generate_image` to create a custom image that fits the slide's message
+- For data-heavy slides, prefer charts over images
+
 ### Typography
 
 **Choose an interesting font pairing** — don't default to Arial. Pick a header font with personality and pair it with a clean body font.
