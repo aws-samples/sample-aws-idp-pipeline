@@ -4,7 +4,7 @@ import logging
 import boto3
 
 from config import get_config
-from skills import build_skills_registry
+from skills import build_skills_registry, load_skill_content
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +140,11 @@ def build_system_prompt(
     if skills_registry:
         skills_prompt = SKILLS_SYSTEM_PROMPT.replace("{{SKILLS_REGISTRY}}", skills_registry)
         system_prompt += skills_prompt
+
+    # search 스킬은 항상 프롬프트에 포함
+    search_skill_content = load_skill_content("search")
+    if search_skill_content:
+        system_prompt += f"\n{search_skill_content}\n"
 
     if agent_id and user_id and project_id:
         custom_prompt = fetch_custom_agent_prompt(user_id, project_id, agent_id)

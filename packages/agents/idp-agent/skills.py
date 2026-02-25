@@ -51,3 +51,19 @@ def build_skills_registry() -> str:
         registry.append(skill_xml)
 
     return "\n".join(registry)
+
+
+def load_skill_content(skill_name: str) -> str | None:
+    """스킬의 SKILL.md 내용을 반환 (frontmatter 제외)."""
+    skill_md = SKILLS_DIR / skill_name / "SKILL.md"
+    if not skill_md.exists():
+        return None
+
+    with open(skill_md, "r") as f:
+        content = f.read()
+
+    # frontmatter 제거
+    parts = content.split("---", 2)
+    if len(parts) >= 3:
+        return parts[2].strip()
+    return content.strip()
