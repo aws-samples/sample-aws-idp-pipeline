@@ -305,31 +305,22 @@ print(matches)
 
 If matches are found, fix them before declaring success.
 
-### Visual QA
+### Structural QA
 
-Convert slides to images, then inspect:
+Run the structural QA script to check layout issues programmatically:
 
 ```python
 import subprocess
-subprocess.run(['python', 'scripts/office/soffice.py', '--headless', '--convert-to', 'pdf', 'output.pptx'])
-subprocess.run(['pdftoppm', '-jpeg', '-r', '150', 'output.pdf', 'slide'])
+result = subprocess.run(['python', 'scripts/structural_qa.py', 'output.pptx'], capture_output=True, text=True)
+print(result.stdout)
 ```
 
-This creates `slide-01.jpg`, `slide-02.jpg`, etc.
-
-Look for:
-- Overlapping elements (text through shapes, lines through words, stacked elements)
-- Text overflow or cut off at edges/box boundaries
-- Decorative lines positioned for single-line text but title wrapped to two lines
-- Source citations or footers colliding with content above
-- Elements too close (< 0.3" gaps) or cards/sections nearly touching
-- Uneven gaps (large empty area in one place, cramped in another)
+This checks for:
+- Overlapping elements (bounding box intersection)
 - Insufficient margin from slide edges (< 0.5")
-- Columns or similar elements not aligned consistently
-- Low-contrast text (e.g., light gray text on cream-colored background)
-- Low-contrast icons (e.g., dark icons on dark backgrounds without a contrasting circle)
-- Text boxes too narrow causing excessive wrapping
-- Leftover placeholder content
+- Elements too close (< 0.3" gaps)
+- Estimated text overflow (text volume vs box size)
+- Leftover placeholder content (xxxx, lorem, ipsum, etc.)
 
 ### Verification Loop
 
@@ -340,27 +331,6 @@ Look for:
 5. Repeat until a full pass reveals no new issues
 
 **Do not declare success until you've completed at least one fix-and-verify cycle.**
-
----
-
-## Converting to Images
-
-Convert presentations to individual slide images for visual inspection:
-
-```python
-import subprocess
-subprocess.run(['python', 'scripts/office/soffice.py', '--headless', '--convert-to', 'pdf', 'output.pptx'])
-subprocess.run(['pdftoppm', '-jpeg', '-r', '150', 'output.pdf', 'slide'])
-```
-
-This creates `slide-01.jpg`, `slide-02.jpg`, etc.
-
-To re-render specific slides after fixes:
-
-```python
-import subprocess
-subprocess.run(['pdftoppm', '-jpeg', '-r', '150', '-f', 'N', '-l', 'N', 'output.pdf', 'slide-fixed'])
-```
 
 ---
 
