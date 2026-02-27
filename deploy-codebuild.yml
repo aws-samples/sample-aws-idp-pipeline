@@ -160,7 +160,6 @@ Resources:
         Type: LOCAL
         Modes:
           - LOCAL_DOCKER_LAYER_CACHE
-          - LOCAL_SOURCE_CACHE
       TimeoutInMinutes: 180
 
 Outputs:

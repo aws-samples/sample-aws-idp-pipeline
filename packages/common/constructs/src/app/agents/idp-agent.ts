@@ -50,7 +50,7 @@ export class IdpAgent extends Construct {
     } = props;
 
     const dockerImage = AgentRuntimeArtifact.fromAsset(agentPath, {
-      platform: Platform.LINUX_AMD64,
+      platform: Platform.LINUX_ARM64,
     });
 
     this.runtime = new Runtime(this, 'Runtime', {
