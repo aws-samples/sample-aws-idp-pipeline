@@ -120,7 +120,7 @@ export class Backend extends Construct {
       cluster,
       taskImageOptions: {
         image: ContainerImage.fromAsset('../backend', {
-          platform: Platform.LINUX_ARM64,
+          platform: Platform.LINUX_AMD64,
         }),
         containerPort: 8000,
         logDriver: new AwsLogDriver({
@@ -141,7 +141,7 @@ export class Backend extends Construct {
         },
       },
       runtimePlatform: {
-        cpuArchitecture: CpuArchitecture.ARM64,
+        cpuArchitecture: CpuArchitecture.X86_64,
         operatingSystemFamily: OperatingSystemFamily.LINUX,
       },
       memoryLimitMiB: 2048,
