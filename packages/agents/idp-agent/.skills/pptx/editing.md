@@ -94,7 +94,7 @@ python scripts/thumbnail.py input.pptx [output_prefix] [--cols N]
 
 Creates `thumbnails.jpg` with slide filenames as labels. Default 3 columns, max 12 per grid.
 
-**Use for template analysis only** (choosing layouts). For visual QA, use `soffice` + `pdftoppm` to create full-resolution individual slide images—see SKILL.md.
+**Use for template analysis only** (choosing layouts). For QA, use `structural_qa.py` to check layout issues programmatically—see SKILL.md.
 
 ---
 
