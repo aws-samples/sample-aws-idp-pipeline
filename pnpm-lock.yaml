@@ -380,6 +380,28 @@ importers:
         specifier: ^4.0.16
         version: 4.0.18(@types/node@22.19.1)(@vitest/ui@4.0.18)(jiti@2.6.1)(jsdom@28.0.0)(lightningcss@1.30.2)(terser@5.46.0)(tsx@4.20.6)(yaml@2.8.2)
 
+  packages/lambda/qa-mcp:
+    dependencies:
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3.958.0
+        version: 3.989.0
+      '@aws-sdk/client-lambda':
+        specifier: ^3.958.0
+        version: 3.989.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3.958.0
+        version: 3.989.0(@aws-sdk/client-dynamodb@3.989.0)
+    devDependencies:
+      '@types/aws-lambda':
+        specifier: ^8.10.145
+        version: 8.10.160
+      '@types/node':
+        specifier: ^22.19.1
+        version: 22.19.1
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+
   packages/lambda/search-mcp:
     dependencies:
       '@aws-sdk/client-bedrock-runtime':

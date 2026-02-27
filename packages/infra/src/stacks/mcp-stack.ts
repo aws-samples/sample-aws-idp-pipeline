@@ -2,12 +2,18 @@ import { Stack, StackProps } from 'aws-cdk-lib';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
-import { SearchMcp, ImageMcp, SSM_KEYS } from ':idp-v2/common-constructs';
+import {
+  SearchMcp,
+  ImageMcp,
+  QaMcp,
+  SSM_KEYS,
+} from ':idp-v2/common-constructs';
 import * as agentcore from '@aws-cdk/aws-bedrock-agentcore-alpha';
 import * as path from 'path';
 
 export class McpStack extends Stack {
   public readonly searchMcp: SearchMcp;
+  public readonly qaMcp: QaMcp;
   public readonly imageMcp?: ImageMcp;
   public readonly gateway: agentcore.Gateway;
 
@@ -54,6 +60,20 @@ export class McpStack extends Stack {
     });
     this.searchMcp.function.grantInvoke(this.gateway.role);
     searchTarget.node.addDependency(this.gateway.role);
+
+    this.qaMcp = new QaMcp(this, 'QaMcp');
+
+    const qaTarget = this.gateway.addLambdaTarget('QaMcpTarget', {
+      gatewayTargetName: 'qa',
+      description:
+        'QA analysis tool: Get document segment info and add new QA analysis to document segments. Use when the user asks for additional analysis or deeper examination of specific document pages.',
+      lambdaFunction: this.qaMcp.function,
+      toolSchema: agentcore.ToolSchema.fromLocalAsset(
+        path.resolve(process.cwd(), '../../packages/lambda/qa-mcp/schema.json'),
+      ),
+    });
+    this.qaMcp.function.grantInvoke(this.gateway.role);
+    qaTarget.node.addDependency(this.gateway.role);
 
     // ImageMcp is optional - enable with context: enableImageMcp=true in cdk.json
     if (this.node.tryGetContext('enableImageMcp')) {

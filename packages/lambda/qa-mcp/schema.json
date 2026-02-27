@@ -1,0 +1,50 @@
+[
+  {
+    "name": "get_document_segments",
+    "description": "Get segment count and workflow info for a document. Use before add_document_qa to check how many segments exist. If the document has multiple segments, ask the user which segment (page) to analyze.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "The unique identifier of the project"
+        },
+        "document_id": {
+          "type": "string",
+          "description": "The unique identifier of the document"
+        }
+      },
+      "required": ["project_id", "document_id"]
+    }
+  },
+  {
+    "name": "add_document_qa",
+    "description": "Add a new QA analysis to a document segment by invoking the qa-regenerator. Use this when the user wants additional analysis, deeper analysis, or more questions about a specific document segment.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "The unique identifier of the project"
+        },
+        "document_id": {
+          "type": "string",
+          "description": "The unique identifier of the document"
+        },
+        "segment_index": {
+          "type": "integer",
+          "description": "Zero-based segment (page) index to analyze"
+        },
+        "question": {
+          "type": "string",
+          "description": "The question to ask about the segment"
+        },
+        "user_instructions": {
+          "type": "string",
+          "description": "Optional additional instructions for analysis"
+        }
+      },
+      "required": ["project_id", "document_id", "segment_index", "question"]
+    }
+  }
+]

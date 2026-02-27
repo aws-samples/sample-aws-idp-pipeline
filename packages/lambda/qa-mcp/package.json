@@ -1,0 +1,25 @@
+{
+  "name": "@idp-v2/qa-mcp",
+  "version": "1.0.0",
+  "description": "QA Analysis MCP Lambda handler for AgentCore Gateway",
+  "main": "dist/handler.js",
+  "types": "dist/handler.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.958.0",
+    "@aws-sdk/client-lambda": "^3.958.0",
+    "@aws-sdk/lib-dynamodb": "^3.958.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^22.19.1",
+    "typescript": "~5.9.3"
+  },
+  "packageManager": "pnpm@10.12.4"
+}
