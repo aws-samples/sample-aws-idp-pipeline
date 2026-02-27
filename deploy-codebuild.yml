@@ -105,7 +105,6 @@ Resources:
                 python: 3.13
               commands:
                 - npm install -g pnpm aws-cdk@latest
-                - docker run --rm --privileged public.ecr.aws/eks-distro-build-tooling/binfmt-misc:qemu-v7.0.0 --install aarch64
             pre_build:
               commands:
                 - git clone $REPO_URL /tmp/project
@@ -157,6 +156,11 @@ Resources:
                     echo "FRONTEND_URL=https://$FRONTEND_URL"
                   fi
                 - echo "Deployment completed at $(date)"
+      Cache:
+        Type: LOCAL
+        Modes:
+          - LOCAL_DOCKER_LAYER_CACHE
+          - LOCAL_SOURCE_CACHE
       TimeoutInMinutes: 180
 
 Outputs:
