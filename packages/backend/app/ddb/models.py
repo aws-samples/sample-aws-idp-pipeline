@@ -43,6 +43,8 @@ class DocumentData(BaseModel):
     document_prompt: str | None = None
     language: str | None = None
     transcribe_options: dict[str, Any] | None = None
+    source_url: str | None = None
+    crawl_instruction: str | None = None
 
 
 class Document(BaseModel):

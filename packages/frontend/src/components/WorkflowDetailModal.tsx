@@ -1073,8 +1073,73 @@ export default function WorkflowDetailModal({
                                 'Crawl Instruction',
                               )}
                             </p>
-                            <p className="text-sm text-slate-800 dark:text-slate-200">
+                            <p className="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap">
                               {workflow.crawl_instruction}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                  {workflow.file_type !== 'application/x-webreq' &&
+                    (workflow.use_bda ||
+                      workflow.use_ocr ||
+                      workflow.use_transcribe ||
+                      workflow.document_prompt) && (
+                      <div className="space-y-3">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                          {t(
+                            'workflow.processingOptions',
+                            'Processing Options',
+                          )}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {workflow.use_bda && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                              BDA
+                            </span>
+                          )}
+                          {workflow.use_ocr && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                              OCR
+                              {workflow.ocr_model && (
+                                <span className="opacity-70">
+                                  ({workflow.ocr_model})
+                                </span>
+                              )}
+                            </span>
+                          )}
+                          {workflow.use_transcribe &&
+                            (() => {
+                              const opts = workflow.transcribe_options as
+                                | Record<string, string>
+                                | undefined;
+                              const mode = opts?.language_mode;
+                              const modeLabel = mode
+                                ? t(
+                                    `transcribe.summary${mode.charAt(0).toUpperCase()}${mode.slice(1)}`,
+                                    mode,
+                                  )
+                                : null;
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                  Transcribe
+                                  {modeLabel && (
+                                    <span className="opacity-70">
+                                      ({modeLabel})
+                                    </span>
+                                  )}
+                                </span>
+                              );
+                            })()}
+                        </div>
+                        {workflow.document_prompt && (
+                          <div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                              {t('workflow.documentPrompt', 'Document Prompt')}
+                            </p>
+                            <p className="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap">
+                              {workflow.document_prompt}
                             </p>
                           </div>
                         )}

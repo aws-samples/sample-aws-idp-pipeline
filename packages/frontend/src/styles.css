@@ -3059,6 +3059,22 @@ a {
   background: rgba(59, 130, 246, 0.25);
 }
 
+/* FileTypeBadge SVG - dark mode opacity */
+.ftb-body {
+  fill-opacity: 0.08;
+  stroke-opacity: 0.3;
+}
+.ftb-fold {
+  fill-opacity: 0.15;
+}
+:root.dark .ftb-body {
+  fill-opacity: 0.45;
+  stroke-opacity: 0.8;
+}
+:root.dark .ftb-fold {
+  fill-opacity: 0.55;
+}
+
 /* Document scanner animations */
 @keyframes ds-scan {
   0%, 5% { top: -2px; }

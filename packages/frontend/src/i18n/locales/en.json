@@ -199,7 +199,11 @@
     "textPreview": "Text Preview",
     "chunk": "Chunk",
     "noTextContent": "No text content available",
-    "loadingSegment": "Loading segment..."
+    "loadingSegment": "Loading segment...",
+    "processingOptions": "Processing Options",
+    "documentPrompt": "Document Prompt",
+    "sourceUrl": "Source URL",
+    "crawlInstruction": "Crawl Instruction"
   },
   "ocr": {
     "title": "OCR Settings",

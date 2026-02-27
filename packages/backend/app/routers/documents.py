@@ -34,6 +34,8 @@ class DocumentUploadRequest(BaseModel):
     document_prompt: str | None = None
     language: str | None = None
     transcribe_options: dict[str, object] | None = None
+    source_url: str | None = None
+    crawl_instruction: str | None = None
 
 
 class DocumentUploadResponse(BaseModel):
@@ -58,6 +60,8 @@ class DocumentResponse(BaseModel):
     document_prompt: str | None = None
     language: str | None = None
     transcribe_options: dict[str, object] | None = None
+    source_url: str | None = None
+    crawl_instruction: str | None = None
     created_at: str
     updated_at: str
 
@@ -79,6 +83,8 @@ class DocumentResponse(BaseModel):
             document_prompt=doc.data.document_prompt,
             language=doc.data.language,
             transcribe_options=doc.data.transcribe_options,
+            source_url=doc.data.source_url,
+            crawl_instruction=doc.data.crawl_instruction,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
         )
@@ -206,6 +212,8 @@ def create_document_upload(project_id: str, request: DocumentUploadRequest) -> D
         document_prompt=request.document_prompt,
         language=request.language,
         transcribe_options=request.transcribe_options,
+        source_url=request.source_url,
+        crawl_instruction=request.crawl_instruction,
     )
     put_document_item(project_id, document_id, data)
 

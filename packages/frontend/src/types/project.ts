@@ -104,6 +104,13 @@ export interface WorkflowDetail {
   segments?: SegmentData[];
   source_url?: string;
   crawl_instruction?: string;
+  use_bda?: boolean;
+  use_ocr?: boolean;
+  use_transcribe?: boolean;
+  ocr_model?: string;
+  ocr_options?: Record<string, unknown>;
+  transcribe_options?: Record<string, unknown>;
+  document_prompt?: string;
 }
 
 export interface ChatAttachment {

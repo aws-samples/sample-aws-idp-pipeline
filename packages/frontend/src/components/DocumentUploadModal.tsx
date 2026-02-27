@@ -72,6 +72,8 @@ export interface DocumentProcessingOptions {
   };
   document_prompt?: string;
   language?: string;
+  source_url?: string;
+  crawl_instruction?: string;
 }
 
 interface DocumentUploadModalProps {
@@ -154,7 +156,8 @@ export default function DocumentUploadModal({
     return () => {
       cancelled = true;
     };
-  }, [files]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files]);
 
   const maxPdfPages = useMemo(() => {
     if (pdfPageCounts.size === 0) return 0;
@@ -367,7 +370,12 @@ export default function DocumentUploadModal({
     } else {
       if (!webUrl) return;
       const webreqFile = createWebreqFile();
-      await onUpload([webreqFile], { use_bda: false, language });
+      await onUpload([webreqFile], {
+        use_bda: false,
+        language,
+        source_url: webUrl,
+        crawl_instruction: webInstruction || undefined,
+      });
       setWebUrl('');
       setWebInstruction('');
     }
@@ -375,6 +383,7 @@ export default function DocumentUploadModal({
     activeTab,
     files,
     webUrl,
+    webInstruction,
     language,
     onUpload,
     createWebreqFile,
@@ -797,7 +806,7 @@ export default function DocumentUploadModal({
                       placeholder={t('analysis.placeholder')}
                       rows={4}
                       disabled={uploading}
-                      className="flex-1 px-3 py-2 text-sm border border-black/10 dark:border-[#3b4264] rounded-lg bg-transparent dark:bg-[#0d1117] text-[#0f172a] dark:text-[#f1f5f9] placeholder-[#94a3b8] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 resize-none"
+                      className="flex-1 px-3 py-2 text-sm border border-black/10 dark:border-[#3b4264] rounded-lg bg-transparent dark:bg-[#0d1117] text-[#0f172a] dark:text-[#f1f5f9] placeholder-[#94a3b8] dark:placeholder-[#94a3b8]/50 placeholder:text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 resize-none"
                     />
                   </div>
                 </div>
@@ -916,7 +925,7 @@ export default function DocumentUploadModal({
                     'https://example.com/page',
                   )}
                   disabled={uploading}
-                  className="w-full px-3 py-2 text-sm border border-black/10 dark:border-[#3b4264] rounded-lg bg-transparent dark:bg-[#0d1117] text-[#0f172a] dark:text-[#f1f5f9] placeholder-[#94a3b8] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                  className="w-full px-3 py-2 text-sm border border-black/10 dark:border-[#3b4264] rounded-lg bg-transparent dark:bg-[#0d1117] text-[#0f172a] dark:text-[#f1f5f9] placeholder-[#94a3b8] dark:placeholder-[#94a3b8]/50 placeholder:text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
                 />
               </div>
 
@@ -942,7 +951,7 @@ export default function DocumentUploadModal({
                   )}
                   disabled={uploading}
                   rows={8}
-                  className="w-full px-3 py-2 text-sm border border-black/10 dark:border-[#3b4264] rounded-lg bg-transparent dark:bg-[#0d1117] text-[#0f172a] dark:text-[#f1f5f9] placeholder-[#94a3b8] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 resize-none"
+                  className="w-full px-3 py-2 text-sm border border-black/10 dark:border-[#3b4264] rounded-lg bg-transparent dark:bg-[#0d1117] text-[#0f172a] dark:text-[#f1f5f9] placeholder-[#94a3b8] dark:placeholder-[#94a3b8]/50 placeholder:text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 resize-none"
                 />
                 <p className="text-xs text-[#64748b]">
                   {t(

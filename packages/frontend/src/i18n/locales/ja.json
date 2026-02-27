@@ -121,7 +121,9 @@
     "analysisInstructions": "指示",
     "bdaTooltip": "Amazon Bedrockを使用して、表、チャート、複数カラムレイアウトなどのドキュメント構造を分析します。",
     "ocrTooltip": "PaddleOCRを使用して、画像やスキャンされたPDFからテキストを抽出します。設定アイコンをクリックしてOCRオプションを変更できます。",
-    "transcribeTooltip": "Amazon Transcribeを使用して、動画や音声ファイルの音声をテキストに変換します。"
+    "transcribeTooltip": "Amazon Transcribeを使用して、動画や音声ファイルの音声をテキストに変換します。",
+    "transcribe": "Transcribe",
+    "transcribeDesc": "Amazon Transcribe"
   },
   "workflow": {
     "title": "ワークフロー",
@@ -197,7 +199,11 @@
     "textPreview": "テキストプレビュー",
     "chunk": "チャンク",
     "noTextContent": "テキストコンテンツがありません",
-    "loadingSegment": "セグメントを読み込み中..."
+    "loadingSegment": "セグメントを読み込み中...",
+    "processingOptions": "処理オプション",
+    "documentPrompt": "ドキュメントプロンプト",
+    "sourceUrl": "ソースURL",
+    "crawlInstruction": "クロール指示"
   },
   "ocr": {
     "title": "OCR設定",
@@ -284,6 +290,29 @@
       "mn": "モンゴル語",
       "sw": "スワヒリ語"
     }
+  },
+  "transcribe": {
+    "title": "Transcribe設定",
+    "languageMode": "言語モード",
+    "language": "言語",
+    "languages": "言語リスト",
+    "modes": {
+      "auto": {
+        "name": "自動検出",
+        "description": "固定された候補リストから音声言語を自動的に識別します"
+      },
+      "direct": {
+        "name": "言語を直接指定",
+        "description": "オーディオ/動画コンテンツの正確な言語を直接指定します"
+      },
+      "multi": {
+        "name": "多言語検出",
+        "description": "複数の言語を含むコンテンツを検出して変換します"
+      }
+    },
+    "summaryAuto": "自動",
+    "summaryDirect": "直接",
+    "summaryMulti": "多言語"
   },
   "analysis": {
     "title": "文書分析の指示",
@@ -464,7 +493,16 @@
     "darkMode": "ダークモード",
     "lightMode": "ライトモード",
     "license": "ライセンス",
-    "licenseTitle": "Amazon Software License"
+    "licenseTitle": "Amazon Software License",
+    "sagemaker": "SageMaker",
+    "sagemakerTitle": "OCRエンドポイント管理",
+    "currentInstances": "現在のインスタンス",
+    "desiredInstances": "目標インスタンス",
+    "startEndpoint": "開始",
+    "stopEndpoint": "停止",
+    "scaleInSettings": "自動停止設定",
+    "scaleInDescription": "アイドル状態が続くとエンドポイントが自動的に停止します",
+    "minutes": "分"
   },
   "systemPrompt": {
     "title": "System Prompt",

@@ -96,6 +96,13 @@ class WorkflowDetailResponse(BaseModel):
     segments: list[SegmentData]
     source_url: str | None = None
     crawl_instruction: str | None = None
+    use_bda: bool = False
+    use_ocr: bool | None = None
+    use_transcribe: bool = False
+    ocr_model: str | None = None
+    ocr_options: dict[str, object] | None = None
+    transcribe_options: dict[str, object] | None = None
+    document_prompt: str | None = None
 
 
 @router.get("")
@@ -133,6 +140,14 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
 
     webcrawler_meta = (wf.data.preprocess or {}).get("webcrawler", {})
 
+    # Fetch document record for processing options
+    doc = get_document_item(wf.data.project_id, document_id)
+    doc_data = doc.data if doc else None
+
+    # source_url / crawl_instruction: prefer DOC record, fall back to workflow preprocess
+    source_url = (doc_data.source_url if doc_data else None) or webcrawler_meta.get("source_url")
+    crawl_instruction = (doc_data.crawl_instruction if doc_data else None) or webcrawler_meta.get("instruction")
+
     return WorkflowDetailResponse(
         workflow_id=workflow_id,
         document_id=document_id,
@@ -145,8 +160,15 @@ def get_workflow(document_id: str, workflow_id: str) -> WorkflowDetailResponse:
         created_at=wf.created_at,
         updated_at=wf.updated_at,
         segments=[],
-        source_url=webcrawler_meta.get("source_url"),
-        crawl_instruction=webcrawler_meta.get("instruction"),
+        source_url=source_url,
+        crawl_instruction=crawl_instruction,
+        use_bda=doc_data.use_bda if doc_data else False,
+        use_ocr=doc_data.use_ocr if doc_data else None,
+        use_transcribe=doc_data.use_transcribe if doc_data else False,
+        ocr_model=doc_data.ocr_model if doc_data else None,
+        ocr_options=doc_data.ocr_options if doc_data else None,
+        transcribe_options=doc_data.transcribe_options if doc_data else None,
+        document_prompt=doc_data.document_prompt if doc_data else None,
     )
 
 

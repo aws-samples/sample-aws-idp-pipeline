@@ -14,12 +14,6 @@ import {
   MoreVertical,
   Trash2,
   FileText,
-  Image,
-  FileCode,
-  FileSpreadsheet,
-  Film,
-  File,
-  Music,
   Copy,
   Download,
   PanelRightClose,
@@ -31,9 +25,6 @@ import {
   FileX,
   Search,
   X,
-  Presentation,
-  Globe,
-  Ruler,
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import {
@@ -44,9 +35,9 @@ import {
   StepStatus,
 } from '../types/project';
 import {
-  getArtifactIcon,
   formatFileSize,
   getFileTypeCategory,
+  getExtensionFromMimeType,
 } from '../lib/fileTypeUtils';
 
 const getIconHue = (fileType: string): number => {
@@ -71,52 +62,110 @@ const getIconHue = (fileType: string): number => {
 const ASCII_MINI =
   'f(x){a=0;\nfor(i<n){\ns+=d[i]*w\nret p%2?1\n}b+=0x3f\nc&=~0xff\nif(k>m){\nout(0xbe)}';
 
-const getFileIcon = (fileType: string) => {
-  if (fileType.includes('pdf')) {
-    return <FileText className="h-5 w-5 text-blue-400" />;
-  }
-  if (fileType.includes('image')) {
-    return <Image className="h-5 w-5 text-emerald-400" />;
-  }
-  if (fileType.includes('video')) {
-    return <Film className="h-5 w-5 text-violet-400" />;
-  }
-  if (fileType.includes('audio')) {
-    return <Music className="h-5 w-5 text-amber-400" />;
-  }
-  if (fileType.includes('webreq')) {
-    return <Globe className="h-5 w-5 text-cyan-400" />;
-  }
-  if (
-    fileType.includes('dxf') ||
-    fileType.includes('dwg') ||
-    fileType.includes('acad')
-  ) {
-    return <Ruler className="h-5 w-5 text-teal-400" />;
-  }
-  if (
-    fileType.includes('presentationml') ||
-    fileType.includes('ms-powerpoint')
-  ) {
-    return <Presentation className="h-5 w-5 text-orange-400" />;
-  }
-  if (
-    fileType.includes('spreadsheetml') ||
-    fileType.includes('ms-excel') ||
-    fileType === 'text/csv'
-  ) {
-    return <FileSpreadsheet className="h-5 w-5 text-green-400" />;
-  }
-  if (fileType === 'text/markdown') {
-    return <FileCode className="h-5 w-5 text-indigo-400" />;
-  }
-  if (fileType.includes('wordprocessing') || fileType.includes('msword')) {
-    return <FileText className="h-5 w-5 text-blue-500" />;
-  }
-  if (fileType === 'text/plain') {
-    return <FileText className="h-5 w-5 text-slate-500" />;
-  }
-  return <File className="h-5 w-5 text-slate-400" />;
+const EXT_COLORS: Record<string, string> = {
+  pdf: '#6882A0',
+  doc: '#6882A0',
+  docx: '#6882A0',
+  ppt: '#6882A0',
+  pptx: '#6882A0',
+  txt: '#6882A0',
+  md: '#6882A0',
+  xls: '#6A9E7E',
+  xlsx: '#6A9E7E',
+  csv: '#6A9E7E',
+  png: '#8878A0',
+  jpg: '#8878A0',
+  jpeg: '#8878A0',
+  gif: '#8878A0',
+  tiff: '#8878A0',
+  mp4: '#8878A0',
+  mov: '#8878A0',
+  mp3: '#8878A0',
+  wav: '#8878A0',
+  flac: '#8878A0',
+  dxf: '#5E9494',
+  webreq: '#5E9494',
+  web: '#5E9494',
+};
+
+const FileTypeBadge = ({ ext }: { ext: string }) => {
+  const color = EXT_COLORS[ext] || '#64748B';
+  const label = ext.toUpperCase();
+  return (
+    <svg
+      width="20"
+      height="24"
+      viewBox="0 0 20 24"
+      fill="none"
+      className="flex-shrink-0"
+    >
+      <path
+        d="M2 1.5C2 .67 2.67 0 3.5 0H13l5 5v17.5c0 .83-.67 1.5-1.5 1.5h-13C2.67 24 2 23.33 2 22.5V1.5z"
+        className="ftb-body"
+        fill={color}
+        stroke={color}
+        strokeWidth="0.5"
+      />
+      <path
+        d="M13 0l5 5h-3.5c-.83 0-1.5-.67-1.5-1.5V0z"
+        className="ftb-fold"
+        fill={color}
+      />
+      <path
+        d="M2 15h16v7.5c0 .83-.67 1.5-1.5 1.5h-13C2.67 24 2 23.33 2 22.5V15z"
+        fill={color}
+      />
+      <text
+        x="10"
+        y="21.5"
+        textAnchor="middle"
+        fill="white"
+        fontSize={label.length > 3 ? '5.5' : '6.5'}
+        fontWeight="700"
+        fontFamily="system-ui, -apple-system, sans-serif"
+      >
+        {label}
+      </text>
+    </svg>
+  );
+};
+
+const ArtifactCircle = ({ ext }: { ext: string }) => {
+  const color = EXT_COLORS[ext] || '#64748B';
+  const label = ext.toUpperCase();
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      className="flex-shrink-0"
+    >
+      <circle cx="10" cy="10" r="9.5" fill={color} fillOpacity="0.6" />
+      <text
+        x="10"
+        y="10.5"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill="white"
+        fontSize={label.length > 3 ? '4.5' : '5.5'}
+        fontWeight="700"
+        fontFamily="system-ui, -apple-system, sans-serif"
+      >
+        {label}
+      </text>
+    </svg>
+  );
+};
+
+const getArtifactBadge = (contentType: string, fileName?: string) => {
+  const ext = getExtensionFromMimeType(contentType, fileName);
+  return <ArtifactCircle ext={ext || 'file'} />;
+};
+
+const getFileIcon = (fileType: string, fileName?: string) => {
+  const ext = getExtensionFromMimeType(fileType, fileName);
+  return <FileTypeBadge ext={ext ? ext.replace('webreq', 'web') : 'file'} />;
 };
 
 const getStatusBadge = (status: string) => {
@@ -711,6 +760,7 @@ export default function SidePanel({
                     { key: 'presentation', label: 'Slide' },
                     { key: 'image', label: 'Image' },
                     { key: 'media', label: 'Media' },
+                    { key: 'cad', label: 'CAD' },
                     { key: 'web', label: 'Web' },
                     { key: 'text', label: 'Text' },
                   ] as const
@@ -811,7 +861,7 @@ export default function SidePanel({
                                   'ds-icon-fade 3.5s infinite ease-in-out',
                               }}
                             >
-                              {getFileIcon(doc.file_type)}
+                              {getFileIcon(doc.file_type, doc.name)}
                             </div>
                             <div
                               className="absolute inset-0 overflow-hidden rounded-lg"
@@ -846,7 +896,7 @@ export default function SidePanel({
                           </div>
                         ) : (
                           <div className="flex-shrink-0 p-1.5 rounded-lg doc-icon-bg">
-                            {getFileIcon(doc.file_type)}
+                            {getFileIcon(doc.file_type, doc.name)}
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
@@ -1012,7 +1062,6 @@ export default function SidePanel({
             ) : (
               <div className="p-2 pb-3 space-y-1">
                 {filteredArtifacts.map((artifact) => {
-                  const ArtifactIcon = getArtifactIcon(artifact.content_type);
                   return (
                     <div
                       key={artifact.artifact_id}
@@ -1036,7 +1085,10 @@ export default function SidePanel({
                       }`}
                       onClick={() => onArtifactSelect?.(artifact.artifact_id)}
                     >
-                      <ArtifactIcon className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
+                      {getArtifactBadge(
+                        artifact.content_type,
+                        artifact.filename,
+                      )}
                       <span className="text-sm truncate flex-1">
                         {artifact.filename}
                       </span>

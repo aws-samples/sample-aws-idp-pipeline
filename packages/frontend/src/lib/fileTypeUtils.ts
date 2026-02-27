@@ -267,6 +267,46 @@ export const getFileTypeInfo = (
   }
 };
 
+// --- MIME type to extension mapping ---
+
+const MIME_TO_EXTENSION: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+    'docx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+    'pptx',
+  'application/vnd.ms-powerpoint': 'ppt',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.ms-excel': 'xls',
+  'text/csv': 'csv',
+  'text/plain': 'txt',
+  'text/markdown': 'md',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/tiff': 'tiff',
+  'image/vnd.dxf': 'dxf',
+  'application/dxf': 'dxf',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'audio/mpeg': 'mp3',
+  'audio/wav': 'wav',
+  'audio/flac': 'flac',
+  'application/x-webreq': 'webreq',
+};
+
+export function getExtensionFromMimeType(
+  fileType: string,
+  fileName?: string,
+): string {
+  if (fileName) {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (ext) return ext;
+  }
+  return MIME_TO_EXTENSION[fileType] || '';
+}
+
 // --- Shared formatFileSize ---
 
 export function formatFileSize(bytes: number): string {

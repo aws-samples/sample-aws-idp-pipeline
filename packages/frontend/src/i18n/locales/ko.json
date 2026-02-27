@@ -199,7 +199,11 @@
     "textPreview": "텍스트 미리보기",
     "chunk": "청크",
     "noTextContent": "텍스트 콘텐츠가 없습니다",
-    "loadingSegment": "세그먼트 로딩 중..."
+    "loadingSegment": "세그먼트 로딩 중...",
+    "processingOptions": "처리 옵션",
+    "documentPrompt": "문서 프롬프트",
+    "sourceUrl": "소스 URL",
+    "crawlInstruction": "크롤링 지시사항"
   },
   "ocr": {
     "title": "OCR 설정",

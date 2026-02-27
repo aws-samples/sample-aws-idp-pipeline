@@ -488,6 +488,8 @@ export function useDocuments({
                 transcribe_options: options.transcribe_options,
                 document_prompt: options.document_prompt,
                 language: options.language,
+                source_url: options.source_url,
+                crawl_instruction: options.crawl_instruction,
               }),
             },
           );
