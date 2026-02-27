@@ -193,6 +193,7 @@
       "documentSummary": "ドキュメント要約"
     },
     "inProgress": "処理中...",
+    "qaRegenInProgress": "追加分析中 (ページ {{page}})",
     "uploading": "アップロード中...",
     "preparing": "準備中...",
     "starting": "開始中...",

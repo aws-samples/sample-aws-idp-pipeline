@@ -193,6 +193,7 @@
       "documentSummary": "Document Summary"
     },
     "inProgress": "Processing...",
+    "qaRegenInProgress": "Additional analysis (page {{page}})",
     "uploading": "Uploading...",
     "preparing": "Preparing...",
     "starting": "Starting...",

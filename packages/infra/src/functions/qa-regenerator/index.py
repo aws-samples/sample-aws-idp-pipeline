@@ -10,6 +10,7 @@ import boto3
 import yaml
 from PIL import Image
 
+from shared.ddb_client import get_steps, get_table, now_iso
 from shared.s3_analysis import get_segment_analysis, save_segment_analysis
 
 BEDROCK_MODEL_ID = os.environ['BEDROCK_MODEL_ID']
@@ -191,6 +192,37 @@ def invoke_lancedb(action: str, params: dict) -> dict:
     return json.loads(payload)
 
 
+def _set_qa_regen_status(workflow_id: str, segment_index: int, status: str):
+    """Update qa_regen sub-field in segment_analyzer step and GSI1SK."""
+    try:
+        table = get_table()
+        steps = get_steps(workflow_id)
+        if not steps:
+            return
+        data = steps.get('data', {})
+        sa = data.get('segment_analyzer', {})
+        if status == 'completed':
+            sa.pop('qa_regen', None)
+        else:
+            sa['qa_regen'] = {'status': status, 'segment_index': segment_index}
+        data['segment_analyzer'] = sa
+
+        gsi1sk = 'in_progress' if status == 'in_progress' else 'completed'
+        table.update_item(
+            Key={'PK': f'WF#{workflow_id}', 'SK': 'STEP'},
+            UpdateExpression='SET #data = :data, updated_at = :updated_at, GSI1SK = :gsi1sk',
+            ExpressionAttributeNames={'#data': 'data'},
+            ExpressionAttributeValues={
+                ':data': data,
+                ':updated_at': now_iso(),
+                ':gsi1sk': gsi1sk,
+            }
+        )
+        print(f'qa_regen updated: workflow={workflow_id}, segment={segment_index}, status={status}, GSI1SK={gsi1sk}')
+    except Exception as e:
+        print(f'Failed to update qa_regen status: {e}')
+
+
 def handler(event, _context):
     print(f'Event: {json.dumps(event)}')
 
@@ -250,59 +282,69 @@ def handler(event, _context):
             'qa_index': qa_index
         }
 
-    # 2. Build context and previous Q&A
-    context = _build_context(segment_data)
-    previous_qa = _build_previous_qa(ai_analysis, qa_index)
+    # 2. Mark qa_regen in progress
+    _set_qa_regen_status(workflow_id, segment_index, 'in_progress')
 
-    # 3. Download and resize image
-    image_uri = segment_data.get('image_uri', '')
-    image_data = _download_image(image_uri)
+    try:
+        # 3. Build context and previous Q&A
+        context = _build_context(segment_data)
+        previous_qa = _build_previous_qa(ai_analysis, qa_index)
 
-    # 4. Build prompt
-    prompt_template = _load_prompt()
-    if prompt_template:
-        prompt = prompt_template.format(
-            previous_context=context,
-            previous_qa=previous_qa,
-            question=question,
-            user_instructions=user_instructions or 'No additional instructions.',
-            language=language
+        # 4. Download and resize image
+        image_uri = segment_data.get('image_uri', '')
+        image_data = _download_image(image_uri)
+
+        # 5. Build prompt
+        prompt_template = _load_prompt()
+        if prompt_template:
+            prompt = prompt_template.format(
+                previous_context=context,
+                previous_qa=previous_qa,
+                question=question,
+                user_instructions=user_instructions or 'No additional instructions.',
+                language=language
+            )
+        else:
+            prompt = f'Answer this question about the document: {question}\n\nRespond in {language}.'
+
+        # 6. Call Bedrock Claude vision API
+        messages_content = []
+        if image_data:
+            resized = _resize_image_if_needed(image_data)
+            image_base64 = base64.b64encode(resized).decode('utf-8')
+            messages_content.append({
+                'type': 'image',
+                'source': {
+                    'type': 'base64',
+                    'media_type': 'image/png',
+                    'data': image_base64
+                }
+            })
+        messages_content.append({'type': 'text', 'text': prompt})
+
+        request_body = {
+            'anthropic_version': 'bedrock-2023-05-31',
+            'max_tokens': 8192,
+            'temperature': 0.1,
+            'messages': [{'role': 'user', 'content': messages_content}]
+        }
+
+        client = get_bedrock_client()
+        response = client.invoke_model(
+            modelId=BEDROCK_MODEL_ID,
+            body=json.dumps(request_body),
+            contentType='application/json'
         )
-    else:
-        prompt = f'Answer this question about the document: {question}\n\nRespond in {language}.'
+        result = json.loads(response['body'].read().decode('utf-8'))
+        answer = result.get('content', [{}])[0].get('text', '')
+    except Exception:
+        _set_qa_regen_status(workflow_id, segment_index, 'completed')
+        raise
 
-    # 5. Call Bedrock Claude vision API
-    messages_content = []
-    if image_data:
-        resized = _resize_image_if_needed(image_data)
-        image_base64 = base64.b64encode(resized).decode('utf-8')
-        messages_content.append({
-            'type': 'image',
-            'source': {
-                'type': 'base64',
-                'media_type': 'image/png',
-                'data': image_base64
-            }
-        })
-    messages_content.append({'type': 'text', 'text': prompt})
+    # 7. Clear qa_regen status
+    _set_qa_regen_status(workflow_id, segment_index, 'completed')
 
-    request_body = {
-        'anthropic_version': 'bedrock-2023-05-31',
-        'max_tokens': 8192,
-        'temperature': 0.1,
-        'messages': [{'role': 'user', 'content': messages_content}]
-    }
-
-    client = get_bedrock_client()
-    response = client.invoke_model(
-        modelId=BEDROCK_MODEL_ID,
-        body=json.dumps(request_body),
-        contentType='application/json'
-    )
-    result = json.loads(response['body'].read().decode('utf-8'))
-    answer = result.get('content', [{}])[0].get('text', '')
-
-    # 6. Update ai_analysis in S3
+    # 8. Update ai_analysis in S3
     new_item = {
         'analysis_query': question,
         'content': answer[:3000]
@@ -315,7 +357,7 @@ def handler(event, _context):
     segment_data['ai_analysis'] = ai_analysis
     save_segment_analysis(file_uri, segment_index, segment_data)
 
-    # 7. Rebuild content_combined and update LanceDB
+    # 9. Rebuild content_combined and update LanceDB
     content_combined = _build_content_combined(segment_data)
 
     # Delete existing record

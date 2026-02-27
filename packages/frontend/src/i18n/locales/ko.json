@@ -193,6 +193,7 @@
       "documentSummary": "문서 요약"
     },
     "inProgress": "처리 중...",
+    "qaRegenInProgress": "추가 분석 중 (페이지 {{page}})",
     "uploading": "업로드 중...",
     "preparing": "준비 중...",
     "starting": "시작 중...",

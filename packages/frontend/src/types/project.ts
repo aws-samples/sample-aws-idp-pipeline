@@ -172,6 +172,7 @@ export interface WorkflowProgress {
   segmentProgress: { completed: number; total: number } | null;
   error: string | null;
   steps?: Record<string, StepStatus>;
+  qaRegen?: { status: string; segmentIndex: number } | null;
 }
 
 export interface AnalysisPopup {

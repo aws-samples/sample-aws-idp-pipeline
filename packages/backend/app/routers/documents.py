@@ -110,6 +110,7 @@ class DeleteDocumentResponse(BaseModel):
 class StepProgress(BaseModel):
     status: str
     label: str
+    qa_regen: dict | None = None
 
 
 class DocumentProgress(BaseModel):
@@ -152,7 +153,10 @@ def get_documents_progress(project_id: str) -> list[DocumentProgress]:
         steps: dict[str, StepProgress] = {}
         for key, value in steps_data.items():
             if isinstance(value, dict) and "status" in value and "label" in value:
-                steps[key] = StepProgress(status=value["status"], label=value["label"])
+                step = StepProgress(status=value["status"], label=value["label"])
+                if "qa_regen" in value:
+                    step.qa_regen = value["qa_regen"]
+                steps[key] = step
 
         results.append(
             DocumentProgress(

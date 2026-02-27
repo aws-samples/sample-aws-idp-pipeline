@@ -954,6 +954,17 @@ export default function SidePanel({
                           segmentProgress={workflowProgress.segmentProgress}
                         />
                       )}
+                      {!isProcessing &&
+                        workflowProgress?.qaRegen?.status === 'in_progress' && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <Loader2 className="h-3 w-3 text-blue-500 animate-spin flex-shrink-0" />
+                            <span className="text-[11px] text-blue-600 dark:text-blue-400">
+                              {t('workflow.qaRegenInProgress', {
+                                page: workflowProgress.qaRegen.segmentIndex + 1,
+                              })}
+                            </span>
+                          </div>
+                        )}
                     </div>
                   );
                 })}

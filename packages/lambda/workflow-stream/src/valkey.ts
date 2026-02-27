@@ -19,7 +19,9 @@ export async function removeStaleConnection(
   try {
     await valkey.srem(`ws:project:${projectId}`, connectionId);
     await valkey.del(`ws:conn:${connectionId}`);
-    console.log(`Removed stale connection ${connectionId} from project ${projectId}`);
+    console.log(
+      `Removed stale connection ${connectionId} from project ${projectId}`,
+    );
   } catch (error) {
     console.error(`Failed to remove stale connection ${connectionId}:`, error);
   }

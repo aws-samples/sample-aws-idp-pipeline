@@ -120,7 +120,14 @@ export function useDocuments({
           workflow_id: string;
           status: string;
           current_step: string;
-          steps: Record<string, { status: string; label: string }>;
+          steps: Record<
+            string,
+            {
+              status: string;
+              label: string;
+              qa_regen?: { status: string; segment_index: number };
+            }
+          >;
         }[]
       >(`projects/${projectId}/documents/progress`);
 
@@ -132,11 +139,19 @@ export function useDocuments({
           );
 
           const steps: Record<string, StepStatus> = {};
+          let qaRegen: { status: string; segmentIndex: number } | null = null;
           if (progress.steps) {
             for (const [key, val] of Object.entries(progress.steps)) {
               steps[key] = {
                 status: val.status as StepStatus['status'],
                 label: stepLabels[key] || val.label,
+              };
+            }
+            const segAnalyzer = progress.steps.segment_analyzer;
+            if (segAnalyzer?.qa_regen) {
+              qaRegen = {
+                status: segAnalyzer.qa_regen.status,
+                segmentIndex: segAnalyzer.qa_regen.segment_index,
               };
             }
           }
@@ -155,6 +170,7 @@ export function useDocuments({
             segmentProgress: null,
             error: progress.status === 'failed' ? 'Workflow failed' : null,
             steps,
+            qaRegen,
           };
         }
         return newMap;
@@ -190,7 +206,14 @@ export function useDocuments({
           workflow_id: string;
           status: string;
           current_step: string;
-          steps: Record<string, { status: string; label: string }>;
+          steps: Record<
+            string,
+            {
+              status: string;
+              label: string;
+              qa_regen?: { status: string; segment_index: number };
+            }
+          >;
         }[]
       >(`projects/${projectId}/documents/progress`);
 
@@ -201,11 +224,19 @@ export function useDocuments({
         );
 
         const steps: Record<string, StepStatus> = {};
+        let qaRegen: { status: string; segmentIndex: number } | null = null;
         if (progress.steps) {
           for (const [key, val] of Object.entries(progress.steps)) {
             steps[key] = {
               status: val.status as StepStatus['status'],
               label: stepLabels[key] || val.label,
+            };
+          }
+          const segAnalyzer = progress.steps.segment_analyzer;
+          if (segAnalyzer?.qa_regen) {
+            qaRegen = {
+              status: segAnalyzer.qa_regen.status,
+              segmentIndex: segAnalyzer.qa_regen.segment_index,
             };
           }
         }
@@ -224,6 +255,7 @@ export function useDocuments({
           segmentProgress: null,
           error: progress.status === 'failed' ? 'Workflow failed' : null,
           steps,
+          qaRegen,
         };
       }
 
@@ -412,7 +444,8 @@ export function useDocuments({
     const completedDocIds = Object.entries(workflowProgressMap)
       .filter(
         ([, progress]) =>
-          progress.status === 'completed' || progress.status === 'failed',
+          (progress.status === 'completed' || progress.status === 'failed') &&
+          progress.qaRegen?.status !== 'in_progress',
       )
       .map(([docId]) => docId);
 
@@ -424,6 +457,7 @@ export function useDocuments({
       setWorkflowProgressMap((prev) => {
         const newMap = { ...prev };
         for (const docId of completedDocIds) {
+          if (newMap[docId]?.qaRegen?.status === 'in_progress') continue;
           delete newMap[docId];
         }
         return newMap;
@@ -439,6 +473,8 @@ export function useDocuments({
       let changed = false;
       for (const docId of Object.keys(newMap)) {
         const doc = documents.find((d) => d.document_id === docId);
+        // Keep entry if qa_regen is active
+        if (newMap[docId]?.qaRegen?.status === 'in_progress') continue;
         if (doc && (doc.status === 'completed' || doc.status === 'failed')) {
           delete newMap[docId];
           changed = true;

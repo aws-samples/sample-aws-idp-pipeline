@@ -1,6 +1,11 @@
 import type { DynamoDBStreamHandler, DynamoDBRecord } from 'aws-lambda';
 import { getConnectionIdsByProject } from './valkey.js';
-import { sendToConnection, WorkflowMessage, StepMessage, DocumentMessage } from './websocket.js';
+import {
+  sendToConnection,
+  WorkflowMessage,
+  StepMessage,
+  DocumentMessage,
+} from './websocket.js';
 
 interface WorkflowData {
   status?: { S: string };
@@ -29,7 +34,10 @@ function getRecordType(image: StreamImage | undefined): RecordType {
   const pk = image.PK?.S || '';
   const sk = image.SK?.S || '';
 
-  if ((pk.startsWith('DOC#') || pk.startsWith('WEB#')) && sk.startsWith('WF#')) {
+  if (
+    (pk.startsWith('DOC#') || pk.startsWith('WEB#')) &&
+    sk.startsWith('WF#')
+  ) {
     return 'workflow';
   }
   if (pk.startsWith('WF#') && sk === 'STEP') {
@@ -91,14 +99,31 @@ function extractStepInfo(image: StreamImage | undefined) {
     }
   }
 
-  return { workflowId, projectId, documentId, currentStep, steps };
+  // Extract qa_regen from segment_analyzer
+  let qaRegen: { status: string; segment_index: number } | null = null;
+  const segmentAnalyzer = data?.segment_analyzer as
+    | { M?: Record<string, { M?: Record<string, { S?: string; N?: string }> }> }
+    | undefined;
+  if (segmentAnalyzer?.M?.qa_regen?.M) {
+    const qr = segmentAnalyzer.M.qa_regen.M;
+    qaRegen = {
+      status: qr.status?.S || '',
+      segment_index: Number(qr.segment_index?.N || '0'),
+    };
+  }
+
+  return { workflowId, projectId, documentId, currentStep, steps, qaRegen };
 }
 
 function findChangedSteps(
   oldSteps: Record<string, string>,
   newSteps: Record<string, string>,
 ): Array<{ stepName: string; oldStatus: string; newStatus: string }> {
-  const changes: Array<{ stepName: string; oldStatus: string; newStatus: string }> = [];
+  const changes: Array<{
+    stepName: string;
+    oldStatus: string;
+    newStatus: string;
+  }> = [];
 
   for (const [stepName, newStatus] of Object.entries(newSteps)) {
     const oldStatus = oldSteps[stepName] || '';
@@ -135,7 +160,9 @@ async function processWorkflowRecord(record: DynamoDBRecord): Promise<void> {
 
   const connectionIds = await getConnectionIdsByProject(newInfo.projectId);
   if (connectionIds.length === 0) {
-    console.log(`No connections subscribed to project ${newInfo.projectId}, skipping`);
+    console.log(
+      `No connections subscribed to project ${newInfo.projectId}, skipping`,
+    );
     return;
   }
 
@@ -153,7 +180,9 @@ async function processWorkflowRecord(record: DynamoDBRecord): Promise<void> {
   };
 
   const messageStr = JSON.stringify(message);
-  console.log(`Sending workflow message to ${connectionIds.length} connections`);
+  console.log(
+    `Sending workflow message to ${connectionIds.length} connections`,
+  );
 
   await Promise.all(
     connectionIds.map((connectionId) =>
@@ -178,18 +207,37 @@ async function processStepRecord(record: DynamoDBRecord): Promise<void> {
   }
 
   const changedSteps = findChangedSteps(oldInfo.steps, newInfo.steps);
-  if (changedSteps.length === 0) {
+
+  // Check qa_regen changes
+  const qaRegenChanged =
+    JSON.stringify(oldInfo.qaRegen) !== JSON.stringify(newInfo.qaRegen);
+
+  if (changedSteps.length === 0 && !qaRegenChanged) {
     return;
   }
 
-  console.log(
-    `Workflow ${newInfo.workflowId} steps changed:`,
-    changedSteps.map((c) => `${c.stepName}: ${c.oldStatus} -> ${c.newStatus}`).join(', '),
-  );
+  if (changedSteps.length > 0) {
+    console.log(
+      `Workflow ${newInfo.workflowId} steps changed:`,
+      changedSteps
+        .map((c) => `${c.stepName}: ${c.oldStatus} -> ${c.newStatus}`)
+        .join(', '),
+    );
+  }
+  if (qaRegenChanged) {
+    console.log(
+      `Workflow ${newInfo.workflowId} qa_regen changed:`,
+      JSON.stringify(oldInfo.qaRegen),
+      '->',
+      JSON.stringify(newInfo.qaRegen),
+    );
+  }
 
   const connectionIds = await getConnectionIdsByProject(newInfo.projectId);
   if (connectionIds.length === 0) {
-    console.log(`No connections subscribed to project ${newInfo.projectId}, skipping`);
+    console.log(
+      `No connections subscribed to project ${newInfo.projectId}, skipping`,
+    );
     return;
   }
 
@@ -211,7 +259,35 @@ async function processStepRecord(record: DynamoDBRecord): Promise<void> {
     };
 
     const messageStr = JSON.stringify(message);
-    console.log(`Sending step message: ${change.stepName} -> ${change.newStatus}`);
+    console.log(
+      `Sending step message: ${change.stepName} -> ${change.newStatus}`,
+    );
+
+    await Promise.all(
+      connectionIds.map((connectionId) =>
+        sendToConnection(connectionId, messageStr, newInfo.projectId),
+      ),
+    );
+  }
+
+  // Send qa_regen change as step_changed event for segment_analyzer
+  if (qaRegenChanged && changedSteps.length === 0) {
+    const message: StepMessage = {
+      action: 'step',
+      data: {
+        event: 'step_changed',
+        workflowId: newInfo.workflowId,
+        documentId: newInfo.documentId,
+        projectId: newInfo.projectId,
+        stepName: 'segment_analyzer',
+        status: newInfo.steps['segment_analyzer'] || 'completed',
+        currentStep: newInfo.currentStep,
+        timestamp: new Date().toISOString(),
+      },
+    };
+
+    const messageStr = JSON.stringify(message);
+    console.log('Sending qa_regen change as step_changed event');
 
     await Promise.all(
       connectionIds.map((connectionId) =>
@@ -251,7 +327,9 @@ async function processDocumentDeletion(record: DynamoDBRecord): Promise<void> {
   };
 
   const messageStr = JSON.stringify(message);
-  console.log(`Sending document deletion message to ${connectionIds.length} connections`);
+  console.log(
+    `Sending document deletion message to ${connectionIds.length} connections`,
+  );
 
   await Promise.all(
     connectionIds.map((connectionId) =>
