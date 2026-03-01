@@ -1,5 +1,6 @@
 {
   "name": "@idp-v2/common-constructs",
   "version": "0.2.0",
-  "private": true
+  "private": true,
+  "type": "module"
 }
