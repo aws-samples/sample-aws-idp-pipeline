@@ -119,18 +119,68 @@ Resources:
                       --desired-weights-and-capacities VariantName=AllTraffic,DesiredInstanceCount=0 2>/dev/null || true
                   fi
                 - |
+                  echo "=== Pre-cleanup: Cognito User Pool (disable deletion protection) ==="
+                  for pool_id in $(aws cognito-idp list-user-pools --max-results 20 \
+                    --query 'UserPools[?starts_with(Name,`UserIdentity`)].Id' --output text 2>/dev/null); do
+                    if [ -n "$pool_id" ]; then
+                      echo "Disabling deletion protection: $pool_id"
+                      aws cognito-idp update-user-pool --user-pool-id "$pool_id" --deletion-protection INACTIVE 2>/dev/null || true
+                    fi
+                  done
+                - |
                   echo "=== Pre-cleanup: S3 Express Directory Buckets ==="
                   aws s3api list-directory-buckets --query 'Buckets[].BucketName' --output text 2>/dev/null | tr '\t' '\n' | grep -E 'idp|lancedb' | while read bucket; do
                     if [ -n "$bucket" ]; then
                       echo "Emptying directory bucket: $bucket"
-                      aws s3 rm "s3://$bucket" --recursive 2>/dev/null || true
+                      while true; do
+                        OBJECTS=$(aws s3api list-objects-v2 --bucket "$bucket" --max-keys 1000 --query 'Contents[].Key' --output json 2>/dev/null || echo "[]")
+                        if [ "$OBJECTS" = "[]" ] || [ "$OBJECTS" = "null" ] || [ -z "$OBJECTS" ]; then
+                          break
+                        fi
+                        DELETE_JSON=$(echo "$OBJECTS" | python3 -c "import sys,json; keys=json.load(sys.stdin); print(json.dumps({'Objects':[{'Key':k} for k in keys]}))")
+                        aws s3api delete-objects --bucket "$bucket" --delete "$DELETE_JSON" 2>/dev/null || true
+                      done
                       echo "Deleting directory bucket: $bucket"
                       aws s3api delete-bucket --bucket "$bucket" 2>/dev/null || true
                     fi
                   done
                 - |
+                  echo "=== Pre-cleanup: Save DynamoDB table names from SSM ==="
+                  BACKEND_TABLE=$(aws ssm get-parameter --name /idp-v2/backend/table-name --query Parameter.Value --output text 2>/dev/null || echo "")
+                  LANCEDB_LOCK_TABLE=$(aws ssm get-parameter --name /idp-v2/lancedb/lock-table-name --query Parameter.Value --output text 2>/dev/null || echo "")
+                  echo "Backend table: $BACKEND_TABLE"
+                  echo "LanceDB lock table: $LANCEDB_LOCK_TABLE"
+                - |
                   echo "=== CDK Destroy ==="
                   cd /tmp/project/packages/infra && npx cdk destroy --all --force || echo "CDK destroy completed with some issues"
+                - |
+                  echo "=== Post-cleanup: DynamoDB Tables ==="
+                  BACKEND_TABLE=$(aws ssm get-parameter --name /idp-v2/backend/table-name --query Parameter.Value --output text 2>/dev/null || echo "")
+                  LANCEDB_LOCK_TABLE=$(aws ssm get-parameter --name /idp-v2/lancedb/lock-table-name --query Parameter.Value --output text 2>/dev/null || echo "")
+                  for table in $BACKEND_TABLE $LANCEDB_LOCK_TABLE; do
+                    if [ -n "$table" ]; then
+                      echo "Disabling deletion protection: $table"
+                      aws dynamodb update-table --table-name "$table" --no-deletion-protection-enabled 2>/dev/null || true
+                      echo "Deleting DynamoDB table: $table"
+                      aws dynamodb delete-table --table-name "$table" 2>/dev/null || true
+                    fi
+                  done
+                - |
+                  echo "=== Post-cleanup: Cognito User Pool (force delete) ==="
+                  for pool_id in $(aws cognito-idp list-user-pools --max-results 20 \
+                    --query 'UserPools[?starts_with(Name,`UserIdentity`)].Id' --output text 2>/dev/null); do
+                    if [ -n "$pool_id" ]; then
+                      echo "Deleting domain for pool: $pool_id"
+                      DOMAIN=$(aws cognito-idp describe-user-pool --user-pool-id "$pool_id" \
+                        --query 'UserPool.Domain' --output text 2>/dev/null || echo "")
+                      if [ -n "$DOMAIN" ] && [ "$DOMAIN" != "None" ]; then
+                        aws cognito-idp delete-user-pool-domain --user-pool-id "$pool_id" --domain "$DOMAIN" 2>/dev/null || true
+                      fi
+                      echo "Deleting User Pool: $pool_id"
+                      aws cognito-idp update-user-pool --user-pool-id "$pool_id" --deletion-protection INACTIVE 2>/dev/null || true
+                      aws cognito-idp delete-user-pool --user-pool-id "$pool_id" 2>/dev/null || true
+                    fi
+                  done
                 - |
                   echo "=== Post-cleanup: Retry failed stacks ==="
                   FAILED_STACKS=$(aws cloudformation list-stacks \
@@ -142,16 +192,6 @@ Resources:
                       echo "Retrying deletion of $stack..."
                       aws cloudformation delete-stack --stack-name "$stack" 2>/dev/null || true
                       aws cloudformation wait stack-delete-complete --stack-name "$stack" 2>/dev/null || true
-                    fi
-                  done
-                - |
-                  echo "=== Post-cleanup: Cognito User Pool ==="
-                  for pool_id in $(aws cognito-idp list-user-pools --max-results 20 \
-                    --query 'UserPools[?starts_with(Name,`UserIdentity`)].Id' --output text 2>/dev/null); do
-                    if [ -n "$pool_id" ]; then
-                      echo "Deleting User Pool: $pool_id"
-                      aws cognito-idp update-user-pool --user-pool-id "$pool_id" --deletion-protection INACTIVE 2>/dev/null || true
-                      aws cognito-idp delete-user-pool --user-pool-id "$pool_id" 2>/dev/null || true
                     fi
                   done
                 - |
