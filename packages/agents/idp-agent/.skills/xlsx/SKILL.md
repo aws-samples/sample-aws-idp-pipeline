@@ -70,6 +70,58 @@ chart.add_data(data, titles_from_data=True)
 sheet.add_chart(chart, "E2")
 ```
 
+### Chart QA — Overlap Detection
+
+After generating the file, run this check to catch overlapping charts before uploading:
+
+```python
+from openpyxl import load_workbook
+from openpyxl.drawing.spreadsheet_drawing import TwoCellAnchor, OneCellAnchor
+
+# Approximate EMU per default cell (column width ~8.43 chars, row height ~15pt)
+EMU_PER_COL = 600000
+EMU_PER_ROW = 190500
+
+def _bounds(anchor):
+    if isinstance(anchor, TwoCellAnchor):
+        return (anchor._from.col, anchor._from.row, anchor.to.col, anchor.to.row)
+    if isinstance(anchor, OneCellAnchor):
+        c, r = anchor._from.col, anchor._from.row
+        return (c, r, c + round(anchor.ext.cx / EMU_PER_COL), r + round(anchor.ext.cy / EMU_PER_ROW))
+    return None
+
+def _overlaps(a, b):
+    return not (a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1])
+
+wb = load_workbook('./output.xlsx')
+issues = []
+for ws in wb.worksheets:
+    bounds = [(c, _bounds(c.anchor)) for c in ws._charts]
+    bounds = [(c, b) for c, b in bounds if b]
+    for i, (_, b1) in enumerate(bounds):
+        for _, b2 in bounds[i+1:]:
+            if _overlaps(b1, b2):
+                issues.append(f"Sheet '{ws.title}': chart overlap {b1} ↔ {b2}")
+
+if issues:
+    for issue in issues:
+        print(f"OVERLAP: {issue}")
+    raise ValueError("Fix chart positions before uploading")
+else:
+    print("OK: no chart overlaps")
+```
+
+If overlaps are detected, adjust the anchor cell or set an explicit size:
+
+```python
+from openpyxl.drawing.spreadsheet_drawing import TwoCellAnchor
+from openpyxl.drawing.xdr import XDRPoint2D, XDRPositiveSize2D
+from openpyxl.utils.units import pixels_to_EMU
+
+# Place chart at E2, spanning to O17 (no overlap with next chart starting at E19)
+chart.anchor = "E2:O17"
+```
+
 ---
 
 # Requirements for Outputs
