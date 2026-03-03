@@ -57,6 +57,19 @@ with open('./output.xlsx', 'rb') as f:
 | Create new spreadsheet | Use `openpyxl` in code_interpreter |
 | Edit existing spreadsheet | Download from S3 → `openpyxl` → edit → upload in code_interpreter |
 
+## Charts
+
+**When the user requests charts or visualizations, always attempt to embed charts directly using `openpyxl` first.** Only use the `chart` skill if direct embedding is not possible or the chart type is unsupported by openpyxl.
+
+```python
+from openpyxl.chart import BarChart, Reference
+
+chart = BarChart()
+data = Reference(sheet, min_col=2, min_row=1, max_row=5)
+chart.add_data(data, titles_from_data=True)
+sheet.add_chart(chart, "E2")
+```
+
 ---
 
 # Requirements for Outputs

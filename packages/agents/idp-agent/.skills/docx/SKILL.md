@@ -61,6 +61,27 @@ A .docx file is a ZIP archive containing XML files.
 | Create new document | Use `python-docx` in code_interpreter |
 | Edit existing document | Unpack → edit XML → repack in code_interpreter |
 
+## Charts
+
+**When the user requests charts or visualizations, always attempt to embed charts directly using `python-docx` first.** Only use the `chart` skill if direct embedding is not possible or the chart type is unsupported by python-docx.
+
+`python-docx` does not natively support inserting Office charts. In practice, embed charts as images: generate the chart with `matplotlib`, save as an image, and insert with `doc.add_picture()`.
+
+```python
+import matplotlib.pyplot as plt
+from io import BytesIO
+
+fig, ax = plt.subplots()
+ax.bar(['Q1', 'Q2', 'Q3', 'Q4'], [100, 120, 140, 160])
+buf = BytesIO()
+fig.savefig(buf, format='png', bbox_inches='tight')
+buf.seek(0)
+doc.add_picture(buf, width=Inches(5))
+plt.close(fig)
+```
+
+Only fall back to the `chart` skill if a standalone chart artifact is explicitly required.
+
 ---
 
 ## Reading Documents

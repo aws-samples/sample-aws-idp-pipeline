@@ -57,6 +57,26 @@ with open('./output.pptx', 'rb') as f:
 | Create new presentation | Read [python-pptx.md](python-pptx.md), use code_interpreter |
 | Edit existing presentation | Read [editing.md](editing.md), unpack → edit XML → repack in code_interpreter |
 
+## Charts
+
+**When the user requests charts or visualizations, always attempt to embed charts directly using `python-pptx` first.** Only use the `chart` skill if direct embedding is not possible or the chart type is unsupported by python-pptx.
+
+```python
+from pptx.util import Inches
+from pptx.chart.data import ChartData
+from pptx import chart as pptx_chart
+
+chart_data = ChartData()
+chart_data.categories = ['Q1', 'Q2', 'Q3', 'Q4']
+chart_data.add_series('Revenue', (100, 120, 140, 160))
+
+slide.shapes.add_chart(
+    pptx_chart.XL_CHART_TYPE.BAR_CLUSTERED,
+    Inches(1), Inches(1.5), Inches(8), Inches(3.5),
+    chart_data
+)
+```
+
 ---
 
 ## Reading Content
