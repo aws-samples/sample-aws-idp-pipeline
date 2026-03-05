@@ -106,6 +106,13 @@ export class IdpAgent extends Construct {
     // Grant DynamoDB read/write access for backend table
     backendTable.grantReadWriteData(this.runtime.role);
 
+    // Add AmazonBedrockMarketplaceAccess managed policy
+    this.runtime.role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName(
+        'AmazonBedrockMarketplaceAccess',
+      ),
+    );
+
     // Add Bedrock model invocation permissions
     this.runtime.addToRolePolicy(
       new iam.PolicyStatement({
