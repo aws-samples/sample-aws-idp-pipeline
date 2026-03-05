@@ -20,7 +20,7 @@
     "@aws-sdk/util-format-url": "^3.972.1",
     "@aws/nx-plugin": "0.64.1",
     "@fortune-sheet/react": "^1.0.4",
-    "@hono/node-server": "^1.19.7",
+    "@hono/node-server": "^1.19.10",
     "@hono/standard-validator": "^0.2.1",
     "@hono/swagger-ui": "^0.5.3",
     "@lancedb/lancedb": "^0.23.0",
