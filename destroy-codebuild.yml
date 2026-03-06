@@ -160,7 +160,7 @@ Resources:
                   done
                 - |
                   echo "=== CDK Destroy ==="
-                  cd /tmp/project/packages/infra && npx cdk destroy --all --force || echo "CDK destroy completed with some issues"
+                  cd /tmp/project/packages/infra && npx cdk destroy --all --force --concurrency=4 || echo "CDK destroy completed with some issues"
                 - |
                   echo "=== Post-cleanup: S3 Express Directory Buckets ==="
                   BUCKETS=$(aws s3api list-directory-buckets --query 'Buckets[].BucketName' --output text 2>/dev/null || echo "")
