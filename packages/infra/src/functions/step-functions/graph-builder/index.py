@@ -13,6 +13,7 @@ from shared.ddb_client import (
     record_step_error,
     record_step_skipped,
     get_project_language,
+    get_document,
     StepName,
 )
 from shared.s3_analysis import get_all_segment_analyses
@@ -264,6 +265,10 @@ def handler(event, _context):
     record_step_start(workflow_id, StepName.GRAPH_BUILDER)
 
     try:
+        # Resolve original file name from DynamoDB document record
+        doc_record = get_document(project_id, document_id)
+        display_name = (doc_record.get('name') if doc_record else None) or (file_uri.split('/')[-1] if file_uri else '')
+
         # 1. Create Document + Segment nodes + structural relationships
         print(f'Creating segment links for {segment_count} segments')
         invoke_graph_service(
@@ -272,7 +277,7 @@ def handler(event, _context):
                 'project_id': project_id,
                 'workflow_id': workflow_id,
                 'document_id': document_id,
-                'file_name': file_uri.split('/')[-1] if file_uri else '',
+                'file_name': display_name,
                 'file_type': file_type,
                 'segment_count': segment_count,
             },

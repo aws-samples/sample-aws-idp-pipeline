@@ -3,6 +3,7 @@ import json
 import os
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import boto3
 from botocore.auth import SigV4Auth
@@ -60,6 +61,20 @@ def run_query(query: str, parameters: dict = None) -> list:
         payload = json.loads(resp.read())
 
     return payload.get('results', [])
+
+
+def run_queries_parallel(queries: list[tuple[str, dict | None]]) -> list[list]:
+    """Execute multiple openCypher queries in parallel. Returns results in the same order."""
+    results = [None] * len(queries)
+    with ThreadPoolExecutor(max_workers=len(queries)) as executor:
+        future_to_idx = {
+            executor.submit(run_query, q, p): i
+            for i, (q, p) in enumerate(queries)
+        }
+        for future in as_completed(future_to_idx):
+            idx = future_to_idx[future]
+            results[idx] = future.result()
+    return results
 
 
 def entity_id(project_id: str, name: str, entity_type: str) -> str:
@@ -522,22 +537,31 @@ def action_search_graph(params: dict) -> dict:
 def action_get_entity_graph(params: dict) -> dict:
     """Get project-level entity graph for visualization."""
     project_id = params['project_id']
-    limit = params.get('limit', 100)
 
-    entity_results = run_query(
-        'MATCH (e:Entity {project_id: $pid}) '
-        'RETURN e.id AS id, e.name AS name, e.type AS type '
-        f'LIMIT {int(limit)}',
-        {'pid': project_id},
-    )
-
-    rel_results = run_query(
-        'MATCH (a:Entity {project_id: $pid})-[r:RELATES_TO]->(b:Entity {project_id: $pid}) '
-        'RETURN a.id AS source, b.id AS target, r.relationship AS label, '
-        'r.source AS origin '
-        f'LIMIT {int(limit * 2)}',
-        {'pid': project_id},
-    )
+    entity_results, rel_results, doc_results, entity_doc_results = run_queries_parallel([
+        (
+            'MATCH (e:Entity {project_id: $pid}) '
+            'RETURN e.id AS id, e.name AS name, e.type AS type',
+            {'pid': project_id},
+        ),
+        (
+            'MATCH (a:Entity {project_id: $pid})-[r:RELATES_TO]->(b:Entity {project_id: $pid}) '
+            'RETURN a.id AS source, b.id AS target, r.relationship AS label, '
+            'r.source AS origin',
+            {'pid': project_id},
+        ),
+        (
+            'MATCH (d:Document {project_id: $pid}) '
+            'RETURN d.id AS id, d.file_name AS file_name, d.file_type AS file_type',
+            {'pid': project_id},
+        ),
+        (
+            'MATCH (e:Entity {project_id: $pid})-[:MENTIONED_IN]->(:Analysis)'
+            '-[:BELONGS_TO]->(:Segment)-[:BELONGS_TO]->(d:Document) '
+            'RETURN DISTINCT e.id AS entity_id, d.id AS document_id',
+            {'pid': project_id},
+        ),
+    ])
 
     nodes = [
         {
@@ -549,6 +573,14 @@ def action_get_entity_graph(params: dict) -> dict:
         for e in entity_results
     ]
 
+    for d in doc_results:
+        nodes.append({
+            'id': d['id'],
+            'label': d.get('file_name', d['id']),
+            'type': 'document',
+            'properties': {'file_type': d.get('file_type', '')},
+        })
+
     edges = [
         {
             'source': r['source'],
@@ -559,6 +591,14 @@ def action_get_entity_graph(params: dict) -> dict:
         for r in rel_results
     ]
 
+    for ed in entity_doc_results:
+        edges.append({
+            'source': ed['entity_id'],
+            'target': ed['document_id'],
+            'label': 'APPEARS_IN',
+            'properties': None,
+        })
+
     return {'success': True, 'nodes': nodes, 'edges': edges}
 
 
@@ -566,65 +606,62 @@ def action_get_document_graph(params: dict) -> dict:
     """Get document-level graph (segments + analyses + entities) for visualization."""
     project_id = params['project_id']
     document_id = params['document_id']
-    limit = params.get('limit', 200)
 
-    seg_results = run_query(
-        'MATCH (s:Segment)-[:BELONGS_TO]->(d:Document {id: $did, project_id: $pid}) '
-        'RETURN s.id AS id, s.segment_index AS segment_index, '
-        's.workflow_id AS workflow_id '
-        'ORDER BY s.segment_index '
-        f'LIMIT {int(limit)}',
-        {'did': document_id, 'pid': project_id},
-    )
+    params_both = {'did': document_id, 'pid': project_id}
 
-    analysis_results = run_query(
-        'MATCH (a:Analysis)-[:BELONGS_TO]->(s:Segment)-[:BELONGS_TO]->'
-        '(d:Document {id: $did, project_id: $pid}) '
-        'RETURN a.id AS id, a.segment_index AS segment_index, '
-        'a.qa_index AS qa_index, a.question AS question, s.id AS segment_id '
-        f'LIMIT {int(limit)}',
-        {'did': document_id, 'pid': project_id},
-    )
-
-    ent_results = run_query(
-        'MATCH (e:Entity)-[:MENTIONED_IN]->(a:Analysis)-[:BELONGS_TO]->'
-        '(s:Segment)-[:BELONGS_TO]->(d:Document {id: $did, project_id: $pid}) '
-        'RETURN DISTINCT e.id AS id, e.name AS name, e.type AS type '
-        f'LIMIT {int(limit)}',
-        {'did': document_id, 'pid': project_id},
-    )
-
-    mention_results = run_query(
-        'MATCH (e:Entity)-[r:MENTIONED_IN]->(a:Analysis)-[:BELONGS_TO]->'
-        '(s:Segment)-[:BELONGS_TO]->(d:Document {id: $did, project_id: $pid}) '
-        'RETURN e.id AS source, a.id AS target, '
-        'r.confidence AS confidence, r.context AS context '
-        f'LIMIT {int(limit * 2)}',
-        {'did': document_id, 'pid': project_id},
-    )
-
-    rel_results = run_query(
-        'MATCH (a_ent:Entity)-[r:RELATES_TO]->(b_ent:Entity) '
-        'WHERE (a_ent)-[:MENTIONED_IN]->(:Analysis)-[:BELONGS_TO]->(:Segment)-[:BELONGS_TO]->(:Document {id: $did}) '
-        'AND (b_ent)-[:MENTIONED_IN]->(:Analysis)-[:BELONGS_TO]->(:Segment)-[:BELONGS_TO]->(:Document {id: $did}) '
-        'RETURN a_ent.id AS source, b_ent.id AS target, r.relationship AS label '
-        f'LIMIT {int(limit)}',
-        {'did': document_id},
-    )
-
-    next_results = run_query(
-        'MATCH (a:Segment)-[:NEXT]->(b:Segment) '
-        'WHERE a.document_id = $did AND b.document_id = $did '
-        'RETURN a.id AS source, b.id AS target '
-        f'LIMIT {int(limit)}',
-        {'did': document_id},
-    )
+    seg_results, analysis_results, ent_results, mention_results, rel_results, next_results = run_queries_parallel([
+        (
+            'MATCH (s:Segment)-[:BELONGS_TO]->(d:Document {id: $did, project_id: $pid}) '
+            'RETURN s.id AS id, s.segment_index AS segment_index, '
+            's.workflow_id AS workflow_id, d.file_name AS doc_file_name '
+            'ORDER BY s.segment_index',
+            params_both,
+        ),
+        (
+            'MATCH (a:Analysis)-[:BELONGS_TO]->(s:Segment)-[:BELONGS_TO]->'
+            '(d:Document {id: $did, project_id: $pid}) '
+            'RETURN a.id AS id, a.segment_index AS segment_index, '
+            'a.qa_index AS qa_index, a.question AS question, s.id AS segment_id',
+            params_both,
+        ),
+        (
+            'MATCH (e:Entity)-[:MENTIONED_IN]->(a:Analysis)-[:BELONGS_TO]->'
+            '(s:Segment)-[:BELONGS_TO]->(d:Document {id: $did, project_id: $pid}) '
+            'RETURN DISTINCT e.id AS id, e.name AS name, e.type AS type',
+            params_both,
+        ),
+        (
+            'MATCH (e:Entity)-[r:MENTIONED_IN]->(a:Analysis)-[:BELONGS_TO]->'
+            '(s:Segment)-[:BELONGS_TO]->(d:Document {id: $did, project_id: $pid}) '
+            'RETURN e.id AS source, a.id AS target, '
+            'r.confidence AS confidence, r.context AS context',
+            params_both,
+        ),
+        (
+            'MATCH (a_ent:Entity)-[r:RELATES_TO]->(b_ent:Entity) '
+            'WHERE (a_ent)-[:MENTIONED_IN]->(:Analysis)-[:BELONGS_TO]->(:Segment)-[:BELONGS_TO]->(:Document {id: $did}) '
+            'AND (b_ent)-[:MENTIONED_IN]->(:Analysis)-[:BELONGS_TO]->(:Segment)-[:BELONGS_TO]->(:Document {id: $did}) '
+            'RETURN a_ent.id AS source, b_ent.id AS target, r.relationship AS label',
+            {'did': document_id},
+        ),
+        (
+            'MATCH (a:Segment)-[:NEXT]->(b:Segment) '
+            'WHERE a.document_id = $did AND b.document_id = $did '
+            'RETURN a.id AS source, b.id AS target',
+            {'did': document_id},
+        ),
+    ])
 
     nodes = []
 
+    # Get file_name from the first segment result (all rows share the same doc)
+    doc_file_name = document_id
+    if seg_results:
+        doc_file_name = seg_results[0].get('doc_file_name') or document_id
+
     nodes.append({
         'id': document_id,
-        'label': document_id,
+        'label': doc_file_name,
         'type': 'document',
         'properties': {},
     })
@@ -708,6 +745,7 @@ def action_get_document_graph(params: dict) -> dict:
         })
 
     return {'success': True, 'nodes': nodes, 'edges': edges}
+
 
 
 # ========================================

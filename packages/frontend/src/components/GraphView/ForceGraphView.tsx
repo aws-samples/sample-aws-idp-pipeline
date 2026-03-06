@@ -2,6 +2,7 @@ import { useRef, useMemo, useEffect, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ForceGraph2D from 'react-force-graph-2d';
 import type { ForceGraphMethods } from 'react-force-graph-2d';
+import { forceX, forceY } from 'd3-force';
 import type { GraphData } from './useGraphData';
 import {
   getEntityColor,
@@ -359,14 +360,31 @@ export default function ForceGraphView({
     const fg = fgRef.current;
     if (!fg) return;
 
+    const nodeCount = graphData.nodes.length;
+    const chargeStrength = nodeCount > 200 ? -80 : nodeCount > 50 ? -150 : -250;
+    const linkDist = nodeCount > 200 ? 40 : nodeCount > 50 ? 60 : 80;
+
     const charge = fg.d3Force('charge');
     if (charge && typeof charge.strength === 'function') {
-      charge.strength(-120);
+      charge.strength(chargeStrength);
+      if (typeof charge.distanceMax === 'function') {
+        charge.distanceMax(nodeCount > 100 ? 400 : 800);
+      }
     }
 
     const link = fg.d3Force('link');
     if (link && typeof link.distance === 'function') {
-      link.distance(50);
+      link.distance(linkDist);
+    }
+
+    // Gentle gravity to keep disconnected clusters from drifting too far
+    if (nodeCount > 30) {
+      const strength = nodeCount > 200 ? 0.05 : 0.03;
+      fg.d3Force('gravityX', forceX(0).strength(strength));
+      fg.d3Force('gravityY', forceY(0).strength(strength));
+    } else {
+      fg.d3Force('gravityX', null);
+      fg.d3Force('gravityY', null);
     }
   }, [graphData]);
 
@@ -374,9 +392,10 @@ export default function ForceGraphView({
   useEffect(() => {
     const fg = fgRef.current;
     if (!fg || graphData.nodes.length === 0) return;
+    const delay = graphData.nodes.length > 100 ? 1500 : 500;
     const timer = setTimeout(() => {
       fg.zoomToFit(400, 40);
-    }, 500);
+    }, delay);
     return () => clearTimeout(timer);
   }, [graphData]);
 
@@ -574,8 +593,90 @@ export default function ForceGraphView({
           ctx.stroke();
           ctx.restore();
         }
+      } else if (nt === 'document') {
+        // Document: folder tab shape
+        const w = r * 2.6;
+        const h = r * 2;
+        const tabW = w * 0.4;
+        const tabH = h * 0.18;
+        const cr = r * 0.15;
+        const cx = x - w / 2;
+        const cy = y - h / 2;
+
+        const folderPath = () => {
+          ctx.beginPath();
+          // Bottom-left corner
+          ctx.moveTo(cx + cr, cy + tabH + h);
+          // Bottom edge
+          ctx.lineTo(cx + w - cr, cy + tabH + h);
+          ctx.quadraticCurveTo(
+            cx + w,
+            cy + tabH + h,
+            cx + w,
+            cy + tabH + h - cr,
+          );
+          // Right edge
+          ctx.lineTo(cx + w, cy + tabH + cr);
+          ctx.quadraticCurveTo(cx + w, cy + tabH, cx + w - cr, cy + tabH);
+          // Top-right of body to tab junction
+          ctx.lineTo(cx + tabW + tabH * 0.5, cy + tabH);
+          // Tab slant
+          ctx.lineTo(cx + tabW, cy);
+          // Tab top
+          ctx.lineTo(cx + cr, cy);
+          ctx.quadraticCurveTo(cx, cy, cx, cy + cr);
+          // Left edge
+          ctx.lineTo(cx, cy + tabH + h - cr);
+          ctx.quadraticCurveTo(cx, cy + tabH + h, cx + cr, cy + tabH + h);
+          ctx.closePath();
+        };
+
+        // Glow
+        ctx.save();
+        ctx.shadowColor = node.color;
+        ctx.shadowBlur = isMatch ? t.glowBlur * 2.5 : t.glowBlur;
+        folderPath();
+        ctx.fillStyle = node.color;
+        ctx.fill();
+        ctx.restore();
+
+        // Inner lighter fill
+        folderPath();
+        ctx.fillStyle = lighten(node.color, isMatch ? 0.45 : 0.3);
+        ctx.fill();
+
+        // Body area (below tab) slightly different shade
+        ctx.beginPath();
+        ctx.moveTo(cx + cr, cy + tabH + h);
+        ctx.lineTo(cx + w - cr, cy + tabH + h);
+        ctx.quadraticCurveTo(cx + w, cy + tabH + h, cx + w, cy + tabH + h - cr);
+        ctx.lineTo(cx + w, cy + tabH);
+        ctx.lineTo(cx, cy + tabH);
+        ctx.lineTo(cx, cy + tabH + h - cr);
+        ctx.quadraticCurveTo(cx, cy + tabH + h, cx + cr, cy + tabH + h);
+        ctx.closePath();
+        ctx.fillStyle = lighten(node.color, isMatch ? 0.55 : 0.4);
+        ctx.fill();
+
+        // Border
+        folderPath();
+        ctx.strokeStyle = lighten(node.color, 0.6);
+        ctx.lineWidth = isMatch ? 1.5 : 0.8;
+        ctx.stroke();
+
+        // Match ring
+        if (isMatch) {
+          ctx.save();
+          ctx.shadowColor = node.color;
+          ctx.shadowBlur = t.glowBlur * 3;
+          folderPath();
+          ctx.strokeStyle = lighten(node.color, 0.3);
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+          ctx.restore();
+        }
       } else {
-        // Entity / Document: circle (existing style)
+        // Entity: circle
         if (isMatch) {
           ctx.save();
           ctx.shadowColor = node.color;
@@ -613,7 +714,12 @@ export default function ForceGraphView({
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.fillStyle = t.labelColor(labelAlpha);
-        const labelY = nt === 'segment' ? y + r * 1.2 : y + r + 2;
+        const labelY =
+          nt === 'segment'
+            ? y + r * 1.2
+            : nt === 'document'
+              ? y + r * 1.3
+              : y + r + 2;
         ctx.fillText(node.label, x, labelY);
       }
     },
@@ -636,6 +742,10 @@ export default function ForceGraphView({
         ctx.lineTo(x, y + d);
         ctx.lineTo(x - d, y);
         ctx.closePath();
+      } else if (node.nodeType === 'document') {
+        const w = r * 2.8;
+        const h = r * 2.4;
+        ctx.rect(x - w / 2, y - h / 2, w, h);
       } else {
         ctx.arc(x, y, r, 0, Math.PI * 2);
       }

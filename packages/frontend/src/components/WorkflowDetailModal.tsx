@@ -15,6 +15,7 @@ import {
   ZoomOut,
   RotateCcw,
   Network,
+  Cloud,
   ChevronDown,
   Search,
 } from 'lucide-react';
@@ -28,6 +29,7 @@ import { useAwsClient } from '../hooks/useAwsClient';
 import { useModal } from '../hooks/useModal';
 import { useDragPan } from '../hooks/useDragPan';
 import GraphView from './GraphView/GraphView';
+import TagCloudView from './GraphView/TagCloudView';
 import type { GraphData } from './GraphView/useGraphData';
 import { getEntityColor, LINK_TYPE_COLORS } from './GraphView/constants';
 import {
@@ -223,6 +225,12 @@ export default function WorkflowDetailModal({
   const [graphDepth, setGraphDepth] = useState(3);
   const [graphFocusPage, setGraphFocusPage] = useState<number | null>(null);
   const [graphShowEdgeLabels, setGraphShowEdgeLabels] = useState(true);
+  const [graphSubMode, setGraphSubMode] = useState<'force' | 'tagcloud'>(
+    'force',
+  );
+  const [tagCloudMinConn, setTagCloudMinConn] = useState(1);
+  const [tagCloudMaxTags, setTagCloudMaxTags] = useState(100);
+  const [tagCloudRotation, setTagCloudRotation] = useState(true);
   const [graphPanelSections, setGraphPanelSections] = useState({
     filters: true,
     groups: false,
@@ -697,7 +705,7 @@ export default function WorkflowDetailModal({
         >
           {/* Header */}
           <div className="flex items-center gap-3 p-4 border-b border-black/[0.08] dark:border-[#2a2f45] bg-transparent">
-            <div className="p-2 rounded-lg bg-black/[0.06] dark:bg-[#1e2235]">
+            <div className="p-2 rounded-lg bg-black/[0.06] dark:bg-[#1e2235] flex-shrink-0">
               <svg
                 className="h-5 w-5 text-slate-600 dark:text-slate-300"
                 fill="none"
@@ -712,7 +720,7 @@ export default function WorkflowDetailModal({
                 />
               </svg>
             </div>
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 truncate">
               {t('workflow.documentDetails')}
             </h2>
             <div className="flex-1" />
@@ -745,7 +753,34 @@ export default function WorkflowDetailModal({
           {/* Content */}
           {viewMode === 'graph' ? (
             <div className="flex-1 overflow-y-auto">
-              {/* Filters section */}
+              {/* Graph sub-mode toggle */}
+              <div className="px-4 py-3 border-b border-black/[0.08] dark:border-[#363b50]">
+                <div className="flex items-center gap-0.5 p-0.5 rounded bg-slate-200/60 dark:bg-white/[0.08]">
+                  <button
+                    onClick={() => setGraphSubMode('force')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-[12px] font-medium transition-all ${
+                      graphSubMode === 'force'
+                        ? 'bg-white dark:bg-white/[0.15] text-slate-700 dark:text-slate-200 shadow-sm'
+                        : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    <Network className="w-3.5 h-3.5" />
+                    Graph
+                  </button>
+                  <button
+                    onClick={() => setGraphSubMode('tagcloud')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-[12px] font-medium transition-all ${
+                      graphSubMode === 'tagcloud'
+                        ? 'bg-white dark:bg-white/[0.15] text-slate-700 dark:text-slate-200 shadow-sm'
+                        : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    <Cloud className="w-3.5 h-3.5" />
+                    Tag Cloud
+                  </button>
+                </div>
+              </div>
+              {/* Filters section - differs by sub-mode */}
               <div className="border-b border-black/[0.08] dark:border-[#363b50]">
                 <button
                   onClick={() =>
@@ -761,104 +796,159 @@ export default function WorkflowDetailModal({
                     className={`w-3.5 h-3.5 text-slate-400 dark:text-slate-500 transition-transform ${graphPanelSections.filters ? '' : '-rotate-90'}`}
                   />
                 </button>
-                {graphPanelSections.filters && (
-                  <div className="px-4 pb-4 space-y-3">
-                    {/* Search */}
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-                      <input
-                        type="text"
-                        placeholder={t('workflow.graph.searchPlaceholder')}
-                        value={graphSearchFilter}
-                        onChange={(e) => setGraphSearchFilter(e.target.value)}
-                        className="w-full pl-8 pr-3 py-1.5 text-[12px] bg-slate-100 dark:bg-[#1e2235] border border-slate-200 dark:border-[#363b50] rounded-md text-slate-700 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-blue-400 dark:focus:border-[#4a5070]"
-                      />
-                    </div>
-                    {/* Depth */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[12px] text-slate-500 dark:text-slate-400">
-                          {t('workflow.graph.depth')}
-                        </span>
-                        <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
-                          {graphDepth}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min={1}
-                        max={6}
-                        value={graphDepth}
-                        onChange={(e) => setGraphDepth(Number(e.target.value))}
-                        className="w-full h-1 appearance-none bg-slate-200 dark:bg-[#363b50] rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
-                      />
-                    </div>
-                    {/* Focus page */}
-                    {graphMaxPage > 0 && (
+                {graphPanelSections.filters &&
+                  (graphSubMode === 'tagcloud' ? (
+                    <div className="px-4 pb-4 space-y-3">
+                      {/* Min connections */}
                       <div>
-                        <span className="text-[12px] text-slate-500 dark:text-slate-400">
-                          {t('workflow.graph.page')}
-                        </span>
-                        <div className="flex items-center gap-3 mt-1.5">
-                          <label className="flex items-center gap-1.5 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="graphPageMode"
-                              checked={graphFocusPage == null}
-                              onChange={() => setGraphFocusPage(null)}
-                              className="w-3 h-3 accent-blue-500"
-                            />
-                            <span className="text-[12px] text-slate-600 dark:text-slate-300">
-                              {t('workflow.graph.allPages')}
-                            </span>
-                          </label>
-                          <label className="flex items-center gap-1.5 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="graphPageMode"
-                              checked={graphFocusPage != null}
-                              onChange={() => setGraphFocusPage(0)}
-                              className="w-3 h-3 accent-blue-500"
-                            />
-                            <span className="text-[12px] text-slate-600 dark:text-slate-300">
-                              {t('workflow.graph.page')}
-                            </span>
-                          </label>
-                          {graphFocusPage != null && (
-                            <input
-                              type="number"
-                              min={1}
-                              max={graphMaxPage + 1}
-                              value={graphFocusPage + 1}
-                              onChange={(e) => {
-                                const v = Math.max(
-                                  0,
-                                  Math.min(
-                                    Number(e.target.value) - 1,
-                                    graphMaxPage,
-                                  ),
-                                );
-                                setGraphFocusPage(v);
-                              }}
-                              className="w-16 px-2 py-1 text-[12px] text-center bg-slate-100 dark:bg-[#1e2235] border border-slate-200 dark:border-[#363b50] rounded-md text-slate-700 dark:text-slate-300 focus:outline-none focus:border-blue-400 dark:focus:border-[#4a5070]"
-                            />
-                          )}
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[12px] text-slate-500 dark:text-slate-400">
+                            Min connections
+                          </span>
+                          <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
+                            {tagCloudMinConn}
+                          </span>
                         </div>
+                        <input
+                          type="range"
+                          min={1}
+                          max={20}
+                          value={tagCloudMinConn}
+                          onChange={(e) =>
+                            setTagCloudMinConn(Number(e.target.value))
+                          }
+                          className="w-full h-1 appearance-none bg-slate-200 dark:bg-[#363b50] rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
+                        />
                       </div>
-                    )}
-                    {/* Toggle rows */}
-                    <ToggleRow
-                      label={t('workflow.graph.incomingLinks')}
-                      checked={graphShowIncoming}
-                      onChange={setGraphShowIncoming}
-                    />
-                    <ToggleRow
-                      label={t('workflow.graph.outgoingLinks')}
-                      checked={graphShowOutgoing}
-                      onChange={setGraphShowOutgoing}
-                    />
-                  </div>
-                )}
+                      {/* Max tags */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[12px] text-slate-500 dark:text-slate-400">
+                            Max tags
+                          </span>
+                          <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
+                            {tagCloudMaxTags}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={10}
+                          max={200}
+                          step={10}
+                          value={tagCloudMaxTags}
+                          onChange={(e) =>
+                            setTagCloudMaxTags(Number(e.target.value))
+                          }
+                          className="w-full h-1 appearance-none bg-slate-200 dark:bg-[#363b50] rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
+                        />
+                      </div>
+                      {/* Rotation toggle */}
+                      <ToggleRow
+                        label="Rotation"
+                        checked={tagCloudRotation}
+                        onChange={setTagCloudRotation}
+                      />
+                    </div>
+                  ) : (
+                    <div className="px-4 pb-4 space-y-3">
+                      {/* Search */}
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                        <input
+                          type="text"
+                          placeholder={t('workflow.graph.searchPlaceholder')}
+                          value={graphSearchFilter}
+                          onChange={(e) => setGraphSearchFilter(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1.5 text-[12px] bg-slate-100 dark:bg-[#1e2235] border border-slate-200 dark:border-[#363b50] rounded-md text-slate-700 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-blue-400 dark:focus:border-[#4a5070]"
+                        />
+                      </div>
+                      {/* Depth */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[12px] text-slate-500 dark:text-slate-400">
+                            {t('workflow.graph.depth')}
+                          </span>
+                          <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
+                            {graphDepth}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={1}
+                          max={6}
+                          value={graphDepth}
+                          onChange={(e) =>
+                            setGraphDepth(Number(e.target.value))
+                          }
+                          className="w-full h-1 appearance-none bg-slate-200 dark:bg-[#363b50] rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
+                        />
+                      </div>
+                      {/* Focus page */}
+                      {graphMaxPage > 0 && (
+                        <div>
+                          <span className="text-[12px] text-slate-500 dark:text-slate-400">
+                            {t('workflow.graph.page')}
+                          </span>
+                          <div className="flex items-center gap-3 mt-1.5">
+                            <label className="flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="graphPageMode"
+                                checked={graphFocusPage == null}
+                                onChange={() => setGraphFocusPage(null)}
+                                className="w-3 h-3 accent-blue-500"
+                              />
+                              <span className="text-[12px] text-slate-600 dark:text-slate-300">
+                                {t('workflow.graph.allPages')}
+                              </span>
+                            </label>
+                            <label className="flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="graphPageMode"
+                                checked={graphFocusPage != null}
+                                onChange={() => setGraphFocusPage(0)}
+                                className="w-3 h-3 accent-blue-500"
+                              />
+                              <span className="text-[12px] text-slate-600 dark:text-slate-300">
+                                {t('workflow.graph.page')}
+                              </span>
+                            </label>
+                            {graphFocusPage != null && (
+                              <input
+                                type="number"
+                                min={1}
+                                max={graphMaxPage + 1}
+                                value={graphFocusPage + 1}
+                                onChange={(e) => {
+                                  const v = Math.max(
+                                    0,
+                                    Math.min(
+                                      Number(e.target.value) - 1,
+                                      graphMaxPage,
+                                    ),
+                                  );
+                                  setGraphFocusPage(v);
+                                }}
+                                className="w-16 px-2 py-1 text-[12px] text-center bg-slate-100 dark:bg-[#1e2235] border border-slate-200 dark:border-[#363b50] rounded-md text-slate-700 dark:text-slate-300 focus:outline-none focus:border-blue-400 dark:focus:border-[#4a5070]"
+                              />
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {/* Toggle rows */}
+                      <ToggleRow
+                        label={t('workflow.graph.incomingLinks')}
+                        checked={graphShowIncoming}
+                        onChange={setGraphShowIncoming}
+                      />
+                      <ToggleRow
+                        label={t('workflow.graph.outgoingLinks')}
+                        checked={graphShowOutgoing}
+                        onChange={setGraphShowOutgoing}
+                      />
+                    </div>
+                  ))}
               </div>
 
               {/* Groups section - entity type toggles */}
@@ -912,60 +1002,62 @@ export default function WorkflowDetailModal({
                 )}
               </div>
 
-              {/* Display section - link type toggles */}
-              <div className="border-b border-black/[0.08] dark:border-[#363b50]">
-                <button
-                  onClick={() =>
-                    setGraphPanelSections((s) => ({
-                      ...s,
-                      display: !s.display,
-                    }))
-                  }
-                  className="flex items-center justify-between w-full px-4 py-2.5 text-[13px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-black/[0.03] dark:hover:bg-white/[0.03] transition-colors"
-                >
-                  {t('workflow.graph.display')}
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 text-slate-400 dark:text-slate-500 transition-transform ${graphPanelSections.display ? '' : '-rotate-90'}`}
-                  />
-                </button>
-                {graphPanelSections.display && (
-                  <div className="px-4 pb-3 space-y-1">
-                    <ToggleRow
-                      label={t('workflow.graph.edgeLabels')}
-                      checked={graphShowEdgeLabels}
-                      onChange={setGraphShowEdgeLabels}
+              {/* Display section - link type toggles (force graph only) */}
+              {graphSubMode !== 'tagcloud' && (
+                <div className="border-b border-black/[0.08] dark:border-[#363b50]">
+                  <button
+                    onClick={() =>
+                      setGraphPanelSections((s) => ({
+                        ...s,
+                        display: !s.display,
+                      }))
+                    }
+                    className="flex items-center justify-between w-full px-4 py-2.5 text-[13px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-black/[0.03] dark:hover:bg-white/[0.03] transition-colors"
+                  >
+                    {t('workflow.graph.display')}
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 text-slate-400 dark:text-slate-500 transition-transform ${graphPanelSections.display ? '' : '-rotate-90'}`}
                     />
-                    {graphLinkTypes.length > 0 && (
-                      <div className="pt-2 border-t border-black/[0.06] dark:border-[#363b50] mt-2 space-y-1">
-                        {graphLinkTypes.map((type) => {
-                          const color = LINK_TYPE_COLORS[type] ?? '#6b7280';
-                          const active = !graphHiddenLinkTypes.has(type);
-                          return (
-                            <div
-                              key={type}
-                              className="flex items-center justify-between py-1"
-                            >
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="w-2.5 h-0.5 rounded-full flex-shrink-0"
-                                  style={{ backgroundColor: color }}
+                  </button>
+                  {graphPanelSections.display && (
+                    <div className="px-4 pb-3 space-y-1">
+                      <ToggleRow
+                        label={t('workflow.graph.edgeLabels')}
+                        checked={graphShowEdgeLabels}
+                        onChange={setGraphShowEdgeLabels}
+                      />
+                      {graphLinkTypes.length > 0 && (
+                        <div className="pt-2 border-t border-black/[0.06] dark:border-[#363b50] mt-2 space-y-1">
+                          {graphLinkTypes.map((type) => {
+                            const color = LINK_TYPE_COLORS[type] ?? '#6b7280';
+                            const active = !graphHiddenLinkTypes.has(type);
+                            return (
+                              <div
+                                key={type}
+                                className="flex items-center justify-between py-1"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className="w-2.5 h-0.5 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: color }}
+                                  />
+                                  <span className="text-[12px] text-slate-600 dark:text-slate-300">
+                                    {type}
+                                  </span>
+                                </div>
+                                <ToggleSwitch
+                                  checked={active}
+                                  onChange={() => toggleGraphLinkType(type)}
                                 />
-                                <span className="text-[12px] text-slate-600 dark:text-slate-300">
-                                  {type}
-                                </span>
                               </div>
-                              <ToggleSwitch
-                                checked={active}
-                                onChange={() => toggleGraphLinkType(type)}
-                              />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto p-5">
@@ -1851,65 +1943,79 @@ export default function WorkflowDetailModal({
                   <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
                 </div>
               ) : graphData && graphData.nodes.length > 0 ? (
-                <GraphView
-                  data={graphData}
-                  hiddenTypes={graphHiddenTypes}
-                  hiddenLinkTypes={graphHiddenLinkTypes}
-                  searchFilter={graphSearchFilter}
-                  depth={graphDepth}
-                  focusPage={graphFocusPage}
-                  showEdgeLabels={graphShowEdgeLabels}
-                  linkDirection={
-                    graphShowOutgoing && graphShowIncoming
-                      ? 'both'
-                      : graphShowOutgoing
-                        ? 'outgoing'
-                        : graphShowIncoming
-                          ? 'incoming'
-                          : 'both'
-                  }
-                  onNodeClick={(nodeId, nodeType) => {
-                    if (nodeType === 'segment' || nodeType === 'analysis') {
-                      const node = graphData.nodes.find((n) => n.id === nodeId);
-                      if (node?.properties?.segment_index != null) {
-                        const segIdx = node.properties.segment_index as number;
-                        setCurrentSegmentIndex(segIdx);
-                        if (nodeType === 'analysis') {
-                          const qaIdx =
-                            (node.properties?.qa_index as number) ?? 0;
-                          const cached = segmentCache.get(segIdx);
-                          const qaItems =
-                            cached?.ai_analysis?.map((a) => ({
-                              question: a.analysis_query,
-                              answer: a.content,
-                            })) || [];
-                          setAnalysisPopup({
-                            type: 'ai',
-                            content: '',
-                            title: `AI Analysis - Segment ${segIdx + 1}`,
-                            qaItems,
-                          });
-                          if (qaItems.length > 0) {
-                            // Segment cached: scroll after DOM renders
-                            setTimeout(() => {
-                              document
-                                .getElementById(`qa-item-${qaIdx}`)
-                                ?.scrollIntoView({
-                                  behavior: 'smooth',
-                                  block: 'start',
-                                });
-                            }, 300);
-                          } else {
-                            // Segment not cached: wait for load via ref
-                            pendingQaScrollRef.current = qaIdx;
-                          }
-                        }
-                        // Set viewMode last so other states are ready
-                        setViewMode('document');
-                      }
+                graphSubMode === 'tagcloud' ? (
+                  <TagCloudView
+                    data={graphData}
+                    hiddenTypes={graphHiddenTypes}
+                    minConnections={tagCloudMinConn}
+                    maxTags={tagCloudMaxTags}
+                    rotation={tagCloudRotation}
+                    onTagClick={(label) => {
+                      setGraphSearchFilter(label);
+                      setGraphSubMode('force');
+                    }}
+                  />
+                ) : (
+                  <GraphView
+                    data={graphData}
+                    hiddenTypes={graphHiddenTypes}
+                    hiddenLinkTypes={graphHiddenLinkTypes}
+                    searchFilter={graphSearchFilter}
+                    depth={graphDepth}
+                    focusPage={graphFocusPage}
+                    showEdgeLabels={graphShowEdgeLabels}
+                    linkDirection={
+                      graphShowOutgoing && graphShowIncoming
+                        ? 'both'
+                        : graphShowOutgoing
+                          ? 'outgoing'
+                          : graphShowIncoming
+                            ? 'incoming'
+                            : 'both'
                     }
-                  }}
-                />
+                    onNodeClick={(nodeId, nodeType) => {
+                      if (nodeType === 'segment' || nodeType === 'analysis') {
+                        const node = graphData.nodes.find(
+                          (n) => n.id === nodeId,
+                        );
+                        if (node?.properties?.segment_index != null) {
+                          const segIdx = node.properties
+                            .segment_index as number;
+                          setCurrentSegmentIndex(segIdx);
+                          if (nodeType === 'analysis') {
+                            const qaIdx =
+                              (node.properties?.qa_index as number) ?? 0;
+                            const cached = segmentCache.get(segIdx);
+                            const qaItems =
+                              cached?.ai_analysis?.map((a) => ({
+                                question: a.analysis_query,
+                                answer: a.content,
+                              })) || [];
+                            setAnalysisPopup({
+                              type: 'ai',
+                              content: '',
+                              title: `AI Analysis - Segment ${segIdx + 1}`,
+                              qaItems,
+                            });
+                            if (qaItems.length > 0) {
+                              setTimeout(() => {
+                                document
+                                  .getElementById(`qa-item-${qaIdx}`)
+                                  ?.scrollIntoView({
+                                    behavior: 'smooth',
+                                    block: 'start',
+                                  });
+                              }, 300);
+                            } else {
+                              pendingQaScrollRef.current = qaIdx;
+                            }
+                          }
+                          setViewMode('document');
+                        }
+                      }
+                    }}
+                  />
+                )
               ) : (
                 <div className="flex items-center justify-center h-full text-slate-500">
                   {t('workflow.graph.noData')}

@@ -57,4 +57,5 @@ export const LINK_TYPE_COLORS: Record<string, string> = {
   BELONGS_TO: '#22c55e',
   MENTIONED_IN: '#8b5cf6',
   RELATES_TO: '#6b7280',
+  APPEARS_IN: '#f59e0b',
 };

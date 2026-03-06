@@ -578,6 +578,17 @@ export default function ChatInputBox({
               onCompositionEnd={() => {
                 isComposingRef.current = false;
               }}
+              onPaste={(e) => {
+                const files = Array.from(e.clipboardData.files);
+                if (files.length > 0) {
+                  e.preventDefault();
+                  handleFiles(files);
+                  return;
+                }
+                e.preventDefault();
+                const text = e.clipboardData.getData('text/plain');
+                document.execCommand('insertText', false, text);
+              }}
               onKeyDown={handleKeyDown}
               data-placeholder={t('chat.placeholder')}
               className="chat-input-editable w-full border-0 outline-none text-base py-0 leading-relaxed empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 empty:before:pointer-events-none"

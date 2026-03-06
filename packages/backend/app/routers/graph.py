@@ -61,12 +61,11 @@ class GraphResponse(BaseModel):
 @router.get("")
 def get_project_graph(
     project_id: str,
-    limit: int = Query(default=100, le=500),
 ) -> GraphResponse:
     """Get project-level entity graph for visualization."""
     result = invoke_graph_service(
         "get_entity_graph",
-        {"project_id": project_id, "limit": limit},
+        {"project_id": project_id},
     )
     return GraphResponse(
         nodes=[GraphNode(**n) for n in result.get("nodes", [])],
@@ -78,7 +77,6 @@ def get_project_graph(
 def get_document_graph(
     project_id: str,
     document_id: str,
-    limit: int = Query(default=200, le=500),
 ) -> GraphResponse:
     """Get document-level graph (segments + entities) for visualization."""
     result = invoke_graph_service(
@@ -86,7 +84,6 @@ def get_document_graph(
         {
             "project_id": project_id,
             "document_id": document_id,
-            "limit": limit,
         },
     )
     return GraphResponse(

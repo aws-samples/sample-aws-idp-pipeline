@@ -2471,7 +2471,7 @@ a {
 /* ===== Project Detail Page ===== */
 
 /* Main panels - dark mode only */
-:root.dark .card [class~='bg-white'] {
+:root.dark .card [class~='bg-white']:not(.document-detail-modal) {
   background: var(--color-bg-primary) !important;
 }
 
@@ -2582,33 +2582,39 @@ a {
   backdrop-filter: blur(4px);
 }
 
-/* Modal content (dark mode only) - use ~= to match exact 'bg-white' class only */
-:root.dark [class*='fixed'][class*='inset-0'] [class~='bg-white'] {
+/* Modal content (dark mode only) — skip .document-detail-modal which has its own overrides */
+:root.dark [class*='fixed'][class*='inset-0'] :not(.document-detail-modal) [class~='bg-white'] {
   background: var(--color-bg-primary) !important;
 }
 
-:root.dark [class*='fixed'][class*='inset-0'] [class~='bg-slate-50'],
-:root.dark [class*='fixed'][class*='inset-0'] [class~='bg-slate-100'] {
+:root.dark [class*='fixed'][class*='inset-0'] :not(.document-detail-modal) [class~='bg-slate-50'],
+:root.dark [class*='fixed'][class*='inset-0'] :not(.document-detail-modal) [class~='bg-slate-100'] {
   background: var(--color-bg-secondary) !important;
 }
 
-:root.dark [class*='fixed'][class*='inset-0'] [class*='border-slate-200'],
-:root.dark [class*='fixed'][class*='inset-0'] [class*='border-slate-300'] {
+/* Preserve code block background inside modals */
+:root.dark [class*='fixed'][class*='inset-0'] pre[class~='bg-slate-50'],
+:root.dark [class*='fixed'][class*='inset-0'] pre[class~='bg-slate-100'] {
+  background: rgba(0, 0, 0, 0.3) !important;
+}
+
+:root.dark [class*='fixed'][class*='inset-0'] :not(.document-detail-modal) [class*='border-slate-200'],
+:root.dark [class*='fixed'][class*='inset-0'] :not(.document-detail-modal) [class*='border-slate-300'] {
   border-color: var(--color-border) !important;
 }
 
-:root.dark [class*='fixed'][class*='inset-0'] [class*='text-slate-800'],
-:root.dark [class*='fixed'][class*='inset-0'] [class*='text-slate-900'] {
+:root.dark [class*='fixed'][class*='inset-0'] :not(.document-detail-modal) [class*='text-slate-800'],
+:root.dark [class*='fixed'][class*='inset-0'] :not(.document-detail-modal) [class*='text-slate-900'] {
   color: var(--color-text-primary) !important;
 }
 
-:root.dark [class*='fixed'][class*='inset-0'] [class*='text-slate-600'],
-:root.dark [class*='fixed'][class*='inset-0'] [class*='text-slate-700'] {
+:root.dark [class*='fixed'][class*='inset-0'] :not(.document-detail-modal) [class*='text-slate-600'],
+:root.dark [class*='fixed'][class*='inset-0'] :not(.document-detail-modal) [class*='text-slate-700'] {
   color: var(--color-text-secondary) !important;
 }
 
-:root.dark [class*='fixed'][class*='inset-0'] [class*='text-slate-500'],
-:root.dark [class*='fixed'][class*='inset-0'] [class*='text-slate-400'] {
+:root.dark [class*='fixed'][class*='inset-0'] :not(.document-detail-modal) [class*='text-slate-500'],
+:root.dark [class*='fixed'][class*='inset-0'] :not(.document-detail-modal) [class*='text-slate-400'] {
   color: var(--color-text-muted) !important;
 }
 
@@ -2662,12 +2668,12 @@ a {
   color: var(--color-text-secondary);
 }
 
-.card .prose code {
+.card .prose code:not(pre code) {
   background: #dce4f0;
   color: var(--color-text-primary);
 }
 
-:root.dark .card .prose code {
+:root.dark .card .prose code:not(pre code) {
   background: rgba(30, 41, 59, 0.8);
 }
 
@@ -2778,53 +2784,53 @@ a {
   background: rgba(59, 130, 246, 0.3) !important;
 }
 
-/* Modal background overrides */
-[class*='fixed'][class*='inset-0'] .rounded-lg.bg-white,
-[class*='fixed'][class*='inset-0'] .overflow-hidden.bg-white {
+/* Modal background overrides — exclude .document-detail-modal (has own theme) */
+[class*='fixed'][class*='inset-0'] :not(.document-detail-modal) .rounded-lg.bg-white,
+[class*='fixed'][class*='inset-0'] :not(.document-detail-modal) .overflow-hidden.bg-white {
   background: var(--color-bg-primary) !important;
 }
 
-[class*='fixed'][class*='inset-0'] .bg-blue-50 {
+[class*='fixed'][class*='inset-0'] :not(.document-detail-modal) .bg-blue-50 {
   background: rgba(59, 130, 246, 0.15) !important;
 }
 
-[class*='fixed'][class*='inset-0'] .border-blue-100 {
+[class*='fixed'][class*='inset-0'] :not(.document-detail-modal) .border-blue-100 {
   border-color: rgba(59, 130, 246, 0.25) !important;
 }
 
-:root.dark [class*='fixed'][class*='inset-0'] .border-blue-100 {
+:root.dark [class*='fixed'][class*='inset-0'] :not(.document-detail-modal) .border-blue-100 {
   border-color: rgba(59, 130, 246, 0.3) !important;
 }
 
-/* Prose tables in modals */
-[class*='fixed'][class*='inset-0'] .prose th {
+/* Prose tables in modals — exclude .document-detail-modal */
+[class*='fixed'][class*='inset-0'] :not(.document-detail-modal) .prose th {
   background: var(--color-bg-tertiary) !important;
   border-color: var(--color-border) !important;
 }
 
-[class*='fixed'][class*='inset-0'] .prose td {
+[class*='fixed'][class*='inset-0'] :not(.document-detail-modal) .prose td {
   border-color: var(--color-border) !important;
 }
 
-[class*='fixed'][class*='inset-0'] .prose {
+[class*='fixed'][class*='inset-0'] :not(.document-detail-modal) .prose {
   color: var(--color-text-primary) !important;
 }
 
-[class*='fixed'][class*='inset-0'] .prose p,
-[class*='fixed'][class*='inset-0'] .prose li {
+[class*='fixed'][class*='inset-0'] :not(.document-detail-modal) .prose p,
+[class*='fixed'][class*='inset-0'] :not(.document-detail-modal) .prose li {
   color: var(--color-text-secondary) !important;
 }
 
 /* Ordered/Unordered list markers in prose */
-[class*='fixed'][class*='inset-0'] .prose ol,
-[class*='fixed'][class*='inset-0'] .prose ul,
+[class*='fixed'][class*='inset-0'] :not(.document-detail-modal) .prose ol,
+[class*='fixed'][class*='inset-0'] :not(.document-detail-modal) .prose ul,
 .card .prose ol,
 .card .prose ul {
   color: var(--color-text-secondary) !important;
 }
 
-[class*='fixed'][class*='inset-0'] .prose ol > li::marker,
-[class*='fixed'][class*='inset-0'] .prose ul > li::marker,
+[class*='fixed'][class*='inset-0'] :not(.document-detail-modal) .prose ol > li::marker,
+[class*='fixed'][class*='inset-0'] :not(.document-detail-modal) .prose ul > li::marker,
 .card .prose ol > li::marker,
 .card .prose ul > li::marker {
   color: var(--color-text-muted) !important;
@@ -3557,6 +3563,11 @@ a {
 /* Document Detail Modal */
 .document-detail-modal {
   background: linear-gradient(180deg, #dce4f0 0%, #e4eaf4 40%, #eef1f7 100%);
+}
+
+.document-detail-modal [class*='border-slate-200'],
+.document-detail-modal [class*='border-slate-300'] {
+  border-color: #b8c4d4 !important;
 }
 
 :root.dark .document-detail-modal {

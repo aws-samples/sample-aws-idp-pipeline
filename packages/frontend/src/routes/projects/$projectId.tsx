@@ -22,6 +22,7 @@ import AgentSelectModal from '../../components/AgentSelectModal';
 import DocumentUploadModal from '../../components/DocumentUploadModal';
 import ArtifactViewer from '../../components/ArtifactViewer';
 import SystemPromptModal from '../../components/SystemPromptModal';
+import ProjectGraphModal from '../../components/ProjectGraphModal';
 import { useSetSidebarSessions } from '../../contexts/SidebarSessionContext';
 import { BidiModelType } from '../../hooks/useVoiceChat';
 import VoiceModelSettingsModal, {
@@ -109,6 +110,7 @@ function ProjectDetailPage() {
 
   // --- System prompt modal state ---
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
+  const [showProjectGraph, setShowProjectGraph] = useState(false);
 
   // --- Subscribe to project WebSocket notifications ---
   useEffect(() => {
@@ -403,6 +405,7 @@ function ProjectDetailPage() {
                     onRefreshDocuments={documentsHook.loadDocuments}
                     onViewWorkflow={documentsHook.loadWorkflowDetail}
                     onDeleteDocument={documentsHook.handleDeleteDocument}
+                    onViewProjectGraph={() => setShowProjectGraph(true)}
                   />
                   {/* Artifact Viewer - overlays SidePanel */}
                   {artifactsHook.selectedArtifact && (
@@ -570,6 +573,16 @@ function ProjectDetailPage() {
           }
         }}
       />
+
+      {/* Project Graph Modal */}
+      {showProjectGraph && (
+        <ProjectGraphModal
+          projectId={projectId}
+          projectName={projectData.project?.name || projectId}
+          fetchApi={fetchApi}
+          onClose={() => setShowProjectGraph(false)}
+        />
+      )}
     </div>
   );
 }

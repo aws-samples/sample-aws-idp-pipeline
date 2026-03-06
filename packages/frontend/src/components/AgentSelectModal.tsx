@@ -173,9 +173,8 @@ export default function AgentSelectModal({
       onClick={handleBackdropClick}
     >
       <div
-        className="relative bg-white dark:bg-slate-900 rounded-2xl animate-in zoom-in-95 duration-200 overflow-hidden border border-slate-200 dark:border-slate-700 transition-all duration-300"
+        className="document-detail-modal relative bg-white dark:bg-slate-900 rounded-2xl animate-in zoom-in-95 duration-200 overflow-hidden border border-slate-200 dark:border-slate-700 transition-all duration-300"
         style={{
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
           width: showRightPanel ? '800px' : '420px',
           maxWidth: '95vw',
         }}

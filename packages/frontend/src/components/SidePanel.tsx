@@ -25,6 +25,7 @@ import {
   FileX,
   Search,
   X,
+  Network,
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import {
@@ -467,6 +468,7 @@ interface SidePanelProps {
   onRefreshDocuments?: () => void;
   onViewWorkflow?: (documentId: string, workflowId: string) => void;
   onDeleteDocument?: (documentId: string) => void;
+  onViewProjectGraph?: () => void;
 }
 
 export default function SidePanel({
@@ -485,6 +487,7 @@ export default function SidePanel({
   onRefreshDocuments,
   onViewWorkflow,
   onDeleteDocument,
+  onViewProjectGraph,
 }: SidePanelProps) {
   const { t } = useTranslation();
   const [openArtifactMenuId, setOpenArtifactMenuId] = useState<string | null>(
@@ -678,6 +681,15 @@ export default function SidePanel({
             >
               <Search className="h-3.5 w-3.5" />
             </button>
+            {onViewProjectGraph && (
+              <button
+                onClick={onViewProjectGraph}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 rounded transition-colors flex-shrink-0"
+                title={t('workflow.graph.title', 'Knowledge Graph')}
+              >
+                <Network className="h-3.5 w-3.5" />
+              </button>
+            )}
             <div className="flex-1" />
             <span className="text-xs text-slate-400 flex-shrink-0">
               {docSearchQuery ||
