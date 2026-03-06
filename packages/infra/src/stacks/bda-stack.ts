@@ -62,7 +62,7 @@ export class BdaStack extends Stack {
       layerVersionName: 'idp-v2-bda-shared',
       description: 'Shared Python modules for BDA',
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_14],
-      compatibleArchitectures: [lambda.Architecture.X86_64],
+      compatibleArchitectures: [lambda.Architecture.ARM_64],
       code: lambda.Code.fromAsset(path.join(__dirname, '../functions'), {
         bundling: {
           image: lambda.Runtime.PYTHON_3_14.bundlingImage,

@@ -14,11 +14,12 @@ import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
-import { Platform } from 'aws-cdk-lib/aws-ecr-assets';
+
 import { SSM_KEYS } from ':idp-v2/common-constructs';
 import {
   PaddleOcrModelBuilder,
   PaddleOcrEndpoint,
+  OcrLambdaBuilder,
 } from '../constructs/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -145,7 +146,7 @@ export class OcrStack extends Stack {
       layerVersionName: 'idp-v2-ocr-shared',
       description: 'Shared Python modules for OCR',
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_14],
-      compatibleArchitectures: [lambda.Architecture.X86_64],
+      compatibleArchitectures: [lambda.Architecture.ARM_64],
       code: lambda.Code.fromAsset(path.join(__dirname, '../functions'), {
         bundling: {
           image: lambda.Runtime.PYTHON_3_14.bundlingImage,
@@ -168,19 +169,25 @@ export class OcrStack extends Stack {
     // OCR Lambda Processor (pp-ocrv5, pp-structurev3 - CPU-only)
     // ========================================
 
+    // OcrLambdaBuilder construct (x86 CodeBuild for PaddlePaddle)
+    const ocrLambdaBuilder = new OcrLambdaBuilder(this, 'OcrLambdaBuilder', {
+      buildContextPath: path.join(__dirname, '../functions'),
+      triggerLambdaPath: path.join(
+        __dirname,
+        '../functions/paddleocr/model-builder-trigger',
+      ),
+    });
+
     const ocrLambdaProcessor = new lambda.DockerImageFunction(
       this,
       'OcrLambdaProcessor',
       {
         functionName: 'idp-v2-ocr-lambda-processor',
         description: 'PaddleOCR processor (CPU)',
-        code: lambda.DockerImageCode.fromImageAsset(
-          path.join(__dirname, '../functions'),
-          {
-            file: 'preprocessing/ocr-lambda-processor/Dockerfile',
-            platform: Platform.LINUX_AMD64,
-          },
-        ),
+        code: lambda.DockerImageCode.fromEcr(ocrLambdaBuilder.repository, {
+          tag: 'latest',
+        }),
+        architecture: lambda.Architecture.X86_64,
         memorySize: 10240,
         timeout: Duration.minutes(15),
         ephemeralStorageSize: Size.gibibytes(2),
@@ -192,6 +199,7 @@ export class OcrStack extends Stack {
         },
       },
     );
+    ocrLambdaProcessor.node.addDependency(ocrLambdaBuilder.buildTrigger);
 
     // Permissions: DDB read/write, S3 read/write for document + model buckets
     backendTable.grantReadWriteData(ocrLambdaProcessor);

@@ -134,7 +134,7 @@ export class WorkflowStack extends Stack {
                 fs.mkdirSync(pythonDir, { recursive: true });
                 execSync(
                   `pip install -t "${pythonDir}" ` +
-                    `--platform manylinux2014_x86_64 ` +
+                    `--platform manylinux2014_aarch64 ` +
                     `--python-version 3.14 ` +
                     `--implementation cp ` +
                     `--only-binary=:all: ${packages}`,
@@ -155,7 +155,7 @@ export class WorkflowStack extends Stack {
       layerVersionName: 'idp-v2-core-libs',
       description: 'boto3, pillow, pypdfium2, pypdf, pyyaml, python-docx',
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_14],
-      compatibleArchitectures: [lambda.Architecture.X86_64],
+      compatibleArchitectures: [lambda.Architecture.ARM_64],
       code: createLayerCode(
         'boto3 pillow pypdfium2 pypdf pyyaml python-docx',
         'core',
@@ -166,7 +166,7 @@ export class WorkflowStack extends Stack {
       layerVersionName: 'idp-v2-strands',
       description: 'Strands Agents SDK 1.25+ with PyYAML',
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_14],
-      compatibleArchitectures: [lambda.Architecture.X86_64],
+      compatibleArchitectures: [lambda.Architecture.ARM_64],
       code: createLayerCode('strands-agents>=1.25 pyyaml', 'strands'),
     });
 
@@ -175,7 +175,7 @@ export class WorkflowStack extends Stack {
       layerVersionName: 'idp-v2-shared',
       description: 'Shared Python modules (ddb_client, embeddings)',
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_14],
-      compatibleArchitectures: [lambda.Architecture.X86_64],
+      compatibleArchitectures: [lambda.Architecture.ARM_64],
       code: lambda.Code.fromAsset(path.join(__dirname, '../functions'), {
         bundling: {
           image: lambda.Runtime.PYTHON_3_14.bundlingImage,
@@ -206,10 +206,10 @@ export class WorkflowStack extends Stack {
         code: lambda.DockerImageCode.fromImageAsset(
           path.join(__dirname, '../functions/container'),
           {
-            platform: Platform.LINUX_AMD64,
+            platform: Platform.LINUX_ARM64,
           },
         ),
-        architecture: lambda.Architecture.X86_64,
+        architecture: lambda.Architecture.ARM_64,
         timeout: Duration.minutes(5),
         memorySize: 2048,
       },
@@ -300,10 +300,10 @@ export class WorkflowStack extends Stack {
         path.join(__dirname, '../functions'),
         {
           file: 'step-functions/format-parser/Dockerfile',
-          platform: Platform.LINUX_AMD64,
+          platform: Platform.LINUX_ARM64,
         },
       ),
-      architecture: lambda.Architecture.X86_64,
+      architecture: lambda.Architecture.ARM_64,
       timeout: Duration.minutes(15),
       memorySize: 2048,
       ephemeralStorageSize: Size.gibibytes(2),

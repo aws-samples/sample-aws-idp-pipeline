@@ -29,6 +29,19 @@ def _load_prompt_from_s3(prompt_name: str) -> str:
         return ''
 
 
+def _detect_media_type(image_data: bytes) -> str:
+    """Detect image media type from bytes."""
+    if image_data[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'image/png'
+    if image_data[:2] == b'\xff\xd8':
+        return 'image/jpeg'
+    if image_data[:4] == b'GIF8':
+        return 'image/gif'
+    if image_data[:4] == b'RIFF' and image_data[8:12] == b'WEBP':
+        return 'image/webp'
+    return 'image/png'
+
+
 def _resize_image_if_needed(image_data: bytes, max_size_mb: float = 3.5) -> bytes:
     """Resize image if it exceeds API limit."""
     try:
@@ -105,6 +118,7 @@ def create_image_analyzer_tool(
 
         try:
             resized_image = _resize_image_if_needed(image_data)
+            media_type = _detect_media_type(resized_image)
             image_base64 = base64.b64encode(resized_image).decode('utf-8')
 
             previous_context = previous_context_getter()
@@ -137,7 +151,7 @@ Provide detailed, professional analysis in {language}."""
                             'type': 'image',
                             'source': {
                                 'type': 'base64',
-                                'media_type': 'image/png',
+                                'media_type': media_type,
                                 'data': image_base64
                             },
                             'cache_control': {'type': 'ephemeral'}

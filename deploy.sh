@@ -30,7 +30,13 @@ while [[ "$#" -gt 0 ]]; do
             FRONTEND_DOMAIN=$(aws cloudformation describe-stacks --stack-name IDP-V2-Application \
                 --query 'Stacks[0].Outputs[?contains(OutputKey,`DistributionDomainName`)].OutputValue' --output text 2>/dev/null)
             if [[ -n "$FRONTEND_DOMAIN" && "$FRONTEND_DOMAIN" != "None" ]]; then
-                echo "Application URL: https://$FRONTEND_DOMAIN"
+                echo ""
+                echo "  Application URL: https://$FRONTEND_DOMAIN"
+                echo ""
+                echo "  Login:"
+                echo "    Username = email prefix (e.g. user@example.com -> user)"
+                echo "    Temporary Password = TempPass123!"
+                echo ""
             else
                 echo "Application stack not found or not yet deployed."
             fi
@@ -192,6 +198,13 @@ if [[ "$BUILD_STATUS" != "SUCCEEDED" ]]; then
     echo "  aws logs tail $LOG_GROUP --since 10m"
     exit 1
 fi
+
+# Clean up CodeBuild stack (no longer needed after build)
+echo ""
+echo "Cleaning up CodeBuild stack..."
+aws cloudformation delete-stack --stack-name "$STACK_NAME"
+aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" 2>/dev/null
+echo "CodeBuild stack deleted."
 
 # Get frontend URL
 FRONTEND_DOMAIN=$(aws cloudformation describe-stacks --stack-name IDP-V2-Application \
