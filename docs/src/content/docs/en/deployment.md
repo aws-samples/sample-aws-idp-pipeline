@@ -169,7 +169,7 @@ When deployment completes successfully, the following information is displayed.
 ### Command-line Options
 
 ```bash
-bash deploy.sh [OPTIONS]
+./deploy.sh [OPTIONS]
 
 Options:
   --admin-email EMAIL   Admin email (skip interactive prompt)
@@ -183,13 +183,13 @@ Options:
 ### Check Deployment URL
 
 ```bash
-bash deploy.sh --info
+./deploy.sh --info
 ```
 
 ### Deploy a Specific Version
 
 ```bash
-bash deploy.sh --admin-email user@example.com --version v1.0.0
+./deploy.sh --admin-email user@example.com --version v1.0.0
 ```
 
 ---

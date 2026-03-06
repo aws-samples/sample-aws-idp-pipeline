@@ -35,7 +35,7 @@
 
 ## Overview
 
-An AI-powered IDP prototype that transforms unstructured data into actionable insights. Analyzes **documents, videos, audio files, and images** with hybrid search (vector + keyword) and a conversational AI interface. Built as an Nx monorepo with AWS CDK, featuring real-time workflow status notifications.
+An AI-powered IDP prototype that transforms unstructured data into actionable insights. Analyzes **documents, videos, audio files, and images** with hybrid search (vector + keyword), knowledge graph traversal, and a conversational AI interface. Built as an Nx monorepo with AWS CDK, featuring real-time workflow status notifications.
 
 > [!CAUTION]
 > This is a development version. Do not deploy to production.
@@ -51,13 +51,14 @@ An AI-powered IDP prototype that transforms unstructured data into actionable in
 
 - **Intelligent Document Processing (IDP)**
   - Document analysis with Bedrock Data Automation (BDA)
-  - [OCR processing with PaddleOCR on SageMaker](docs/src/content/docs/en/ocr.md)
+  - [OCR processing with PaddleOCR (Lambda CPU + SageMaker GPU)](docs/src/content/docs/en/ocr.md)
   - Audio/video transcription via AWS Transcribe
-  - Automatic file type detection and preprocessing pipeline routing
+  - Automatic file type detection and [preprocessing pipeline routing](docs/src/content/docs/en/preprocessing.md)
 
 - **[AI-Powered Analysis](docs/src/content/docs/en/analysis.md)**
   - Per-segment deep analysis with Claude Sonnet 4.6 Vision ReAct Agent
-  - Document summarization with Claude Haiku 4.5
+  - Video analysis with TwelveLabs Pegasus 1.2 + Amazon Nova Lite 2
+  - Document summarization with Claude Sonnet 4.6 / Haiku 4.5
   - 1024-dimensional vector embeddings with Nova Embed
 
 - **[Hybrid Search](docs/src/content/docs/en/vectordb.md)**
@@ -65,15 +66,35 @@ An AI-powered IDP prototype that transforms unstructured data into actionable in
   - Kiwi Korean morphological analyzer for keyword extraction
   - Result reranking with Bedrock Cohere Rerank v3.5
 
+- **Knowledge Graph**
+  - Neptune DB Serverless for entity and relationship storage
+  - LLM-based entity extraction and relationship mapping (auto-built during analysis)
+  - Graph traversal to discover related pages across documents
+  - Project-level and document-level graph visualization
+
 - **AI Chat (Agent Core)**
-  - IDP Agent / Research Agent on Bedrock Agent Core
-  - Tool invocation via MCP Gateway (search, artifact management)
+  - IDP Agent on Bedrock Agent Core
+  - Tool invocation via MCP Gateway (search, graph, artifact management)
   - S3-based session management for conversation continuity
+  - Custom agents with project-specific system prompts
 
 - **Real-time Notifications**
   - Real-time status updates via WebSocket API + ElastiCache Redis
   - Workflow event detection through DynamoDB Streams
   - Live updates for step progress, artifact changes, and session state
+
+- **Supported File Formats**
+
+  | File Type | Supported Formats |
+  |-----------|-------------------|
+  | Documents | PDF, DOCX, DOC, TXT, MD |
+  | Images | PNG, JPG, JPEG, GIF, TIFF, WebP |
+  | Videos | MP4, MOV, AVI, MKV, WebM |
+  | Audio | MP3, WAV, FLAC, M4A |
+  | Presentations | PPTX, PPT |
+  | Spreadsheets | XLSX, XLS, CSV |
+  | CAD | DXF |
+  | Web | .webreq (URL crawling) |
 
 ## Architecture
 
@@ -82,18 +103,20 @@ An AI-powered IDP prototype that transforms unstructured data into actionable in
 ### CDK Stack Structure
 
 ```
-@idp-v2/infra
+@idp-v2/infra (14 stacks)
 ├── VpcStack              - VPC (10.0.0.0/16, 2 AZ, NAT Gateway)
+├── NeptuneStack          - Neptune DB Serverless (knowledge graph)
 ├── StorageStack          - S3 buckets, DynamoDB tables, ElastiCache Redis
 ├── EventStack            - S3 EventBridge, SQS queues, file type detection Lambda
+├── OcrStack              - PaddleOCR (Lambda CPU + SageMaker GPU)
 ├── BdaStack              - Bedrock Data Automation consumer
-├── OcrStack              - PaddleOCR SageMaker async endpoint
 ├── TranscribeStack       - AWS Transcribe consumer
 ├── WorkflowStack         - Step Functions workflow (Distributed Map)
 ├── WebsocketStack        - WebSocket API, real-time notifications
+├── McpStack              - MCP Gateway (search, graph, artifact tools)
 ├── WorkerStack           - WebSocket message processing
-├── McpStack              - MCP Gateway (search, artifact tools)
-├── AgentStack            - Bedrock Agent Core (IDP Agent, Research Agent)
+├── AgentStack            - Bedrock Agent Core (IDP Agent)
+├── WebcrawlerStack       - Web crawling agent (Bedrock Agent Core)
 └── ApplicationStack      - Backend (ECS Fargate), Frontend (CloudFront), Cognito
 ```
 
@@ -101,23 +124,27 @@ An AI-powered IDP prototype that transforms unstructured data into actionable in
 
 #### 1. Document Upload & Analysis Pipeline
 
-When a user uploads a document to S3 via Presigned URL, EventBridge detects the ObjectCreated event. The Type Detection Lambda identifies the file type and routes it to SQS. OCR (PaddleOCR/SageMaker) and Transcribe run automatically, while BDA runs optionally. After preprocessing completes, the Step Functions workflow performs segmentation, AI analysis, vector embedding, and document summarization sequentially.
+When a user uploads a document to S3 via Presigned URL, EventBridge detects the ObjectCreated event. The Type Detection Lambda identifies the file type and routes it to SQS. Preprocessing runs in parallel (OCR, BDA, Transcribe), and after completion, the Step Functions workflow performs segmentation, AI analysis, vector embedding, knowledge graph building, and document summarization.
 
 ```
 S3 Upload (Presigned URL)
-  → EventBridge (ObjectCreated)
-    → Type Detection Lambda
-      ├─ OCR Queue     → PaddleOCR (SageMaker)    ── automatic
-      ├─ BDA Queue     → Bedrock Data Automation   ── optional
-      └─ Transcribe Queue → AWS Transcribe          ── automatic
+  -> EventBridge (ObjectCreated)
+    -> Type Detection Lambda
+      +- OCR Queue     -> PaddleOCR (Lambda/SageMaker)  -- optional
+      +- BDA Queue     -> Bedrock Data Automation        -- optional
+      +- Transcribe Queue -> AWS Transcribe              -- optional
+      +- WebCrawler Queue -> Bedrock Agent Core          -- automatic (.webreq)
+      '- Workflow Queue -> Step Functions
 
-  → Step Functions Workflow
-      Segment Prep ─→ Wait for Preprocess ─→ Build Segments
-        ─→ Distributed Map (max 30)
-            ├─ Segment Analyzer (Claude Sonnet 4.6 Vision)
-            └─ Analysis Finalizer → SQS → LanceDB Writer
-        ─→ Document Summarizer (Claude Haiku 4.5)
-            → Vector Embedding (Nova 1024d) → LanceDB
+  -> Step Functions Workflow
+      Segment Prep -> Wait for Preprocess -> Format Parser -> Build Segments
+        -> Distributed Map (max 30)
+            +- Segment Analyzer (Claude Sonnet 4.6 Vision / Pegasus 1.2 / Nova Lite 2)
+            '- Analysis Finalizer -> SQS -> LanceDB Writer
+        -> Document Summarizer (Claude Sonnet 4.6)
+            -> Vector Embedding (Nova 1024d) -> LanceDB
+        -> Graph Builder (Entity Extraction)
+            -> Neptune DB (entities, relationships)
 ```
 
 #### 2. Real-time Notifications (WebSocket)
@@ -126,54 +153,58 @@ When workflow progress is recorded in DynamoDB, DynamoDB Streams detects the cha
 
 ```
 DynamoDB Streams (state change detection)
-  → WorkflowStream Lambda (VPC)
-    → Redis (connection lookup)
-      → WebSocket API → Frontend
-        ├─ Step progress
-        ├─ Artifact changes
-        └─ Session state updates
+  -> WorkflowStream Lambda (VPC)
+    -> Redis (connection lookup)
+      -> WebSocket API -> Frontend
+        +- Step progress
+        +- Artifact changes
+        '- Session state updates
 ```
 
 #### 3. AI Chat (Agent Core)
 
-User queries are routed through API Gateway to Bedrock Agent Core. The IDP Agent and Research Agent invoke tools via MCP Gateway, performing hybrid search with the Search Tool and managing outputs with the Artifact Tool. Session history is persisted to S3 to maintain conversation context.
+User queries are routed through API Gateway to Bedrock Agent Core. The IDP Agent invokes tools via MCP Gateway, performing hybrid search with the Search Tool, graph traversal with the Graph Tool, and managing outputs with the Artifact Tool. Session history is persisted to S3 to maintain conversation context.
 
 ```
 User Query
-  → API Gateway REST (SigV4)
-    → Bedrock Agent Core Runtime
-      ├─ IDP Agent (Claude Sonnet 4.6)
-      └─ Research Agent
-          → MCP Gateway
-            ├─ Search Tool Lambda → Backend API → Hybrid Search (Vector + FTS + Rerank)
-            └─ Artifact Tool Lambda → S3
-          → S3 (Session Load/Save)
+  -> API Gateway REST (SigV4)
+    -> Bedrock Agent Core Runtime
+      '- IDP Agent (Claude Sonnet 4.6)
+          -> MCP Gateway
+            +- Search Tool Lambda -> LanceDB Service -> Hybrid Search (Vector + FTS)
+            +- Graph Tool Lambda  -> Graph Service   -> Neptune (graph traversal)
+            +- Artifact Tool Lambda -> S3
+            '- Code Interpreter -> Python execution
+          -> S3 (Session Load/Save)
 ```
 
 #### 4. Backend API (HTTP)
 
-API Gateway HTTP (IAM Auth) connects through VPC Link to a Private ALB, then to ECS Fargate running FastAPI. It handles all data access including project/document management, workflow queries, hybrid search, chat sessions, custom agents, and artifact management.
+API Gateway HTTP (IAM Auth) connects through VPC Link to a Private ALB, then to ECS Fargate running FastAPI. It handles all data access including project/document management, workflow queries, hybrid search, chat sessions, custom agents, knowledge graph, and artifact management.
 
 ```
 API Gateway HTTP (IAM Auth)
-  → VPC Link → Private ALB → ECS Fargate (FastAPI)
-    ├─ DynamoDB     ── Project/document CRUD, workflow status
-    ├─ LanceDB      ── Hybrid search (Vector + FTS)
-    ├─ Bedrock      ── Cohere Rerank v3.5
-    ├─ S3           ── Presigned URL, sessions (DuckDB), agents
-    ├─ Redis        ── Query cache
-    ├─ Step Functions ── Reanalysis trigger
-    └─ Lambda       ── QA Regenerator
+  -> VPC Link -> Private ALB -> ECS Fargate (FastAPI)
+    +- DynamoDB     -- Project/document CRUD, workflow status
+    +- LanceDB      -- Hybrid search (Vector + FTS) via Lambda invoke
+    +- Neptune      -- Knowledge graph queries
+    +- Bedrock      -- Cohere Rerank v3.5
+    +- S3           -- Presigned URL, sessions (DuckDB), agents, artifacts
+    +- Redis        -- Query cache
+    +- Step Functions -- Reanalysis trigger
+    '- Lambda       -- QA Regenerator
 ```
 
 ### Key Design Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| Step Functions payload → DynamoDB intermediate storage | Bypass Step Functions 256KB payload limit |
+| Step Functions payload -> DynamoDB intermediate storage | Bypass Step Functions 256KB payload limit |
 | Only segment indices passed in workflow | Support for 3000+ page documents |
 | LanceDB + S3 Express One Zone | Low-latency storage optimized for vector search |
-| SageMaker Auto-scaling 0→1 | Cost optimization (Scale-to-zero when idle) |
+| Neptune DB Serverless | Knowledge graph for entity relationships, scales to zero when idle |
+| PaddleOCR dual backend (Lambda + SageMaker) | CPU models on Lambda (no cold start), GPU model (VL) on SageMaker |
+| SageMaker Auto-scaling 0->1 | Cost optimization (Scale-to-zero when idle) |
 | ElastiCache Redis | WebSocket connection state management (faster than DynamoDB TTL) |
 | DuckDB for direct S3 queries | Query session/agent data without copying |
 | VPC Link + Private ALB | Keep backend unexposed to the internet |
@@ -271,47 +302,92 @@ pnpm nx lint @idp-v2/infra --configuration=fix  # Auto-fix
 | Model | Purpose | Description |
 |-------|---------|-------------|
 | Claude Sonnet 4.6 | Segment analysis / Agent | Vision ReAct Agent, deep document analysis |
-| Claude Haiku 4.5 | Document summarization | Lightweight model, fast summary generation |
-| Nova Embed Text v1 | Vector embeddings | 1024-dimensional text embeddings |
+| Claude Sonnet 4.6 | Document summarization | Overall document summary generation |
+| Claude Haiku 4.5 | Search summarization | Lightweight model for search result organization |
+| TwelveLabs Pegasus 1.2 | Video visual analysis | Direct video understanding and scene analysis |
+| Amazon Nova Lite 2 | Video script extraction | Large-context STT-based video script extraction |
+| Nova Embed Text v2 | Vector embeddings | 1024-dimensional multimodal embeddings |
 | Cohere Rerank v3.5 | Search reranking | Hybrid search result optimization |
 
 ### Preprocessing Models
 
 | Model | Purpose | Description |
 |-------|---------|-------------|
-| PaddleOCR | OCR | SageMaker g5.xlarge, Auto-scaling 0→1 |
+| PP-OCRv5 / PP-StructureV3 | OCR (CPU) | Lambda container, general-purpose text extraction |
+| PaddleOCR-VL | OCR (GPU) | SageMaker g5.xlarge, Vision-Language model, Auto-scaling 0->1 |
 | Bedrock Data Automation | Document analysis | Async document structure analysis (optional) |
 | AWS Transcribe | Speech-to-text | Audio/video text conversion |
+
+### MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| search_documents | Hybrid search across project documents (Vector + FTS + Rerank) |
+| graph_search | Knowledge graph traversal to discover related pages |
+| link_documents / unlink_documents | Manual document relationship management |
+| overview | Project document overview and summaries |
+| save/load/edit_markdown | Create and edit markdown artifacts |
+| create_pdf, extract_pdf_text/tables | PDF generation and extraction |
+| create_docx, extract_docx_text/tables | Word document generation and extraction |
+| generate_image | AI image generation |
+| code_interpreter | Python code execution sandbox |
 
 ## Project Structure
 
 ```
 sample-aws-idp-pipeline/
-├── packages/
-│   ├── agents/                    # AI agents
-│   │   ├── idp-agent/             # IDP Agent (Strands SDK)
-│   │   └── research-agent/        # Research Agent
-│   ├── backend/app/               # FastAPI backend
-│   │   ├── main.py
-│   │   ├── config.py
-│   │   ├── ddb/                   # DynamoDB modules
-│   │   ├── routers/               # API routers
-│   │   └── services/              # Business logic
-│   ├── common/constructs/src/     # Reusable CDK constructs
-│   ├── frontend/src/              # React SPA
-│   │   ├── routes/                # Page routes
-│   │   └── components/            # React components
-│   └── infra/src/
-│       ├── stacks/                # 12 CDK stacks
-│       ├── functions/             # Python Lambda functions
-│       │   ├── step-functions/    # Workflow functions
-│       │   ├── shared/            # Shared modules
-│       │   ├── websocket/         # WebSocket handlers
-│       │   └── lancedb-writer/    # LanceDB writer
-│       └── lambda-layers/         # Lambda layers
-├── docs/                          # Documentation
-└── README.md
++-- packages/
+|   +-- agents/                    # AI agents
+|   |   '-- idp-agent/             # IDP Agent (Strands SDK)
+|   +-- backend/app/               # FastAPI backend
+|   |   +-- main.py
+|   |   +-- config.py
+|   |   +-- ddb/                   # DynamoDB modules
+|   |   +-- routers/               # API routers
+|   |   '-- services/              # Business logic
+|   +-- common/constructs/src/     # Reusable CDK constructs
+|   +-- frontend/src/              # React SPA
+|   |   +-- routes/                # Page routes
+|   |   '-- components/            # React components
+|   +-- lambda/                    # MCP tool Lambdas
+|   |   +-- search-mcp/            # Search tool (hybrid search + summarize)
+|   |   '-- graph-mcp/             # Graph tool (Neptune traversal)
+|   '-- infra/src/
+|       +-- stacks/                # 14 CDK stacks
+|       +-- functions/             # Python Lambda functions
+|       |   +-- step-functions/    # Workflow functions
+|       |   +-- container/         # Container Lambda (LanceDB + Graph services)
+|       |   +-- shared/            # Shared modules
+|       |   +-- websocket/         # WebSocket handlers
+|       |   '-- lancedb-writer/    # LanceDB writer
+|       '-- lambda-layers/         # Lambda layers
++-- docs/                          # Documentation (Astro)
+'-- README.md
 ```
+
+## Backend API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Health check |
+| GET/POST | `/projects` | List / create projects |
+| GET/PUT/DELETE | `/projects/{id}` | Get / update / delete project |
+| GET | `/projects/{id}/workflows` | List project workflows |
+| POST | `/projects/{id}/documents` | Upload document (presigned URL) |
+| GET/DELETE | `/projects/{id}/documents/{id}` | Get / delete document |
+| GET | `/documents/{id}/workflows/{id}` | Workflow detail with segments |
+| POST | `/documents/{id}/workflows/{id}/reanalyze` | Trigger reanalysis |
+| POST | `.../segments/{idx}/regenerate-qa` | Regenerate Q&A for segment |
+| POST | `.../segments/{idx}/add-qa` | Add Q&A to segment |
+| DELETE | `.../segments/{idx}/qa/{qa_idx}` | Delete Q&A from segment |
+| GET | `/chat/projects/{id}/sessions` | List chat sessions |
+| GET/PATCH/DELETE | `/chat/.../sessions/{id}` | Get / rename / delete session |
+| GET/POST/PUT/DELETE | `/projects/{id}/agents` | Custom agent CRUD |
+| GET/DELETE | `/artifacts` | List / delete artifacts |
+| GET | `/projects/{id}/graph` | Project knowledge graph |
+| GET | `/projects/{id}/graph/documents/{id}` | Document-level graph |
+| GET/PUT | `/prompts/system` | System prompt management |
+| GET/POST/PUT | `/sagemaker/*` | SageMaker endpoint management |
 
 ## Tech Stack
 
@@ -324,6 +400,7 @@ sample-aws-idp-pipeline/
 ### Backend (Python)
 - FastAPI (ECS Fargate, ARM64)
 - LanceDB + S3 Express One Zone (vector storage)
+- Neptune DB Serverless (knowledge graph)
 - DynamoDB (One Table Design)
 - Kiwi (Korean morphological analyzer)
 - DuckDB (direct S3 queries)
@@ -340,7 +417,9 @@ sample-aws-idp-pipeline/
 - Bedrock Claude Sonnet 4.6 / Haiku 4.5
 - Bedrock Nova Embed (1024 dimensions)
 - Bedrock Cohere Rerank v3.5
-- PaddleOCR (SageMaker)
+- TwelveLabs Pegasus 1.2 (video visual analysis)
+- Amazon Nova Lite 2 (video script extraction)
+- PaddleOCR (Lambda CPU + SageMaker GPU)
 - AWS Transcribe
 
 ---

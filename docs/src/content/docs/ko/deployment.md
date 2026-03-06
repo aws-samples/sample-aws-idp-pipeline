@@ -169,7 +169,7 @@ Phase: BUILD
 ### 명령행 옵션
 
 ```bash
-bash deploy.sh [OPTIONS]
+./deploy.sh [OPTIONS]
 
 Options:
   --admin-email EMAIL   관리자 이메일 (대화형 입력 생략)
@@ -183,13 +183,13 @@ Options:
 ### 배포 URL 재확인
 
 ```bash
-bash deploy.sh --info
+./deploy.sh --info
 ```
 
 ### 특정 버전 배포
 
 ```bash
-bash deploy.sh --admin-email user@example.com --version v1.0.0
+./deploy.sh --admin-email user@example.com --version v1.0.0
 ```
 
 ---

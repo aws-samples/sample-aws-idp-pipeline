@@ -5,7 +5,7 @@ description: "비정형 데이터를 위한 AI 기반 지능형 문서 처리(ID
 
 ## 개요
 
-비정형 데이터를 실행 가능한 인사이트로 변환하는 AI 기반 IDP 프로토타입입니다. **문서, 비디오, 오디오, 이미지**를 분석하고, 하이브리드 검색(벡터 + 키워드)과 대화형 AI 인터페이스를 제공합니다. AWS CDK로 구축된 Nx 모노레포 구조이며, 실시간 워크플로우 상태 알림을 지원합니다.
+비정형 데이터를 실행 가능한 인사이트로 변환하는 AI 기반 IDP 프로토타입입니다. **문서, 비디오, 오디오, 이미지**를 분석하고, 하이브리드 검색(벡터 + 키워드), 지식 그래프 탐색, 대화형 AI 인터페이스를 제공합니다. AWS CDK로 구축된 Nx 모노레포 구조이며, 실시간 워크플로우 상태 알림을 지원합니다.
 
 :::danger
 개발 중인 버전입니다. 프로덕션에 배포하지 마세요.
@@ -21,13 +21,14 @@ description: "비정형 데이터를 위한 AI 기반 지능형 문서 처리(ID
 
 - **지능형 문서 처리 (IDP)**
   - Bedrock Data Automation (BDA)을 활용한 문서 분석
-  - [PaddleOCR (SageMaker) 기반 OCR 처리](./ocr.md)
+  - [PaddleOCR (Lambda CPU + SageMaker GPU) 기반 OCR 처리](./ocr.md)
   - AWS Transcribe를 통한 오디오/비디오 텍스트 변환
-  - 파일 유형 자동 감지 및 적절한 전처리 파이프라인 라우팅
+  - 파일 유형 자동 감지 및 [전처리 파이프라인 라우팅](./preprocessing.md)
 
 - **[AI 기반 분석](./analysis.md)**
   - Claude Sonnet 4.6 Vision ReAct Agent로 세그먼트별 심층 분석
-  - Claude Haiku 4.5로 문서 요약 생성
+  - TwelveLabs Pegasus 1.2 + Amazon Nova Lite 2로 비디오 분석
+  - Claude Sonnet 4.6 / Haiku 4.5로 문서 요약 생성
   - Nova Embed로 1024차원 벡터 임베딩
 
 - **[하이브리드 검색](./vectordb.md)**
@@ -35,15 +36,35 @@ description: "비정형 데이터를 위한 AI 기반 지능형 문서 처리(ID
   - Kiwi 한국어 형태소 분석기 기반 키워드 추출
   - Bedrock Cohere Rerank v3.5로 결과 재순위화
 
+- **지식 그래프**
+  - Neptune DB Serverless 기반 엔티티 및 관계 저장
+  - LLM 기반 엔티티 추출 및 관계 매핑 (분석 시 자동 구축)
+  - 그래프 탐색으로 문서 간 관련 페이지 발견
+  - 프로젝트 및 문서 수준 그래프 시각화
+
 - **AI 챗봇 (Agent Core)**
-  - Bedrock Agent Core 기반 IDP Agent / Research Agent
-  - MCP Gateway를 통한 도구 호출 (검색, 아티팩트 관리)
+  - Bedrock Agent Core 기반 IDP Agent
+  - MCP Gateway를 통한 도구 호출 (검색, 그래프, 아티팩트 관리)
   - S3 기반 세션 관리로 대화 맥락 유지
+  - 프로젝트별 커스텀 에이전트 및 시스템 프롬프트
 
 - **실시간 알림**
   - WebSocket API + ElastiCache Redis로 실시간 상태 업데이트
   - DynamoDB Streams 기반 워크플로우 이벤트 감지
   - 단계별 진행률, 아티팩트 변경, 세션 상태 실시간 반영
+
+- **지원 파일 형식**
+
+  | 파일 유형 | 지원 형식 |
+  |-----------|-----------|
+  | 문서 | PDF, DOCX, DOC, TXT, MD |
+  | 이미지 | PNG, JPG, JPEG, GIF, TIFF, WebP |
+  | 비디오 | MP4, MOV, AVI, MKV, WebM |
+  | 오디오 | MP3, WAV, FLAC, M4A |
+  | 프레젠테이션 | PPTX, PPT |
+  | 스프레드시트 | XLSX, XLS, CSV |
+  | CAD | DXF |
+  | 웹 | .webreq (URL 크롤링) |
 
 ## 아키텍처
 
@@ -52,18 +73,20 @@ description: "비정형 데이터를 위한 AI 기반 지능형 문서 처리(ID
 ### CDK 스택 구조
 
 ```
-@idp-v2/infra
+@idp-v2/infra (14개 스택)
 ├── VpcStack              - VPC (10.0.0.0/16, 2 AZ, NAT Gateway)
+├── NeptuneStack          - Neptune DB Serverless (지식 그래프)
 ├── StorageStack          - S3 버킷, DynamoDB 테이블, ElastiCache Redis
 ├── EventStack            - S3 EventBridge, SQS 큐, 파일 유형 감지 Lambda
+├── OcrStack              - PaddleOCR (Lambda CPU + SageMaker GPU)
 ├── BdaStack              - Bedrock Data Automation 소비자
-├── OcrStack              - PaddleOCR SageMaker 비동기 엔드포인트
 ├── TranscribeStack       - AWS Transcribe 소비자
 ├── WorkflowStack         - Step Functions 워크플로우 (Distributed Map)
 ├── WebsocketStack        - WebSocket API, 실시간 알림
+├── McpStack              - MCP Gateway (검색, 그래프, 아티팩트 도구)
 ├── WorkerStack           - WebSocket 메시지 처리
-├── McpStack              - MCP Gateway (검색, 아티팩트 도구)
-├── AgentStack            - Bedrock Agent Core (IDP Agent, Research Agent)
+├── AgentStack            - Bedrock Agent Core (IDP Agent)
+├── WebcrawlerStack       - 웹 크롤링 에이전트 (Bedrock Agent Core)
 └── ApplicationStack      - Backend (ECS Fargate), Frontend (CloudFront), Cognito
 ```
 
@@ -71,23 +94,27 @@ description: "비정형 데이터를 위한 AI 기반 지능형 문서 처리(ID
 
 #### 1. 문서 업로드 및 분석 파이프라인
 
-사용자가 Presigned URL로 S3에 문서를 업로드하면, EventBridge가 ObjectCreated 이벤트를 감지합니다. Type Detection Lambda가 파일 유형을 판별하여 SQS로 라우팅하며, OCR(PaddleOCR/SageMaker)과 Transcribe는 자동 실행되고 BDA는 옵션으로 실행됩니다. 전처리 완료 후 Step Functions 워크플로우가 세그먼트 분할, AI 분석, 벡터 임베딩, 문서 요약을 순차적으로 수행합니다.
+사용자가 Presigned URL로 S3에 문서를 업로드하면, EventBridge가 ObjectCreated 이벤트를 감지합니다. Type Detection Lambda가 파일 유형을 판별하여 SQS로 라우팅하며, 전처리가 병렬로 실행됩니다(OCR, BDA, Transcribe). 전처리 완료 후 Step Functions 워크플로우가 세그먼트 분할, AI 분석, 벡터 임베딩, 지식 그래프 구축, 문서 요약을 수행합니다.
 
 ```
 S3 Upload (Presigned URL)
-  → EventBridge (ObjectCreated)
-    → Type Detection Lambda
-      ├─ OCR Queue     → PaddleOCR (SageMaker)    ── 자동 실행
-      ├─ BDA Queue     → Bedrock Data Automation   ── 옵션
-      └─ Transcribe Queue → AWS Transcribe          ── 자동 실행
+  -> EventBridge (ObjectCreated)
+    -> Type Detection Lambda
+      +- OCR Queue     -> PaddleOCR (Lambda/SageMaker)  -- 옵션
+      +- BDA Queue     -> Bedrock Data Automation        -- 옵션
+      +- Transcribe Queue -> AWS Transcribe              -- 옵션
+      +- WebCrawler Queue -> Bedrock Agent Core          -- 자동 (.webreq)
+      '- Workflow Queue -> Step Functions
 
-  → Step Functions Workflow
-      Segment Prep ─→ Wait for Preprocess ─→ Build Segments
-        ─→ Distributed Map (max 30)
-            ├─ Segment Analyzer (Claude Sonnet 4.6 Vision)
-            └─ Analysis Finalizer → SQS → LanceDB Writer
-        ─→ Document Summarizer (Claude Haiku 4.5)
-            → Vector Embedding (Nova 1024d) → LanceDB
+  -> Step Functions Workflow
+      Segment Prep -> Wait for Preprocess -> Format Parser -> Build Segments
+        -> Distributed Map (max 30)
+            +- Segment Analyzer (Claude Sonnet 4.6 Vision / Pegasus 1.2 / Nova Lite 2)
+            '- Analysis Finalizer -> SQS -> LanceDB Writer
+        -> Document Summarizer (Claude Sonnet 4.6)
+            -> Vector Embedding (Nova 1024d) -> LanceDB
+        -> Graph Builder (엔티티 추출)
+            -> Neptune DB (엔티티, 관계)
 ```
 
 #### 2. 실시간 알림 (WebSocket)
@@ -96,54 +123,58 @@ S3 Upload (Presigned URL)
 
 ```
 DynamoDB Streams (상태 변경 감지)
-  → WorkflowStream Lambda (VPC)
-    → Redis (연결 조회)
-      → WebSocket API → Frontend
-        ├─ 단계별 진행률
-        ├─ 아티팩트 변경
-        └─ 세션 상태 업데이트
+  -> WorkflowStream Lambda (VPC)
+    -> Redis (연결 조회)
+      -> WebSocket API -> Frontend
+        +- 단계별 진행률
+        +- 아티팩트 변경
+        '- 세션 상태 업데이트
 ```
 
 #### 3. AI 채팅 (Agent Core)
 
-사용자 질문이 API Gateway를 통해 Bedrock Agent Core로 전달됩니다. IDP Agent와 Research Agent가 MCP Gateway를 통해 도구를 호출하며, Search Tool로 하이브리드 검색을 수행하고 Artifact Tool로 결과물을 관리합니다. 세션 히스토리는 S3에 저장되어 대화 맥락이 유지됩니다.
+사용자 질문이 API Gateway를 통해 Bedrock Agent Core로 전달됩니다. IDP Agent가 MCP Gateway를 통해 도구를 호출하며, Search Tool로 하이브리드 검색, Graph Tool로 그래프 탐색을 수행하고 Artifact Tool로 결과물을 관리합니다. 세션 히스토리는 S3에 저장되어 대화 맥락이 유지됩니다.
 
 ```
 User Query
-  → API Gateway REST (SigV4)
-    → Bedrock Agent Core Runtime
-      ├─ IDP Agent (Claude Sonnet 4.6)
-      └─ Research Agent
-          → MCP Gateway
-            ├─ Search Tool Lambda → Backend API → Hybrid Search (Vector + FTS + Rerank)
-            └─ Artifact Tool Lambda → S3
-          → S3 (Session Load/Save)
+  -> API Gateway REST (SigV4)
+    -> Bedrock Agent Core Runtime
+      '- IDP Agent (Claude Sonnet 4.6)
+          -> MCP Gateway
+            +- Search Tool Lambda -> LanceDB Service -> Hybrid Search (Vector + FTS)
+            +- Graph Tool Lambda  -> Graph Service   -> Neptune (그래프 탐색)
+            +- Artifact Tool Lambda -> S3
+            '- Code Interpreter -> Python 실행
+          -> S3 (Session Load/Save)
 ```
 
 #### 4. 백엔드 API (HTTP)
 
-API Gateway HTTP(IAM 인증)에서 VPC Link를 통해 Private ALB를 거쳐 ECS Fargate의 FastAPI로 연결됩니다. 프로젝트/문서 관리, 워크플로우 조회, 하이브리드 검색, 채팅 세션, 커스텀 에이전트, 아티팩트 관리 등 모든 데이터 접근을 담당합니다.
+API Gateway HTTP(IAM 인증)에서 VPC Link를 통해 Private ALB를 거쳐 ECS Fargate의 FastAPI로 연결됩니다. 프로젝트/문서 관리, 워크플로우 조회, 하이브리드 검색, 채팅 세션, 커스텀 에이전트, 지식 그래프, 아티팩트 관리 등 모든 데이터 접근을 담당합니다.
 
 ```
 API Gateway HTTP (IAM Auth)
-  → VPC Link → Private ALB → ECS Fargate (FastAPI)
-    ├─ DynamoDB     ── 프로젝트/문서 CRUD, 워크플로우 상태
-    ├─ LanceDB      ── 하이브리드 검색 (Vector + FTS)
-    ├─ Bedrock      ── Cohere Rerank v3.5
-    ├─ S3           ── Presigned URL, 세션 (DuckDB), 에이전트
-    ├─ Redis        ── 쿼리 캐시
-    ├─ Step Functions ── 재분석 트리거
-    └─ Lambda       ── QA Regenerator
+  -> VPC Link -> Private ALB -> ECS Fargate (FastAPI)
+    +- DynamoDB     -- 프로젝트/문서 CRUD, 워크플로우 상태
+    +- LanceDB      -- 하이브리드 검색 (Vector + FTS) via Lambda invoke
+    +- Neptune      -- 지식 그래프 조회
+    +- Bedrock      -- Cohere Rerank v3.5
+    +- S3           -- Presigned URL, 세션 (DuckDB), 에이전트, 아티팩트
+    +- Redis        -- 쿼리 캐시
+    +- Step Functions -- 재분석 트리거
+    '- Lambda       -- QA Regenerator
 ```
 
 ### 주요 설계 결정
 
 | 결정 | 이유 |
 |------|------|
-| Step Functions 페이로드 → DynamoDB 중간 저장소 | Step Functions 256KB 페이로드 제한 우회 |
+| Step Functions 페이로드 -> DynamoDB 중간 저장소 | Step Functions 256KB 페이로드 제한 우회 |
 | 세그먼트 인덱스만 워크플로우에 전달 | 3000+ 페이지 문서 지원 |
 | LanceDB + S3 Express One Zone | 벡터 검색 최적화 저지연 스토리지 |
-| SageMaker Auto-scaling 0→1 | 비용 최적화 (사용하지 않을 때 Scale-to-zero) |
+| Neptune DB Serverless | 엔티티 관계 지식 그래프, 미사용 시 제로 스케일링 |
+| PaddleOCR 듀얼 백엔드 (Lambda + SageMaker) | CPU 모델은 Lambda (콜드 스타트 없음), GPU 모델(VL)은 SageMaker |
+| SageMaker Auto-scaling 0->1 | 비용 최적화 (사용하지 않을 때 Scale-to-zero) |
 | ElastiCache Redis | WebSocket 연결 상태 관리 (DynamoDB TTL 대비 고속) |
 | DuckDB로 S3 직접 쿼리 | 세션/에이전트 데이터 복사 없이 조회 |
 | VPC Link + Private ALB | 백엔드를 인터넷에 노출하지 않음 |
@@ -241,46 +272,67 @@ pnpm nx lint @idp-v2/infra --configuration=fix  # 자동 수정
 | 모델 | 용도 | 설명 |
 |------|------|------|
 | Claude Sonnet 4.6 | 세그먼트 분석 / 에이전트 | Vision ReAct Agent, 심층 문서 분석 |
-| Claude Haiku 4.5 | 문서 요약 | 경량 모델, 빠른 요약 생성 |
-| Nova Embed Text v1 | 벡터 임베딩 | 1024차원 텍스트 임베딩 |
+| Claude Sonnet 4.6 | 문서 요약 | 전체 문서 요약 생성 |
+| Claude Haiku 4.5 | 검색 요약 | 경량 모델, 검색 결과 정리 |
+| TwelveLabs Pegasus 1.2 | 비디오 시각 분석 | 직접 비디오를 분석하여 장면 이해 |
+| Amazon Nova Lite 2 | 비디오 스크립트 추출 | 대용량 컨텍스트 STT 기반 영상 스크립트 추출 |
+| Nova Embed Text v2 | 벡터 임베딩 | 1024차원 멀티모달 임베딩 |
 | Cohere Rerank v3.5 | 검색 재순위 | 하이브리드 검색 결과 최적화 |
 
 ### 전처리 모델
 
 | 모델 | 용도 | 설명 |
 |------|------|------|
-| PaddleOCR | OCR | SageMaker g5.xlarge, Auto-scaling 0→1 |
+| PP-OCRv5 / PP-StructureV3 | OCR (CPU) | Lambda 컨테이너, 범용 텍스트 추출 |
+| PaddleOCR-VL | OCR (GPU) | SageMaker g5.xlarge, Vision-Language 모델, Auto-scaling 0->1 |
 | Bedrock Data Automation | 문서 분석 | 비동기 문서 구조 분석 (옵션) |
 | AWS Transcribe | 음성 변환 | 오디오/비디오 텍스트 변환 |
+
+### MCP 도구
+
+| 도구 | 설명 |
+|------|------|
+| search_documents | 프로젝트 문서 하이브리드 검색 (Vector + FTS + Rerank) |
+| graph_search | 지식 그래프 탐색으로 관련 페이지 발견 |
+| link_documents / unlink_documents | 문서 간 수동 관계 관리 |
+| overview | 프로젝트 문서 개요 및 요약 |
+| save/load/edit_markdown | 마크다운 아티팩트 생성 및 편집 |
+| create_pdf, extract_pdf_text/tables | PDF 생성 및 텍스트/테이블 추출 |
+| create_docx, extract_docx_text/tables | Word 문서 생성 및 텍스트/테이블 추출 |
+| generate_image | AI 이미지 생성 |
+| code_interpreter | Python 코드 실행 샌드박스 |
 
 ## 프로젝트 구조
 
 ```
 sample-aws-idp-pipeline/
-├── packages/
-│   ├── agents/                    # AI 에이전트
-│   │   ├── idp-agent/             # IDP Agent (Strands SDK)
-│   │   └── research-agent/        # Research Agent
-│   ├── backend/app/               # FastAPI 백엔드
-│   │   ├── main.py
-│   │   ├── config.py
-│   │   ├── ddb/                   # DynamoDB 모듈
-│   │   ├── routers/               # API 라우터
-│   │   └── services/              # 비즈니스 로직
-│   ├── common/constructs/src/     # 재사용 CDK 구성 요소
-│   ├── frontend/src/              # React SPA
-│   │   ├── routes/                # 페이지 라우트
-│   │   └── components/            # React 컴포넌트
-│   └── infra/src/
-│       ├── stacks/                # 12개 CDK 스택
-│       ├── functions/             # Python Lambda 함수
-│       │   ├── step-functions/    # 워크플로우 함수
-│       │   ├── shared/            # 공유 모듈
-│       │   ├── websocket/         # WebSocket 핸들러
-│       │   └── lancedb-writer/    # LanceDB 작성기
-│       └── lambda-layers/         # Lambda 레이어
-├── docs/                          # 문서
-└── README.md
++-- packages/
+|   +-- agents/                    # AI 에이전트
+|   |   '-- idp-agent/             # IDP Agent (Strands SDK)
+|   +-- backend/app/               # FastAPI 백엔드
+|   |   +-- main.py
+|   |   +-- config.py
+|   |   +-- ddb/                   # DynamoDB 모듈
+|   |   +-- routers/               # API 라우터
+|   |   '-- services/              # 비즈니스 로직
+|   +-- common/constructs/src/     # 재사용 CDK 구성 요소
+|   +-- frontend/src/              # React SPA
+|   |   +-- routes/                # 페이지 라우트
+|   |   '-- components/            # React 컴포넌트
+|   +-- lambda/                    # MCP 도구 Lambda
+|   |   +-- search-mcp/            # 검색 도구 (하이브리드 검색 + 요약)
+|   |   '-- graph-mcp/             # 그래프 도구 (Neptune 탐색)
+|   '-- infra/src/
+|       +-- stacks/                # 14개 CDK 스택
+|       +-- functions/             # Python Lambda 함수
+|       |   +-- step-functions/    # 워크플로우 함수
+|       |   +-- container/         # 컨테이너 Lambda (LanceDB + Graph 서비스)
+|       |   +-- shared/            # 공유 모듈
+|       |   +-- websocket/         # WebSocket 핸들러
+|       |   '-- lancedb-writer/    # LanceDB 작성기
+|       '-- lambda-layers/         # Lambda 레이어
++-- docs/                          # 문서 (Astro)
+'-- README.md
 ```
 
 ## 기술 스택
@@ -294,6 +346,7 @@ sample-aws-idp-pipeline/
 ### 백엔드 (Python)
 - FastAPI (ECS Fargate, ARM64)
 - LanceDB + S3 Express One Zone (벡터 스토리지)
+- Neptune DB Serverless (지식 그래프)
 - DynamoDB (One Table Design)
 - Kiwi (한국어 형태소 분석기)
 - DuckDB (S3 직접 쿼리)
@@ -310,7 +363,9 @@ sample-aws-idp-pipeline/
 - Bedrock Claude Sonnet 4.6 / Haiku 4.5
 - Bedrock Nova Embed (1024차원)
 - Bedrock Cohere Rerank v3.5
-- PaddleOCR (SageMaker)
+- TwelveLabs Pegasus 1.2 (비디오 시각 분석)
+- Amazon Nova Lite 2 (비디오 스크립트 추출)
+- PaddleOCR (Lambda CPU + SageMaker GPU)
 - AWS Transcribe
 
 ---

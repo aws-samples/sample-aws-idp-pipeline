@@ -169,7 +169,7 @@ Phase: BUILD
 ### コマンドラインオプション
 
 ```bash
-bash deploy.sh [OPTIONS]
+./deploy.sh [OPTIONS]
 
 Options:
   --admin-email EMAIL   管理者メール（対話的入力をスキップ）
@@ -183,13 +183,13 @@ Options:
 ### デプロイURL再確認
 
 ```bash
-bash deploy.sh --info
+./deploy.sh --info
 ```
 
 ### 特定バージョンのデプロイ
 
 ```bash
-bash deploy.sh --admin-email user@example.com --version v1.0.0
+./deploy.sh --admin-email user@example.com --version v1.0.0
 ```
 
 ---

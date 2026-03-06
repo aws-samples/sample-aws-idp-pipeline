@@ -55,10 +55,18 @@ export default defineConfig({
 					link: '/analysis',
 				},
 				{
-					label: 'PaddleOCR on SageMaker',
+					label: 'Preprocessing',
 					translations: {
-						ko: 'PaddleOCR (SageMaker)',
-						ja: 'PaddleOCR (SageMaker)',
+						ko: '전처리 파이프라인',
+						ja: '前処理パイプライン',
+					},
+					link: '/preprocessing',
+				},
+				{
+					label: 'OCR',
+					translations: {
+						ko: 'OCR',
+						ja: 'OCR',
 					},
 					link: '/ocr',
 				},
