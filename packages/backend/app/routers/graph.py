@@ -92,6 +92,56 @@ def get_document_graph(
     )
 
 
+class TagCloudItem(BaseModel):
+    id: str
+    name: str
+    type: str
+    connections: int
+
+
+class TagCloudResponse(BaseModel):
+    tags: list[TagCloudItem]
+
+
+@router.get("/documents/{document_id}/tagcloud")
+def get_document_tagcloud(
+    project_id: str,
+    document_id: str,
+) -> TagCloudResponse:
+    """Get lightweight entity tag cloud data for a document."""
+    result = invoke_graph_service(
+        "get_document_tagcloud",
+        {
+            "project_id": project_id,
+            "document_id": document_id,
+        },
+    )
+    return TagCloudResponse(
+        tags=[TagCloudItem(**t) for t in result.get("tags", [])],
+    )
+
+
+@router.get("/documents/{document_id}/expand/{entity_type}")
+def expand_entity_cluster(
+    project_id: str,
+    document_id: str,
+    entity_type: str,
+) -> GraphResponse:
+    """Expand a clustered entity type into individual entities."""
+    result = invoke_graph_service(
+        "expand_entity_cluster",
+        {
+            "project_id": project_id,
+            "document_id": document_id,
+            "entity_type": entity_type,
+        },
+    )
+    return GraphResponse(
+        nodes=[GraphNode(**n) for n in result.get("nodes", [])],
+        edges=[GraphEdge(**e) for e in result.get("edges", [])],
+    )
+
+
 class EntityDetail(BaseModel):
     id: str
     name: str

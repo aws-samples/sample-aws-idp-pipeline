@@ -11,6 +11,7 @@ system: |
   - CRITICAL: The "name", "context", and "relationship" fields MUST be written in the specified language. Entity type stays uppercase English.
   - Each mention must include qa_index and context. Context should explain WHY this entity is mentioned in that specific QA pair (not a verbatim quote).
   - CRITICAL: Every QA pair MUST have at least one entity mentioned_in it. If an entity appears in multiple QA pairs, list ALL of them in mentioned_in - do NOT skip duplicates. No QA pair should be left without any entity connection.
+  - NEVER extract pipeline/processing artifacts as entities. Ignore terms like: PaddleOCR, OCR, BDA, Format Parser, Segment, QA pair, Page Description, Document Indexer, and any other internal processing tool or step names. Only extract entities that represent actual document content.
 
   Output valid JSON only. No markdown, no explanation.
 

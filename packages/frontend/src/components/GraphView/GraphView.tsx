@@ -1,13 +1,17 @@
 import { useMemo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import ForceGraphView from './ForceGraphView';
-import type { LinkDirection } from './ForceGraphView';
+import ForceGraphView2D from './ForceGraphView2D';
+import ForceGraphView3D from './ForceGraphView3D';
+import type { LinkDirection } from './ForceGraphView3D';
 import type { GraphData } from './useGraphData';
 import { getEntityColor, GRAPH_BG } from './constants';
+
+type ViewMode = '2d' | '3d';
 
 interface GraphViewProps {
   data: GraphData;
   onNodeClick?: (nodeId: string, nodeType: string) => void;
+  onClusterClick?: (entityType: string) => void;
   /** When provided, entity type filter is controlled externally (no overlay). */
   hiddenTypes?: Set<string>;
   hiddenLinkTypes?: Set<string>;
@@ -23,6 +27,8 @@ function collectEntityTypes(data: GraphData): string[] {
   for (const node of data.nodes) {
     if (node.type === 'entity') {
       types.add((node.properties?.entity_type as string) ?? 'CONCEPT');
+    } else if (node.type === 'cluster') {
+      types.add((node.properties?.entity_type as string) ?? 'CONCEPT');
     }
   }
   return Array.from(types).sort();
@@ -31,6 +37,7 @@ function collectEntityTypes(data: GraphData): string[] {
 export default function GraphView({
   data,
   onNodeClick,
+  onClusterClick,
   hiddenTypes: controlledHiddenTypes,
   hiddenLinkTypes,
   linkDirection,
@@ -43,6 +50,7 @@ export default function GraphView({
   const [internalHiddenTypes, setInternalHiddenTypes] = useState<Set<string>>(
     new Set(),
   );
+  const [viewMode, setViewMode] = useState<ViewMode>('3d');
 
   const isControlled = controlledHiddenTypes !== undefined;
   const hiddenTypes = isControlled
@@ -74,8 +82,34 @@ export default function GraphView({
     );
   }
 
+  const ForceGraphView =
+    viewMode === '3d' ? ForceGraphView3D : ForceGraphView2D;
+
   return (
     <div className="w-full h-full relative" style={{ background: GRAPH_BG }}>
+      {/* View mode toggle */}
+      <div className="absolute top-2 right-2 z-10 flex gap-0.5 bg-slate-800/80 backdrop-blur-sm rounded-lg shadow-md p-0.5">
+        <button
+          onClick={() => setViewMode('2d')}
+          className={`text-[10px] font-medium px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+            viewMode === '2d'
+              ? 'bg-slate-600 text-white'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          2D
+        </button>
+        <button
+          onClick={() => setViewMode('3d')}
+          className={`text-[10px] font-medium px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+            viewMode === '3d'
+              ? 'bg-slate-600 text-white'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          3D
+        </button>
+      </div>
       {/* Show overlay filter only when uncontrolled */}
       {!isControlled && entityTypes.length > 0 && (
         <div className="absolute top-2 left-2 z-10 bg-slate-800/80 backdrop-blur-sm rounded-lg shadow-md p-2 flex flex-wrap gap-1.5 max-w-[300px]">
@@ -110,6 +144,7 @@ export default function GraphView({
         focusPage={focusPage}
         showEdgeLabels={showEdgeLabels}
         onNodeClick={onNodeClick}
+        onClusterClick={onClusterClick}
       />
     </div>
   );

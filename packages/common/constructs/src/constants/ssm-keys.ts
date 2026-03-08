@@ -41,4 +41,5 @@ export const SSM_KEYS = {
   NEPTUNE_CLUSTER_RESOURCE_ID: '/idp-v2/neptune/cluster-resource-id',
   NEPTUNE_SECURITY_GROUP_ID: '/idp-v2/neptune/security-group-id',
   GRAPH_SERVICE_FUNCTION_ARN: '/idp-v2/graph/function-arn',
+  GRAPH_DELETE_QUEUE_URL: '/idp-v2/graph/delete-queue-url',
 } as const;

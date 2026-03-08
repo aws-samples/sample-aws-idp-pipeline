@@ -119,6 +119,10 @@ export class Backend extends Construct {
       this,
       SSM_KEYS.GRAPH_SERVICE_FUNCTION_ARN,
     );
+    const graphDeleteQueueUrl = StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.GRAPH_DELETE_QUEUE_URL,
+    );
 
     this.service = new ApplicationLoadBalancedFargateService(this, 'Service', {
       cluster,
@@ -143,6 +147,7 @@ export class Backend extends Construct {
           QA_REGENERATOR_FUNCTION_ARN: qaRegeneratorFunctionArn,
           LANCEDB_FUNCTION_NAME: lancedbFunctionArn,
           GRAPH_SERVICE_FUNCTION_NAME: graphServiceFunctionArn,
+          GRAPH_DELETE_QUEUE_URL: graphDeleteQueueUrl,
         },
       },
       runtimePlatform: {
@@ -209,6 +214,14 @@ export class Backend extends Construct {
           lancedbFunctionArn,
           graphServiceFunctionArn,
         ],
+      }),
+    );
+
+    // Grant SQS send for graph deletion queue
+    taskRole.addToPrincipalPolicy(
+      new PolicyStatement({
+        actions: ['sqs:SendMessage'],
+        resources: ['*'],
       }),
     );
 

@@ -99,7 +99,7 @@ class DeletedDocumentInfo(BaseModel):
     workflow_id: str | None = None
     lancedb_deleted: bool = False
     lancedb_error: str | None = None
-    graph_deleted: bool = False
+    graph_delete_queued: bool = False
     graph_error: str | None = None
     workflow_deleted: bool = False
 
@@ -329,32 +329,26 @@ def delete_document(project_id: str, document_id: str) -> DeleteDocumentResponse
         except Exception as e:
             deleted_info.lancedb_error = str(e)
 
-    # 1b. Delete from Neptune graph via GraphService Lambda
-    if workflow_id and config.graph_service_function_name:
+    # 1b. Queue graph deletion via SQS (async, handles large documents)
+    if workflow_id and config.graph_delete_queue_url:
         try:
             import json
 
             import boto3
 
-            lambda_client = boto3.client("lambda", region_name=config.aws_region)
-            resp = lambda_client.invoke(
-                FunctionName=config.graph_service_function_name,
-                InvocationType="RequestResponse",
-                Payload=json.dumps(
+            sqs_client = boto3.client("sqs", region_name=config.aws_region)
+            sqs_client.send_message(
+                QueueUrl=config.graph_delete_queue_url,
+                MessageBody=json.dumps(
                     {
-                        "action": "delete_by_workflow",
-                        "params": {
-                            "project_id": project_id,
-                            "workflow_id": workflow_id,
-                        },
+                        "project_id": project_id,
+                        "workflow_id": workflow_id,
+                        "phase": "analyses",
+                        "batch_size": 500,
                     }
                 ),
             )
-            payload = json.loads(resp["Payload"].read())
-            if resp.get("FunctionError") or payload.get("statusCode") != 200:
-                deleted_info.graph_error = payload.get("error", "Unknown error")
-            else:
-                deleted_info.graph_deleted = True
+            deleted_info.graph_delete_queued = True
         except Exception as e:
             deleted_info.graph_error = str(e)
 

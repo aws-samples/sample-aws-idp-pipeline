@@ -9,14 +9,13 @@ from strands.models import BedrockModel
 
 from shared.ddb_client import (
     record_step_start,
-    record_step_complete,
     record_step_error,
     record_step_skipped,
     get_project_language,
     get_document,
     StepName,
 )
-from shared.s3_analysis import get_all_segment_analyses, get_segment_analysis
+from shared.s3_analysis import get_all_segment_analyses, get_segment_analysis, get_s3_client, parse_s3_uri
 
 import boto3
 
@@ -50,23 +49,33 @@ def get_prompts():
     return PROMPTS
 
 
-def invoke_graph_service(action: str, params: dict) -> dict:
-    """Invoke the GraphService Lambda."""
+def invoke_graph_service(action: str, params: dict, max_retries: int = 3) -> dict:
+    """Invoke the GraphService Lambda with retry on 5xx errors."""
+    import time
+
     client = get_lambda_client()
-    response = client.invoke(
-        FunctionName=GRAPH_SERVICE_FUNCTION_NAME,
-        InvocationType='RequestResponse',
-        Payload=json.dumps({'action': action, 'params': params}),
-    )
-    payload = json.loads(response['Payload'].read())
-    if response.get('FunctionError') or payload.get('statusCode') != 200:
-        raise RuntimeError(f'GraphService error: {payload.get("error", "Unknown")}')
-    return payload
+    for attempt in range(max_retries + 1):
+        response = client.invoke(
+            FunctionName=GRAPH_SERVICE_FUNCTION_NAME,
+            InvocationType='RequestResponse',
+            Payload=json.dumps({'action': action, 'params': params}),
+        )
+        payload = json.loads(response['Payload'].read())
+        if response.get('FunctionError') or payload.get('statusCode') != 200:
+            error_msg = payload.get('error', 'Unknown')
+            if attempt < max_retries and ('500' in str(error_msg) or '503' in str(error_msg)):
+                wait = 2 ** attempt
+                print(f'{action} retry {attempt + 1}/{max_retries} after {wait}s: {error_msg}')
+                time.sleep(wait)
+                continue
+            raise RuntimeError(f'GraphService error: {error_msg}')
+        return payload
+    raise RuntimeError(f'GraphService error: max retries exceeded for {action}')
 
 
 def send_batches_parallel(action: str, key: str, items: list, extra_params: dict,
-                          batch_size: int = 50, max_workers: int = 10):
-    """Send items to graph service in parallel batches."""
+                          batch_size: int = 50, max_workers: int = 2):
+    """Send items to graph service in parallel batches with retry."""
     batches = []
     for i in range(0, len(items), batch_size):
         batches.append(items[i:i + batch_size])
@@ -95,7 +104,7 @@ def send_batches_parallel(action: str, key: str, items: list, extra_params: dict
                 print(f'{action} batch error: {e}')
 
     if errors:
-        print(f'{action}: {len(errors)} batch errors out of {len(batches)} batches')
+        raise RuntimeError(f'{action}: {len(errors)} failed out of {len(batches)} batches')
 
     return completed
 
@@ -289,19 +298,25 @@ def handler(event, _context):
         doc_record = get_document(project_id, document_id)
         display_name = (doc_record.get('name') if doc_record else None) or (file_uri.split('/')[-1] if file_uri else '')
 
-        # 1. Create Document + Segment nodes + structural relationships
-        print(f'Creating segment links for {segment_count} segments')
-        invoke_graph_service(
-            'add_segment_links',
-            {
-                'project_id': project_id,
-                'workflow_id': workflow_id,
-                'document_id': document_id,
-                'file_name': display_name,
-                'file_type': file_type,
-                'segment_count': segment_count,
-            },
-        )
+        # 1. Create Document + Segment nodes + structural relationships (chunked)
+        chunk_size = 500
+        print(f'Creating segment links for {segment_count} segments ({chunk_size}/chunk)')
+        for start in range(0, segment_count, chunk_size):
+            end = min(start + chunk_size, segment_count)
+            invoke_graph_service(
+                'add_segment_links',
+                {
+                    'project_id': project_id,
+                    'workflow_id': workflow_id,
+                    'document_id': document_id,
+                    'file_name': display_name,
+                    'file_type': file_type,
+                    'segment_count': segment_count,
+                    'start_index': start,
+                    'end_index': end,
+                },
+            )
+            print(f'Segment links: {end}/{segment_count}')
         print('Segment links created')
 
         # 2. Load all segment analysis results from S3
@@ -309,50 +324,69 @@ def handler(event, _context):
         segments_sorted = sorted(segments, key=lambda x: x.get('segment_index', 0))
         print(f'Loaded {len(segments_sorted)} segments from S3')
 
-        # 3. Create Analysis nodes for each QA pair
-        analyses = create_analysis_nodes(
-            segments_sorted, workflow_id, project_id, document_id
-        )
-        print(f'Analysis nodes: {len(analyses)}')
+        # 3. Build analyses list
+        analyses = []
+        for seg in segments_sorted:
+            segment_index = seg.get('segment_index', 0)
+            for qa_index, analysis in enumerate(seg.get('ai_analysis', [])):
+                analyses.append({
+                    'segment_index': segment_index,
+                    'qa_index': qa_index,
+                    'question': analysis.get('analysis_query', ''),
+                })
+        print(f'Analyses: {len(analyses)}')
 
-        # 4. Collect pre-extracted entities from S3 segments
-        #    (entity extraction now runs in AnalysisFinalizer, parallelized per segment)
+        # 4. Collect and deduplicate entities
         all_entities, all_relationships = collect_entities_from_segments(
             segments_sorted, workflow_id
         )
-        print(f'Collected {len(all_entities)} entities, {len(all_relationships)} relationships from segments')
-
-        # 5. Entity resolution (deduplicate)
         unique_entities = deduplicate_entities(all_entities)
         print(
-            f'Entity resolution: {len(all_entities)} -> {len(unique_entities)} unique entities'
+            f'Entities: {len(all_entities)} -> {len(unique_entities)} unique, '
+            f'Relationships: {len(all_relationships)}'
         )
 
-        # 6. Add entities to graph (parallel batches)
+        # 5. Save work items to S3 for Map processing
+        bucket, _ = parse_s3_uri(file_uri)
+        base_key = f'_graph_work/{workflow_id}'
+        s3 = get_s3_client()
+
+        graph_batches = []
+
+        if analyses:
+            key = f'{base_key}/analyses.json'
+            s3.put_object(Bucket=bucket, Key=key, Body=json.dumps(analyses), ContentType='application/json')
+            graph_batches.append({
+                'action': 'add_analyses',
+                'item_key': 'analyses',
+                's3_key': key,
+                'batch_size': 200,
+                'extra_params': {'project_id': project_id, 'workflow_id': workflow_id, 'document_id': document_id},
+            })
+
         if unique_entities:
-            send_batches_parallel(
-                'add_entities', 'entities', unique_entities,
-                {'project_id': project_id},
-            )
+            key = f'{base_key}/entities.json'
+            s3.put_object(Bucket=bucket, Key=key, Body=json.dumps(unique_entities), ContentType='application/json')
+            graph_batches.append({
+                'action': 'add_entities',
+                'item_key': 'entities',
+                's3_key': key,
+                'batch_size': 100,
+                'extra_params': {'project_id': project_id},
+            })
 
-        # 7. Add relationships (parallel batches)
         if all_relationships:
-            send_batches_parallel(
-                'add_relationships', 'relationships', all_relationships,
-                {'project_id': project_id},
-            )
+            key = f'{base_key}/relationships.json'
+            s3.put_object(Bucket=bucket, Key=key, Body=json.dumps(all_relationships), ContentType='application/json')
+            graph_batches.append({
+                'action': 'add_relationships',
+                'item_key': 'relationships',
+                's3_key': key,
+                'batch_size': 200,
+                'extra_params': {'project_id': project_id},
+            })
 
-        record_step_complete(
-            workflow_id,
-            StepName.GRAPH_BUILDER,
-            entity_count=len(unique_entities),
-            relationship_count=len(all_relationships),
-        )
-
-        print(
-            f'Graph builder completed: {len(unique_entities)} entities, '
-            f'{len(all_relationships)} relationships'
-        )
+        print(f'Saved {len(graph_batches)} work files to S3')
 
         return {
             'workflow_id': workflow_id,
@@ -361,6 +395,10 @@ def handler(event, _context):
             'file_uri': file_uri,
             'file_type': file_type,
             'segment_count': segment_count,
+            's3_bucket': bucket,
+            'graph_batches': graph_batches,
+            'entity_count': len(unique_entities),
+            'relationship_count': len(all_relationships),
         }
 
     except Exception as e:

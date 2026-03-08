@@ -109,6 +109,16 @@ export class WorkflowStack extends Stack {
       visibilityTimeout: Duration.minutes(5),
     });
 
+    // SQS Queue for graph deletion (async, batched)
+    const graphDeleteDlq = new sqs.Queue(this, 'GraphDeleteDLQ', {
+      queueName: 'idp-v2-graph-delete-dlq',
+    });
+    const graphDeleteQueue = new sqs.Queue(this, 'GraphDeleteQueue', {
+      queueName: 'idp-v2-graph-delete-queue',
+      visibilityTimeout: Duration.minutes(6),
+      deadLetterQueue: { queue: graphDeleteDlq, maxReceiveCount: 3 },
+    });
+
     // ========================================
     // Lambda Layers
     // ========================================
@@ -263,6 +273,44 @@ export class WorkflowStack extends Stack {
         resources: ['*'],
       }),
     );
+
+    // Graph Delete Consumer (SQS consumer for async graph deletion)
+    const graphDeleteConsumer = new lambda.Function(
+      this,
+      'GraphDeleteConsumer',
+      {
+        functionName: 'idp-v2-graph-delete-consumer',
+        runtime: lambda.Runtime.PYTHON_3_14,
+        handler: 'index.handler',
+        code: lambda.Code.fromAsset(
+          path.join(__dirname, '../functions/graph-delete-consumer'),
+        ),
+        timeout: Duration.minutes(5),
+        memorySize: 256,
+        architecture: lambda.Architecture.ARM_64,
+        vpc,
+        vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+        securityGroups: [graphServiceSg],
+        reservedConcurrentExecutions: 1,
+        environment: {
+          NEPTUNE_ENDPOINT: neptuneEndpoint,
+          NEPTUNE_PORT: neptunePort,
+          GRAPH_DELETE_QUEUE_URL: graphDeleteQueue.queueUrl,
+        },
+      },
+    );
+    graphDeleteConsumer.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['neptune-db:*'],
+        resources: ['*'],
+      }),
+    );
+    graphDeleteConsumer.addEventSourceMapping('GraphDeleteQueueTrigger', {
+      eventSourceArn: graphDeleteQueue.queueArn,
+      batchSize: 1,
+    });
+    graphDeleteQueue.grantConsumeMessages(graphDeleteConsumer);
+    graphDeleteQueue.grantSendMessages(graphDeleteConsumer);
 
     // ========================================
     // Lambda Functions
@@ -438,7 +486,7 @@ export class WorkflowStack extends Stack {
       ...commonLambdaProps,
       functionName: 'idp-v2-graph-builder',
       handler: 'index.handler',
-      timeout: Duration.minutes(10),
+      timeout: Duration.minutes(15),
       memorySize: 512,
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/graph-builder'),
@@ -453,6 +501,44 @@ export class WorkflowStack extends Stack {
 
     // Grant GraphService invoke to GraphBuilder
     graphService.grantInvoke(graphBuilder);
+
+    // Graph Batch Sender (sends graph data to Neptune via graph-service, called by Map)
+    const graphBatchSender = new lambda.Function(this, 'GraphBatchSender', {
+      ...commonLambdaProps,
+      functionName: 'idp-v2-graph-batch-sender',
+      handler: 'index.handler',
+      timeout: Duration.minutes(15),
+      memorySize: 512,
+      code: lambda.Code.fromAsset(
+        path.join(
+          __dirname,
+          '../functions/step-functions/graph-batch-sender',
+        ),
+      ),
+      environment: {
+        ...commonLambdaProps.environment,
+        GRAPH_SERVICE_FUNCTION_NAME: graphService.functionName,
+      },
+    });
+    graphService.grantInvoke(graphBatchSender);
+
+    // Graph Builder Finalizer (records step complete after Map)
+    const graphBuilderFinalizer = new lambda.Function(
+      this,
+      'GraphBuilderFinalizer',
+      {
+        ...commonLambdaProps,
+        functionName: 'idp-v2-graph-builder-finalizer',
+        handler: 'index.handler',
+        code: lambda.Code.fromAsset(
+          path.join(
+            __dirname,
+            '../functions/step-functions/graph-builder-finalizer',
+          ),
+        ),
+        layers: [sharedLayer],
+      },
+    );
 
     // LanceDB Writer Lambda (consumes from SQS, concurrency=1)
     const lancedbWriter = new lambda.Function(this, 'LanceDBWriter', {
@@ -633,6 +719,7 @@ export class WorkflowStack extends Stack {
       },
     );
 
+    // PrepareGraph: load segments, deduplicate, save work to S3
     const graphBuilderTask = new tasks.LambdaInvoke(
       this,
       'BuildKnowledgeGraph',
@@ -641,6 +728,51 @@ export class WorkflowStack extends Stack {
         outputPath: '$.Payload',
       },
     );
+
+    // SendGraphBatch: send one batch file to graph-service
+    const graphBatchSenderTask = new tasks.LambdaInvoke(
+      this,
+      'SendGraphBatch',
+      {
+        lambdaFunction: graphBatchSender,
+        outputPath: '$.Payload',
+      },
+    );
+
+    // Map over graph batches (sequential to avoid Neptune overload)
+    const sendGraphBatchesMap = new sfn.Map(
+      this,
+      'SendGraphBatches',
+      {
+        maxConcurrency: 1,
+        itemsPath: '$.graph_batches',
+        resultPath: sfn.JsonPath.DISCARD,
+        itemSelector: {
+          'action.$': '$$.Map.Item.Value.action',
+          'item_key.$': '$$.Map.Item.Value.item_key',
+          's3_key.$': '$$.Map.Item.Value.s3_key',
+          'batch_size.$': '$$.Map.Item.Value.batch_size',
+          'extra_params.$': '$$.Map.Item.Value.extra_params',
+          's3_bucket.$': '$.s3_bucket',
+        },
+      },
+    );
+    sendGraphBatchesMap.itemProcessor(graphBatchSenderTask);
+
+    // FinalizeGraph: record step complete
+    const graphBuilderFinalizerTask = new tasks.LambdaInvoke(
+      this,
+      'FinalizeGraph',
+      {
+        lambdaFunction: graphBuilderFinalizer,
+        outputPath: '$.Payload',
+      },
+    );
+
+    // Chain: PrepareGraph → SendGraphBatches(Map) → FinalizeGraph
+    const graphBuilderChain = graphBuilderTask
+      .next(sendGraphBatchesMap)
+      .next(graphBuilderFinalizerTask);
 
     const errorHandlerTask = new tasks.LambdaInvoke(
       this,
@@ -668,6 +800,8 @@ export class WorkflowStack extends Stack {
     segmentBuilderTask.addCatch(errorHandlerTask, catchConfig);
     reanalysisPrepTask.addCatch(errorHandlerTask, catchConfig);
     graphBuilderTask.addCatch(errorHandlerTask, catchConfig);
+    sendGraphBatchesMap.addCatch(errorHandlerTask, catchConfig);
+    graphBuilderFinalizerTask.addCatch(errorHandlerTask, catchConfig);
     documentSummarizerTask.addCatch(errorHandlerTask, catchConfig);
 
     // ========================================
@@ -740,10 +874,10 @@ export class WorkflowStack extends Stack {
     waitForPreprocess.next(checkPreprocessStatusTask);
     checkPreprocessStatusTask.next(preprocessStatusChoice);
 
-    // Chain: SegmentBuilder → Map(Analyze) → GraphBuilder → Summarize
+    // Chain: SegmentBuilder → Map(Analyze) → GraphBuilder chain → Summarize
     segmentBuilderTask
       .next(parallelSegmentProcessing)
-      .next(graphBuilderTask)
+      .next(graphBuilderChain)
       .next(documentSummarizerTask);
 
     // ========================================
@@ -844,6 +978,8 @@ export class WorkflowStack extends Stack {
       analysisFinalizer,
       documentSummarizer,
       graphBuilder,
+      graphBatchSender,
+      graphBuilderFinalizer,
       workflowErrorHandler,
       triggerFunction,
       lancedbService,
@@ -938,6 +1074,11 @@ export class WorkflowStack extends Stack {
     new ssm.StringParameter(this, 'GraphServiceFunctionArn', {
       parameterName: SSM_KEYS.GRAPH_SERVICE_FUNCTION_ARN,
       stringValue: graphService.functionArn,
+    });
+
+    new ssm.StringParameter(this, 'GraphDeleteQueueUrl', {
+      parameterName: SSM_KEYS.GRAPH_DELETE_QUEUE_URL,
+      stringValue: graphDeleteQueue.queueUrl,
     });
   }
 }

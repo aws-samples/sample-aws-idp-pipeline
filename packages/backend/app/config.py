@@ -18,6 +18,7 @@ class Config(BaseSettings):
     paddleocr_endpoint_name: str = "paddleocr-endpoint"
     paddleocr_scale_in_alarm_name: str = "idp-v2-paddleocr-scale-in"
     graph_service_function_name: str = ""
+    graph_delete_queue_url: str = ""
 
 
 @lru_cache

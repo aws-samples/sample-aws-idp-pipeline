@@ -212,6 +212,9 @@ export default function WorkflowDetailModal({
   const { getPresignedDownloadUrl, fetchApi } = useAwsClient();
   const [viewMode, setViewMode] = useState<'document' | 'graph'>('document');
   const [graphData, setGraphData] = useState<GraphData | null>(null);
+  const [tagCloudData, setTagCloudData] = useState<
+    { id: string; name: string; type: string; connections: number }[] | null
+  >(null);
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphHiddenTypes, setGraphHiddenTypes] = useState<Set<string>>(
     new Set(),
@@ -275,11 +278,19 @@ export default function WorkflowDetailModal({
     if (viewMode !== 'graph' || graphData) return;
     let cancelled = false;
     setGraphLoading(true);
-    fetchApi<GraphData>(
+    const graphPromise = fetchApi<GraphData>(
       `projects/${projectId}/graph/documents/${workflow.document_id}`,
-    )
-      .then((data) => {
-        if (!cancelled) setGraphData(data);
+    );
+    const tagCloudPromise = fetchApi<{
+      tags: { id: string; name: string; type: string; connections: number }[];
+    }>(
+      `projects/${projectId}/graph/documents/${workflow.document_id}/tagcloud`,
+    ).catch(() => null);
+    Promise.all([graphPromise, tagCloudPromise])
+      .then(([gData, tcData]) => {
+        if (cancelled) return;
+        setGraphData(gData);
+        if (tcData?.tags) setTagCloudData(tcData.tags);
       })
       .catch(() => {
         if (!cancelled) setGraphData({ nodes: [], edges: [] });
@@ -297,12 +308,18 @@ export default function WorkflowDetailModal({
     if (!graphData) return [];
     const types = new Set<string>();
     for (const node of graphData.nodes) {
-      if (node.type === 'entity') {
+      if (node.type === 'entity' || node.type === 'cluster') {
         types.add((node.properties?.entity_type as string) ?? 'CONCEPT');
       }
     }
+    // Also include types from tagCloudData (for clustered mode)
+    if (tagCloudData) {
+      for (const t of tagCloudData) {
+        types.add(t.type);
+      }
+    }
     return Array.from(types).sort();
-  }, [graphData]);
+  }, [graphData, tagCloudData]);
 
   const graphLinkTypes = useMemo(() => {
     if (!graphData) return [];
@@ -1946,6 +1963,7 @@ export default function WorkflowDetailModal({
                 graphSubMode === 'tagcloud' ? (
                   <TagCloudView
                     data={graphData}
+                    tagCloudData={tagCloudData ?? undefined}
                     hiddenTypes={graphHiddenTypes}
                     minConnections={tagCloudMinConn}
                     maxTags={tagCloudMaxTags}
@@ -1973,6 +1991,34 @@ export default function WorkflowDetailModal({
                             ? 'incoming'
                             : 'both'
                     }
+                    onClusterClick={async (entityType) => {
+                      if (!graphData || !workflow.document_id) return;
+                      try {
+                        const result = await fetchApi<GraphData>(
+                          `projects/${projectId}/graph/documents/${workflow.document_id}/expand/${encodeURIComponent(entityType)}`,
+                        );
+                        const clusterId = `cluster_${entityType}`;
+                        const existingIds = new Set(
+                          graphData.nodes.map((n) => n.id),
+                        );
+                        const newNodes = graphData.nodes.filter(
+                          (n) => n.id !== clusterId,
+                        );
+                        for (const node of result.nodes) {
+                          if (!existingIds.has(node.id)) {
+                            newNodes.push(node);
+                          }
+                        }
+                        const newEdges = graphData.edges.filter(
+                          (e) =>
+                            e.source !== clusterId && e.target !== clusterId,
+                        );
+                        newEdges.push(...result.edges);
+                        setGraphData({ nodes: newNodes, edges: newEdges });
+                      } catch {
+                        // ignore expand errors
+                      }
+                    }}
                     onNodeClick={(nodeId, nodeType) => {
                       if (nodeType === 'segment' || nodeType === 'analysis') {
                         const node = graphData.nodes.find(

@@ -21,8 +21,16 @@ interface PlacedWord {
   weight: number;
 }
 
+export interface TagCloudData {
+  id: string;
+  name: string;
+  type: string;
+  connections: number;
+}
+
 interface TagCloudViewProps {
-  data: GraphData;
+  data?: GraphData;
+  tagCloudData?: TagCloudData[];
   hiddenTypes: Set<string>;
   onTagClick?: (label: string) => void;
   minConnections?: number;
@@ -50,6 +58,7 @@ let filterIdCounter = 0;
 
 export default function TagCloudView({
   data,
+  tagCloudData,
   hiddenTypes,
   onTagClick,
   minConnections = 1,
@@ -85,6 +94,36 @@ export default function TagCloudView({
   }, []);
 
   const tags = useMemo(() => {
+    // Use tagCloudData from dedicated API if available
+    if (tagCloudData && tagCloudData.length > 0) {
+      const items: TagItem[] = [];
+      for (const t of tagCloudData) {
+        if (hiddenTypes.has(t.type)) continue;
+        items.push({
+          text: t.name,
+          weight: t.connections + 1,
+          entityType: t.type,
+          color: getEntityColor(t.type),
+        });
+      }
+      const merged = new Map<string, TagItem>();
+      for (const item of items) {
+        const existing = merged.get(item.text);
+        if (existing) {
+          existing.weight += item.weight;
+        } else {
+          merged.set(item.text, { ...item });
+        }
+      }
+      return Array.from(merged.values())
+        .filter((t) => t.weight >= minConnections)
+        .sort((a, b) => b.weight - a.weight)
+        .slice(0, maxTags);
+    }
+
+    // Fallback: derive from full GraphData
+    if (!data) return [];
+
     const entityEdgeCount = new Map<string, number>();
     const entityInfo = new Map<string, { label: string; entityType: string }>();
 
@@ -137,7 +176,7 @@ export default function TagCloudView({
       .filter((t) => t.weight >= minConnections)
       .sort((a, b) => b.weight - a.weight)
       .slice(0, maxTags);
-  }, [data, hiddenTypes, minConnections, maxTags]);
+  }, [data, tagCloudData, hiddenTypes, minConnections, maxTags]);
 
   useEffect(() => {
     if (tags.length === 0 || dimensions.width === 0) {

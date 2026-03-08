@@ -45,6 +45,7 @@ export interface ForceGraphViewProps {
   focusPage?: number | null;
   showEdgeLabels?: boolean;
   onNodeClick?: (nodeId: string, nodeType: string) => void;
+  onClusterClick?: (entityType: string) => void;
 }
 
 const DEFAULT_LINK_COLOR = '#4b5563';
@@ -102,6 +103,7 @@ export default function ForceGraphView({
   focusPage,
   showEdgeLabels = true,
   onNodeClick,
+  onClusterClick,
 }: ForceGraphViewProps) {
   const { t } = useTranslation();
   const fgRef = useRef<ForceGraphMethods<ForceNode, ForceLink>>(undefined);
@@ -164,7 +166,7 @@ export default function ForceGraphView({
     // Step 1: determine which node IDs pass type + page range filter
     const typePassIds = new Set<string>();
     for (const node of data.nodes) {
-      if (node.type === 'entity') {
+      if (node.type === 'entity' || node.type === 'cluster') {
         const entityType =
           (node.properties?.entity_type as string) ?? 'CONCEPT';
         if (hiddenTypes.has(entityType)) continue;
@@ -302,6 +304,21 @@ export default function ForceGraphView({
           color: DOCUMENT_COLOR,
           radius: isMatched ? 13 : 10,
         });
+      } else if (node.type === 'cluster') {
+        const entityType =
+          (node.properties?.entity_type as string) ?? 'CONCEPT';
+        const color = getEntityColor(entityType);
+        const count = (node.properties?.count as number) ?? 0;
+        nodes.push({
+          id: node.id,
+          label: node.label,
+          nodeType: 'cluster',
+          entityType,
+          description: `${count} entities`,
+          matched: false,
+          color,
+          radius: Math.min(8 + Math.sqrt(count) * 1.5, 25),
+        });
       }
     }
 
@@ -401,11 +418,15 @@ export default function ForceGraphView({
 
   const handleNodeClick = useCallback(
     (node: ForceNode) => {
+      if (node.nodeType === 'cluster' && onClusterClick && node.entityType) {
+        onClusterClick(node.entityType);
+        return;
+      }
       if (onNodeClick && node.id) {
         onNodeClick(node.id as string, node.nodeType);
       }
     },
-    [onNodeClick],
+    [onNodeClick, onClusterClick],
   );
 
   const handleNodeHover = useCallback(
