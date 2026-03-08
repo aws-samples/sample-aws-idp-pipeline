@@ -970,10 +970,8 @@ def action_get_document_tagcloud(params: dict) -> dict:
     results = run_query(
         'MATCH (e:Entity)-[r:MENTIONED_IN]->(a:Analysis)-[:BELONGS_TO]->'
         '(s:Segment)-[:BELONGS_TO]->(d:Document {id: $did, project_id: $pid}) '
-        'WITH e, count(r) AS mentions '
-        'OPTIONAL MATCH (e)-[rel:RELATES_TO]-() '
         'RETURN e.id AS id, e.name AS name, e.type AS type, '
-        'mentions + count(rel) AS connections',
+        'count(r) AS connections',
         {'did': document_id, 'pid': project_id},
     )
 
