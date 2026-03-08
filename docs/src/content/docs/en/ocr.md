@@ -332,9 +332,3 @@ PaddleOCR supports **80+ languages**.
 |--------|-----------|
 | PDF | `.pdf` |
 | Images | `.png`, `.jpg`, `.jpeg`, `.tiff`, `.bmp`, `.webp` |
-
----
-
-## License
-
-This project is licensed under the [Amazon Software License](https://github.com/aws-samples/sample-aws-idp-pipeline/blob/main/LICENSE).

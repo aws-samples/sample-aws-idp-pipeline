@@ -280,9 +280,3 @@ CloudShell
       ├─ BUILD:      lint + test + bundle → CDK deploy (12 stacks)
       └─ POST_BUILD: Cognito admin user 作成
 ```
-
----
-
-## ライセンス
-
-このプロジェクトは[Amazon Software License](../../LICENSE)の下でライセンスされています。

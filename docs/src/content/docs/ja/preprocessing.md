@@ -416,9 +416,3 @@ s3://bucket/projects/{project_id}/documents/{document_id}/
 ```
 
 Step Functionsワークフローの`CheckPreprocessStatus` Lambdaが定期的にポーリングして、すべての必須前処理が完了したかを確認します。すべての必須前処理が`completed`または`skipped`ステータスになると、次のステージ（Format Parser → Segment Builder）に進みます。
-
----
-
-## ライセンス
-
-このプロジェクトは[Amazon Software License](../../LICENSE)の下でライセンスされています。

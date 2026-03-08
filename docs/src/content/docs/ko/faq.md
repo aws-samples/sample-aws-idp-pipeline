@@ -234,9 +234,3 @@ aws lambda invoke --function-name idp-v2-lancedb-service \
     --cli-binary-format raw-in-base64-out \
     /dev/stdout 2>/dev/null | jq .
 ```
-
----
-
-## 라이선스
-
-이 프로젝트는 [Amazon Software License](../../LICENSE)의 하에 라이선스됩니다.

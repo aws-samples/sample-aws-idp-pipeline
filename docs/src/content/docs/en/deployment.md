@@ -280,9 +280,3 @@ CloudShell
       ├─ BUILD:      lint + test + bundle → CDK deploy (12 stacks)
       └─ POST_BUILD: Cognito admin user creation
 ```
-
----
-
-## License
-
-This project is licensed under the [Amazon Software License](https://github.com/aws-samples/sample-aws-idp-pipeline/blob/main/LICENSE).

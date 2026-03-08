@@ -234,9 +234,3 @@ aws lambda invoke --function-name idp-v2-lancedb-service \
     --cli-binary-format raw-in-base64-out \
     /dev/stdout 2>/dev/null | jq .
 ```
-
----
-
-## ライセンス
-
-このプロジェクトは[Amazon Software License](https://github.com/aws-samples/sample-aws-idp-pipeline/blob/main/LICENSE)の下でライセンスされています。

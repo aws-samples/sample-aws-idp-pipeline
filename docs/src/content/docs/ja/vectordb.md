@@ -5,7 +5,16 @@ description: "サーバーレスベクトルストレージと韓国語形態素
 
 ## 概要
 
-このプロジェクトでは、Amazon OpenSearch Serviceの代わりに[LanceDB](https://lancedb.com/)をベクトルデータベースとして使用しています。LanceDBはオープンソースのサーバーレスベクトルデータベースで、データをS3に直接保存し、専用クラスターインフラが不要です。韓国語形態素解析器[Kiwi](https://github.com/bab2min/Kiwi)と組み合わせることで、韓国語対応のハイブリッド検索（ベクトル＋全文検索）を実現しています。
+このプロジェクトでは、Amazon OpenSearch Serviceの代わりに[LanceDB](https://lancedb.com/)をベクトルデータベースとして使用しています。LanceDBはオープンソースのサーバーレスベクトルデータベースで、データをS3に直接保存し、専用クラスターインフラが不要です。韓国語形態素解析器[Kiwi](https://github.com/bab2min/Kiwi)と組み合わせることで、韓国語文書に対するハイブリッド検索（ベクトル＋全文検索）を実現しています。
+
+### 多言語検索サポート
+
+| 言語 | セマンティック検索（ベクトル） | 全文検索（FTS） | 検索モード |
+|------|:---:|:---:|------------|
+| **韓国語** | O | O | ハイブリッド（ベクトル + FTS） |
+| **英語およびその他の言語** | O | X | セマンティック検索のみ |
+
+Kiwiは韓国語専用の形態素解析器であるため、FTSキーワードが正確に抽出されるのは韓国語文書のみです。英語などの他言語の文書は、Bedrock Novaベクトル埋め込みによるセマンティック検索で検索されます。ベクトル検索は言語に関係なく意味ベースで動作するため、すべての言語の文書を検索できます。
 
 ### PoCにLanceDBを選んだ理由
 
@@ -83,9 +92,10 @@ DynamoDB (Lock Table)
 
 | アクション | 説明 |
 |-----------|------|
-| `add_record` | 文書セグメント追加（キーワード抽出 + 埋め込み + 保存） |
-| `delete_record` | セグメントIDで削除 |
+| `add_record` | QAレコード追加（キーワード抽出 + 埋め込み + 保存） |
+| `delete_record` | QA IDまたはセグメントIDで削除 |
 | `get_segments` | ワークフローの全セグメント取得 |
+| `get_by_segment_ids` | セグメントIDリストで本文取得（Graph MCPで使用） |
 | `hybrid_search` | ハイブリッド検索（ベクトル + FTS、`query_type='hybrid'`） |
 | `list_tables` | 全プロジェクトテーブル一覧 |
 | `count` | プロジェクトテーブルのレコード数取得 |
@@ -132,14 +142,17 @@ AIチャット中にエージェントが文書を検索する際、LanceDB Serv
 
 ## データスキーマ
 
-各文書セグメントは以下のスキーマで保存されます:
+各QA分析結果がレコードとして保存されます。1つのセグメント（ページ）に複数のQAが存在できるため、**QA単位でレコード**が作成されます:
 
 ```python
 class DocumentRecord(LanceModel):
     workflow_id: str            # ワークフローID
     document_id: str            # 文書ID
     segment_id: str             # "{workflow_id}_{segment_index:04d}"
+    qa_id: str                  # "{workflow_id}_{segment_index:04d}_{qa_index:02d}"
     segment_index: int          # セグメントページ/チャプター番号
+    qa_index: int               # QA番号（0から）
+    question: str               # AIが生成した質問
     content: str                # content_combined（埋め込みソースフィールド）
     vector: Vector(1024)        # Bedrock Nova埋め込み（ベクトルフィールド）
     keywords: str               # Kiwi抽出キーワード（FTSインデックス）
@@ -150,9 +163,10 @@ class DocumentRecord(LanceModel):
 ```
 
 - **プロジェクトごとに1テーブル**: テーブル名 = `project_id`
+- **QA単位保存**: セグメントごとに複数のQAが独立レコードとして保存（`qa_id`で一意識別）
 - **`content`**: 全前処理結果を統合したテキスト（OCR + BDA + PDFテキスト + AI分析）
 - **`vector`**: LanceDB埋め込み関数で自動生成（Bedrock Nova、1024次元）
-- **`keywords`**: Kiwiで抽出した韓国語形態素（FTSインデックス）
+- **`keywords`**: Kiwiで抽出した韓国語形態素（FTSインデックス）。韓国語以外の言語はスペースベースのトークン化
 
 ---
 
@@ -356,9 +370,3 @@ Phase 4: LanceDB依存関係の削除
 | 埋め込み | OpenSearch neural searchでingest pipelineから自動埋め込み可能、または事前計算済み埋め込みを使用 |
 | コスト | OpenSearchは稼働中のクラスターが必要。HAのための最低2ノードクラスター |
 | SQSインターフェース | SQS書き込みキューパターンは維持可能、コンシューマーロジックのみ変更 |
-
----
-
-## ライセンス
-
-このプロジェクトは[Amazon Software License](../../LICENSE)の下でライセンスされています。

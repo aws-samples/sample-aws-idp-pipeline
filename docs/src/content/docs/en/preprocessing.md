@@ -416,9 +416,3 @@ Preprocessing status is managed in the `preprocess` field of the DynamoDB workfl
 ```
 
 The `CheckPreprocessStatus` Lambda in the Step Functions workflow periodically polls to verify all required preprocessing is complete. Once all required preprocessors reach `completed` or `skipped` status, the workflow proceeds to the next stage (Format Parser → Segment Builder).
-
----
-
-## License
-
-This project is licensed under the [Amazon Software License](../../LICENSE).

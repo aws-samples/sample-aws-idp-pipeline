@@ -329,9 +329,3 @@ The Segment Analyzer generates analysis results in the project's configured lang
 ## Reanalysis
 
 Previously analyzed segments can be reanalyzed with custom instructions. During reanalysis, user-specified instructions are applied instead of the project default prompt.
-
----
-
-## License
-
-This project is licensed under the [Amazon Software License](https://github.com/aws-samples/sample-aws-idp-pipeline/blob/main/LICENSE).

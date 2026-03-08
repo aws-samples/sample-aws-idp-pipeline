@@ -332,9 +332,3 @@ PaddleOCRは**80以上の言語**をサポートしています。
 |------|--------|
 | PDF | `.pdf` |
 | 画像 | `.png`, `.jpg`, `.jpeg`, `.tiff`, `.bmp`, `.webp` |
-
----
-
-## ライセンス
-
-このプロジェクトは[Amazon Software License](../../LICENSE)の下でライセンスされています。

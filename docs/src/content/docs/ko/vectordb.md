@@ -5,7 +5,16 @@ description: "서버리스 벡터 스토리지와 한국어 형태소 기반 검
 
 ## 개요
 
-이 프로젝트는 Amazon OpenSearch Service 대신 [LanceDB](https://lancedb.com/)를 벡터 데이터베이스로 사용합니다. LanceDB는 오픈소스 서버리스 벡터 데이터베이스로, 데이터를 S3에 직접 저장하며 별도의 클러스터 인프라가 필요 없습니다. 여기에 한국어 형태소 분석기 [Kiwi](https://github.com/bab2min/Kiwi)를 결합하여 한국어를 지원하는 하이브리드 검색(벡터 + 전문 검색)을 구현합니다.
+이 프로젝트는 Amazon OpenSearch Service 대신 [LanceDB](https://lancedb.com/)를 벡터 데이터베이스로 사용합니다. LanceDB는 오픈소스 서버리스 벡터 데이터베이스로, 데이터를 S3에 직접 저장하며 별도의 클러스터 인프라가 필요 없습니다. 여기에 한국어 형태소 분석기 [Kiwi](https://github.com/bab2min/Kiwi)를 결합하여 한국어 문서에 대한 하이브리드 검색(벡터 + 전문 검색)을 구현합니다.
+
+### 다국어 검색 지원
+
+| 언어 | 시멘틱 검색 (벡터) | 전문 검색 (FTS) | 검색 모드 |
+|------|:---:|:---:|------|
+| **한국어** | O | O | 하이브리드 (벡터 + FTS) |
+| **영어 및 기타 언어** | O | X | 시멘틱 검색 전용 |
+
+Kiwi는 한국어 전용 형태소 분석기이므로, 한국어 문서에서만 FTS 키워드가 정확하게 추출됩니다. 영어 등 다른 언어의 문서는 Bedrock Nova 벡터 임베딩을 통한 시멘틱 검색으로 검색됩니다. 벡터 검색은 언어에 무관하게 의미 기반으로 동작하므로, 모든 언어의 문서를 검색할 수 있습니다.
 
 ### PoC에 LanceDB를 선택한 이유
 
@@ -83,9 +92,10 @@ DynamoDB (Lock Table)
 
 | 액션 | 설명 |
 |------|------|
-| `add_record` | 문서 세그먼트 추가 (키워드 추출 + 임베딩 + 저장) |
-| `delete_record` | 세그먼트 ID로 삭제 |
+| `add_record` | QA 레코드 추가 (키워드 추출 + 임베딩 + 저장) |
+| `delete_record` | QA ID 또는 세그먼트 ID로 삭제 |
 | `get_segments` | 워크플로우의 모든 세그먼트 조회 |
+| `get_by_segment_ids` | 세그먼트 ID 목록으로 본문 조회 (Graph MCP에서 사용) |
 | `hybrid_search` | 하이브리드 검색 (벡터 + FTS, `query_type='hybrid'`) |
 | `list_tables` | 전체 프로젝트 테이블 목록 |
 | `count` | 프로젝트 테이블의 레코드 수 조회 |
@@ -132,14 +142,17 @@ AI 채팅 중 에이전트가 문서를 검색할 때 LanceDB Service Lambda를 
 
 ## 데이터 스키마
 
-각 문서 세그먼트는 다음 스키마로 저장됩니다:
+각 QA 분석 결과는 다음 스키마로 저장됩니다. 하나의 세그먼트(페이지)에 여러 QA가 존재할 수 있으므로, **QA 단위로 레코드**가 생성됩니다:
 
 ```python
 class DocumentRecord(LanceModel):
     workflow_id: str            # 워크플로우 ID
     document_id: str            # 문서 ID
     segment_id: str             # "{workflow_id}_{segment_index:04d}"
+    qa_id: str                  # "{workflow_id}_{segment_index:04d}_{qa_index:02d}"
     segment_index: int          # 세그먼트 페이지/챕터 번호
+    qa_index: int               # QA 번호 (0부터)
+    question: str               # AI가 생성한 질문
     content: str                # content_combined (임베딩 소스 필드)
     vector: Vector(1024)        # Bedrock Nova 임베딩 (벡터 필드)
     keywords: str               # Kiwi 추출 키워드 (FTS 인덱싱)
@@ -150,9 +163,10 @@ class DocumentRecord(LanceModel):
 ```
 
 - **프로젝트당 하나의 테이블**: 테이블 이름 = `project_id`
+- **QA 단위 저장**: 세그먼트당 여러 QA가 각각 독립 레코드로 저장 (`qa_id`로 고유 식별)
 - **`content`**: 모든 전처리 결과를 합친 텍스트 (OCR + BDA + PDF 텍스트 + AI 분석)
 - **`vector`**: LanceDB 임베딩 함수로 자동 생성 (Bedrock Nova, 1024차원)
-- **`keywords`**: Kiwi로 추출한 한국어 형태소 (FTS 인덱스)
+- **`keywords`**: Kiwi로 추출한 한국어 형태소 (FTS 인덱스). 한국어 외 언어는 공백 기반 토큰화
 
 ---
 
@@ -356,9 +370,3 @@ Phase 4: LanceDB 의존성 제거
 | 임베딩 | OpenSearch neural search로 ingest pipeline에서 자동 임베딩 가능, 또는 사전 계산된 임베딩 사용 |
 | 비용 | OpenSearch는 실행 중인 클러스터 필요. HA를 위한 최소 2노드 클러스터 |
 | SQS 인터페이스 | SQS 쓰기 큐 패턴은 유지 가능, 소비자 로직만 변경 |
-
----
-
-## 라이선스
-
-이 프로젝트는 [Amazon Software License](../../LICENSE)의 하에 라이선스됩니다.

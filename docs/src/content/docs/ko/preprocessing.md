@@ -416,9 +416,3 @@ s3://bucket/projects/{project_id}/documents/{document_id}/
 ```
 
 Step Functions 워크플로우의 `CheckPreprocessStatus` Lambda가 주기적으로 폴링하여 모든 필수 전처리가 완료되었는지 확인합니다. 모든 필수 전처리가 `completed` 또는 `skipped` 상태가 되면 다음 단계(Format Parser → Segment Builder)로 진행합니다.
-
----
-
-## 라이선스
-
-이 프로젝트는 [Amazon Software License](../../LICENSE)에 따라 라이선스가 부여됩니다.
