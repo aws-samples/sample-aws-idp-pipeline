@@ -174,10 +174,14 @@ Choose colors that match your topic — don't default to generic blue. Use these
 
 ### Images
 
-Presentations are visual — use real images to make slides compelling. Use `image___search_image` to find relevant images *before* calling `code_interpreter`.
+Presentations are visual — use real images to make slides compelling.
+
+**Tool selection:**
+- If `image___search_image` is available in your tool list, use it to find relevant images *before* calling `code_interpreter`.
+- If `image___search_image` is NOT available, use `generate_image` to create custom images that fit each slide's message.
 
 **Workflow:**
-1. **Before** `code_interpreter`, plan which slides need images and call `image___search_image` for each topic.
+1. **Before** `code_interpreter`, plan which slides need images and call `image___search_image` (or `generate_image` if unavailable) for each topic.
 2. Collect the returned image URLs.
 3. **Inside** `code_interpreter`, download each URL and embed with `add_picture()`.
 
@@ -186,7 +190,7 @@ import requests
 from io import BytesIO
 from pptx.util import Inches
 
-# Download image from URL (obtained via image___search_image)
+# Download image from URL (obtained via image___search_image or generate_image)
 resp = requests.get(image_url)
 slide.shapes.add_picture(BytesIO(resp.content), Inches(5.2), Inches(1.2), Inches(4.5), Inches(3))
 ```
@@ -197,7 +201,7 @@ slide.shapes.add_picture(BytesIO(resp.content), Inches(5.2), Inches(1.2), Inches
 - **Max 1 image per slide** — multiple images per slide cause clutter
 - **Max 8 images per presentation** — too many slows download and increases file size
 - Always specify both width and height, or use aspect ratio preservation (see python-pptx.md)
-- If `image___search_image` returns no good results, use `generate_image` to create a custom image that fits the slide's message
+- If `image___search_image` returns no good results, use `generate_image` as fallback
 - For data-heavy slides, prefer charts over images
 
 ### Typography

@@ -217,10 +217,12 @@ Here is a statement[^1].
 
 ## Images
 
-When creating documents with images, use `image___search_image` to find relevant images *before* calling `code_interpreter`.
+**Tool selection:**
+- If `image___search_image` is available in your tool list, use it to find relevant images *before* calling `code_interpreter`.
+- If `image___search_image` is NOT available, use `generate_image` to create custom images.
 
 **Workflow:**
-1. **Before** `code_interpreter`, call `image___search_image` for relevant topics.
+1. **Before** `code_interpreter`, call `image___search_image` (or `generate_image` if unavailable) for relevant topics.
 2. Collect the returned image URLs.
 3. **Inside** `code_interpreter`, embed the URLs as Markdown image syntax.
 
@@ -240,7 +242,7 @@ More content below the image...
 - **Max 5 images per document** — too many images slow rendering
 - Match image content to the surrounding text
 - Always include descriptive alt text in `![alt text](...)`
-- If `image___search_image` returns no good results, use `generate_image` to create a custom image
+- If `image___search_image` returns no good results, use `generate_image` as fallback
 - For data, prefer describing it in a Markdown table rather than embedding a chart image
 
 ---
