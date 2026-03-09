@@ -317,10 +317,7 @@ export class OcrStack extends Stack {
       timeout: Duration.minutes(5),
       memorySize: 1024,
       code: lambda.Code.fromAsset(
-        path.join(
-          __dirname,
-          '../functions/preprocessing/ocr-chunk-merger',
-        ),
+        path.join(__dirname, '../functions/preprocessing/ocr-chunk-merger'),
       ),
       layers: [sharedLayer],
       environment: {
@@ -348,7 +345,8 @@ export class OcrStack extends Stack {
           object: {
             key: [
               {
-                wildcard: 'projects/*/documents/*/paddleocr/chunks/chunk_*.json',
+                wildcard:
+                  'projects/*/documents/*/paddleocr/chunks/chunk_*.json',
               },
             ],
           },

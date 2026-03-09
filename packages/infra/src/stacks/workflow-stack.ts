@@ -510,10 +510,7 @@ export class WorkflowStack extends Stack {
       timeout: Duration.minutes(15),
       memorySize: 512,
       code: lambda.Code.fromAsset(
-        path.join(
-          __dirname,
-          '../functions/step-functions/graph-batch-sender',
-        ),
+        path.join(__dirname, '../functions/step-functions/graph-batch-sender'),
       ),
       environment: {
         ...commonLambdaProps.environment,
@@ -631,7 +628,7 @@ export class WorkflowStack extends Stack {
       itemsPath: '$.render_batches',
       resultPath: sfn.JsonPath.DISCARD,
       itemSelector: {
-        'mode': 'render_pages',
+        mode: 'render_pages',
         'file_uri.$': '$.file_uri',
         'start_page.$': '$$.Map.Item.Value.start_page',
         'end_page.$': '$$.Map.Item.Value.end_page',
@@ -740,23 +737,19 @@ export class WorkflowStack extends Stack {
     );
 
     // Map over graph batches (sequential to avoid Neptune overload)
-    const sendGraphBatchesMap = new sfn.Map(
-      this,
-      'SendGraphBatches',
-      {
-        maxConcurrency: 1,
-        itemsPath: '$.graph_batches',
-        resultPath: sfn.JsonPath.DISCARD,
-        itemSelector: {
-          'action.$': '$$.Map.Item.Value.action',
-          'item_key.$': '$$.Map.Item.Value.item_key',
-          's3_key.$': '$$.Map.Item.Value.s3_key',
-          'batch_size.$': '$$.Map.Item.Value.batch_size',
-          'extra_params.$': '$$.Map.Item.Value.extra_params',
-          's3_bucket.$': '$.s3_bucket',
-        },
+    const sendGraphBatchesMap = new sfn.Map(this, 'SendGraphBatches', {
+      maxConcurrency: 1,
+      itemsPath: '$.graph_batches',
+      resultPath: sfn.JsonPath.DISCARD,
+      itemSelector: {
+        'action.$': '$$.Map.Item.Value.action',
+        'item_key.$': '$$.Map.Item.Value.item_key',
+        's3_key.$': '$$.Map.Item.Value.s3_key',
+        'batch_size.$': '$$.Map.Item.Value.batch_size',
+        'extra_params.$': '$$.Map.Item.Value.extra_params',
+        's3_bucket.$': '$.s3_bucket',
       },
-    );
+    });
     sendGraphBatchesMap.itemProcessor(graphBatchSenderTask);
 
     // FinalizeGraph: record step complete
