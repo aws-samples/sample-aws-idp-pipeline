@@ -9,14 +9,11 @@ from strands.models import BedrockModel
 from strands.types.content import SystemContentBlock
 
 from shared.ddb_client import (
-    update_workflow_status,
     record_step_start,
     record_step_complete,
     record_step_error,
     get_project_language,
-    get_entity_prefix,
-        StepName,
-    WorkflowStatus,
+    StepName,
 )
 from shared.s3_analysis import get_all_segment_analyses, save_summary
 
@@ -264,15 +261,7 @@ def handler(event, context):
             segment_count=total_pages
         )
 
-        entity_type = get_entity_prefix(file_type)
-        update_workflow_status(
-            document_id,
-            workflow_id,
-            WorkflowStatus.COMPLETED,
-            entity_type=entity_type,
-        )
-
-        print(f'Completed workflow {workflow_id} with {total_pages} pages')
+        print(f'Summarization complete for workflow {workflow_id} with {total_pages} pages')
 
         return {
             'workflow_id': workflow_id,
@@ -285,8 +274,6 @@ def handler(event, context):
         print(f'Error in document summarization: {e}')
         traceback.print_exc()
         record_step_error(workflow_id, StepName.DOCUMENT_SUMMARIZER, str(e))
-        entity_type = get_entity_prefix(file_type)
-        update_workflow_status(document_id, workflow_id, WorkflowStatus.FAILED, entity_type=entity_type, error=str(e))
         return {
             'workflow_id': workflow_id,
             'status': 'failed',

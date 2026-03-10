@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Check, Eye } from 'lucide-react';
-import { getToolEntry } from './toolRegistry';
+import { getToolEntry, isRegisteredTool } from './toolRegistry';
 import { formatToolDisplayName } from './utils';
 import type {
   ToolResultImage,
@@ -68,6 +68,7 @@ export default function ToolResultCard({
   const summaryLabel = buildSummaryLabel(
     t,
     displayName,
+    toolName,
     resultType,
     artifact,
     sources,
@@ -126,15 +127,55 @@ export default function ToolResultCard({
     }
   };
 
-  // Crafting (code_interpreter) / artifact_path: just show "completed"
-  const isCrafting =
-    toolName === 'code_interpreter' || toolName === 'artifact_path';
-  if (isCrafting) {
+  // Unregistered tools: just show "completed"
+  if (!isRegisteredTool(toolName)) {
     return (
       <div className="flex items-center gap-1.5 py-0.5">
         <Check className="w-3.5 h-3.5 text-indigo-400 dark:text-indigo-500 flex-shrink-0" />
         <span className="text-sm text-indigo-400 dark:text-indigo-500">
           {displayName} - {t('common.completed', 'completed')}
+        </span>
+      </div>
+    );
+  }
+
+  // Graph search: show result summary inline
+  if (entry.renderAsGraph && content) {
+    let graphSources = 0;
+    try {
+      const parsed = JSON.parse(content) as GraphSearchResult;
+      graphSources = parsed.sources?.length || 0;
+    } catch {
+      // ignore
+    }
+
+    if (graphSources > 0) {
+      return (
+        <button
+          type="button"
+          onClick={handleClick}
+          className="group flex items-center gap-1.5 py-0.5 text-left transition-colors hover:opacity-80"
+        >
+          <Icon className="w-3.5 h-3.5 text-indigo-400 dark:text-indigo-500 flex-shrink-0" />
+          <span className="text-sm text-indigo-400 dark:text-indigo-500">
+            {displayName} -{' '}
+            {t(
+              'chat.graphSourcesFound',
+              '{{count}} additional pages discovered',
+              { count: graphSources },
+            )}
+          </span>
+          <Eye className="w-3 h-3 text-indigo-300 dark:text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+        </button>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-1.5 py-0.5">
+        <Check className="w-3.5 h-3.5 text-indigo-400 dark:text-indigo-500 flex-shrink-0" />
+        <span className="text-sm text-indigo-400 dark:text-indigo-500">
+          {displayName} -{' '}
+          {t('chat.graphNoAdditionalSources', 'No additional pages discovered')}
         </span>
       </div>
     );
@@ -211,6 +252,7 @@ function buildSummaryLabel(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   t: any,
   displayName: string,
+  toolName?: string,
   resultType?: string,
   artifact?: ChatArtifact,
   sources?: ToolResultSource[],
@@ -235,6 +277,17 @@ function buildSummaryLabel(
   // Sources
   if (sources && sources.length > 0) {
     return `${displayName} - ${t('chat.sourcesReviewed', '{{count}} sources reviewed', { count: sources.length })}`;
+  }
+
+  // Overview: show document count
+  if (toolName === 'search___overview' && content) {
+    try {
+      const parsed = JSON.parse(content) as { documents?: unknown[] };
+      const count = parsed.documents?.length ?? 0;
+      return `${displayName} - ${t('chat.documentsFound', '{{count}} documents', { count })}`;
+    } catch {
+      // fallthrough
+    }
   }
 
   // Query-based tools

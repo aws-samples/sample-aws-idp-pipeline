@@ -12,10 +12,13 @@ const resources = {
   ja: { translation: ja },
 };
 
-// Set default language to English if not stored
 const LANGUAGE_KEY = 'i18nextLng';
+const SUPPORTED_LANGS = ['ko', 'en', 'ja'];
+
 if (!localStorage.getItem(LANGUAGE_KEY)) {
-  localStorage.setItem(LANGUAGE_KEY, 'en');
+  const browserLang = navigator.language.split('-')[0];
+  const detected = SUPPORTED_LANGS.includes(browserLang) ? browserLang : 'en';
+  localStorage.setItem(LANGUAGE_KEY, detected);
 }
 
 i18n

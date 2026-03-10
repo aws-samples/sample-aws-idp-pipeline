@@ -107,7 +107,7 @@ export default function GraphView({
           <button
             onClick={onExpandAll}
             disabled={expandingAll}
-            className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1 rounded-lg bg-slate-800/80 backdrop-blur-sm shadow-md text-slate-300 hover:text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1 rounded-lg bg-white/90 dark:bg-slate-800/80 backdrop-blur-sm shadow-md border border-slate-200/60 dark:border-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Maximize2 className="h-3 w-3" />
             {expandingAll
@@ -140,7 +140,7 @@ export default function GraphView({
       </div>
       {/* Show overlay filter only when uncontrolled */}
       {!isControlled && entityTypes.length > 0 && (
-        <div className="absolute top-2 left-2 z-10 bg-slate-800/80 backdrop-blur-sm rounded-lg shadow-md p-2 flex flex-wrap gap-1.5 max-w-[300px]">
+        <div className="absolute top-2 left-2 z-10 bg-white/90 dark:bg-slate-800/80 backdrop-blur-sm rounded-lg shadow-md border border-slate-200/60 dark:border-transparent p-2 flex flex-wrap gap-1.5 max-w-[300px]">
           {entityTypes.map((type) => {
             const color = getEntityColor(type);
             const active = !hiddenTypes.has(type);

@@ -5,8 +5,6 @@ import {
   Clock,
   Calculator,
   BookOpen,
-  ClipboardList,
-  MessageSquare,
   File,
   Sparkles,
   Network,
@@ -52,30 +50,6 @@ const TOOL_REGISTRY: Record<string, ToolRegistryEntry> = {
     resultLabel: 'chat.calculationResult',
     loadingLabel: 'chat.calculating',
   },
-  research_agent: {
-    icon: BookOpen,
-    resultLabel: 'chat.researchResult',
-    loadingLabel: 'chat.researching',
-    renderAsMarkdown: true,
-  },
-  plan_agent: {
-    icon: ClipboardList,
-    resultLabel: 'chat.planResult',
-    loadingLabel: 'chat.planning',
-    renderAsMarkdown: true,
-  },
-  handoff_to_user: {
-    icon: MessageSquare,
-    resultLabel: 'chat.agentMessage',
-    loadingLabel: 'chat.handingOff',
-    renderAsMarkdown: true,
-  },
-  websearch_agent: {
-    icon: Globe,
-    resultLabel: 'chat.webSearch',
-    loadingLabel: 'chat.webSearch',
-    renderAsMarkdown: true,
-  },
   graph___graph_search: {
     icon: Network,
     resultLabel: 'chat.graphSearch',
@@ -103,6 +77,10 @@ export function getToolEntry(
   if (isArtifact) return ARTIFACT_ENTRY;
   if (!toolName) return DEFAULT_ENTRY;
   return TOOL_REGISTRY[toolName] ?? DEFAULT_ENTRY;
+}
+
+export function isRegisteredTool(toolName?: string): boolean {
+  return !!toolName && toolName in TOOL_REGISTRY;
 }
 
 /** Get the icon for a tool_use block (running state) with search heuristic */

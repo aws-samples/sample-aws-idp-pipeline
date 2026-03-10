@@ -1,6 +1,6 @@
 import React, { PropsWithChildren, useEffect } from 'react';
 import { AuthProvider, AuthProviderProps, useAuth } from 'react-oidc-context';
-import { Alert } from '../alert';
+import { Alert } from '../Alert';
 import CubeLoader from '../CubeLoader';
 import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 

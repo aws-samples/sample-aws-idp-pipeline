@@ -192,10 +192,11 @@ function createPageTextureRaw(
   const g = Math.round(c.g * 255);
   const b = Math.round(c.b * 255);
 
-  // Background - lighter shade
-  const bgR = Math.min(255, r + Math.round((255 - r) * 0.6));
-  const bgG = Math.min(255, g + Math.round((255 - g) * 0.6));
-  const bgB = Math.min(255, b + Math.round((255 - b) * 0.6));
+  // Background - lighter shade (brighter in light mode for contrast)
+  const lightFactor = dark ? 0.6 : 0.85;
+  const bgR = Math.min(255, r + Math.round((255 - r) * lightFactor));
+  const bgG = Math.min(255, g + Math.round((255 - g) * lightFactor));
+  const bgB = Math.min(255, b + Math.round((255 - b) * lightFactor));
 
   const fold = w * 0.22;
   const cr = 6;
@@ -215,9 +216,9 @@ function createPageTextureRaw(
   ctx.fillStyle = `rgb(${bgR},${bgG},${bgB})`;
   ctx.fill();
 
-  // Border
-  ctx.strokeStyle = `rgba(${r},${g},${b},0.6)`;
-  ctx.lineWidth = matched ? 3 : 1.5;
+  // Border (stronger in light mode)
+  ctx.strokeStyle = `rgba(${r},${g},${b},${dark ? 0.6 : 0.9})`;
+  ctx.lineWidth = matched ? 3 : dark ? 1.5 : 2;
   ctx.stroke();
 
   // Folded corner triangle
@@ -226,9 +227,10 @@ function createPageTextureRaw(
   ctx.lineTo(w - fold, fold);
   ctx.lineTo(w, fold);
   ctx.closePath();
-  const foldR = Math.min(255, r + Math.round((255 - r) * 0.35));
-  const foldG = Math.min(255, g + Math.round((255 - g) * 0.35));
-  const foldB = Math.min(255, b + Math.round((255 - b) * 0.35));
+  const foldFactor = dark ? 0.35 : 0.65;
+  const foldR = Math.min(255, r + Math.round((255 - r) * foldFactor));
+  const foldG = Math.min(255, g + Math.round((255 - g) * foldFactor));
+  const foldB = Math.min(255, b + Math.round((255 - b) * foldFactor));
   ctx.fillStyle = `rgb(${foldR},${foldG},${foldB})`;
   ctx.fill();
   ctx.strokeStyle = `rgba(${r},${g},${b},0.4)`;

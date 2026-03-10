@@ -581,6 +581,19 @@ export class WorkflowStack extends Stack {
       },
     );
 
+    // Workflow Finalizer (records workflow as COMPLETED after PostAnalysisParallel)
+    const workflowFinalizer = new lambda.Function(this, 'WorkflowFinalizer', {
+      ...commonLambdaProps,
+      functionName: 'idp-v2-workflow-finalizer',
+      handler: 'index.handler',
+      timeout: Duration.minutes(1),
+      memorySize: 256,
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, '../functions/step-functions/workflow-finalizer'),
+      ),
+      layers: [sharedLayer],
+    });
+
     // QA Regenerator Lambda (single Q&A re-generation via Bedrock vision)
     const qaRegenerator = new lambda.Function(this, 'QaRegenerator', {
       ...commonLambdaProps,
@@ -795,13 +808,11 @@ export class WorkflowStack extends Stack {
     };
 
     // Catch on top-level tasks (not inside Parallel/Map)
+    // Note: graphBuilderTask, sendGraphBatchesMap, graphBuilderFinalizerTask,
+    // and documentSummarizerTask are inside PostAnalysisParallel, which has its own catch.
     checkPreprocessStatusTask.addCatch(errorHandlerTask, catchConfig);
     segmentBuilderTask.addCatch(errorHandlerTask, catchConfig);
     reanalysisPrepTask.addCatch(errorHandlerTask, catchConfig);
-    graphBuilderTask.addCatch(errorHandlerTask, catchConfig);
-    sendGraphBatchesMap.addCatch(errorHandlerTask, catchConfig);
-    graphBuilderFinalizerTask.addCatch(errorHandlerTask, catchConfig);
-    documentSummarizerTask.addCatch(errorHandlerTask, catchConfig);
 
     // ========================================
     // Segment Processing
@@ -873,11 +884,34 @@ export class WorkflowStack extends Stack {
     waitForPreprocess.next(checkPreprocessStatusTask);
     checkPreprocessStatusTask.next(preprocessStatusChoice);
 
-    // Chain: SegmentBuilder → Map(Analyze) → GraphBuilder chain → Summarize
+    // Workflow Finalizer task (records workflow COMPLETED after all branches done)
+    const workflowFinalizerTask = new tasks.LambdaInvoke(
+      this,
+      'FinalizeWorkflow',
+      {
+        lambdaFunction: workflowFinalizer,
+        outputPath: '$.Payload',
+      },
+    );
+    workflowFinalizerTask.addCatch(errorHandlerTask, catchConfig);
+
+    // Post-analysis: GraphBuilder and Summarizer run in parallel (independent)
+    const postAnalysisParallel = new sfn.Parallel(
+      this,
+      'PostAnalysisParallel',
+      {
+        resultPath: sfn.JsonPath.DISCARD,
+      },
+    );
+    postAnalysisParallel.branch(graphBuilderChain);
+    postAnalysisParallel.branch(documentSummarizerTask);
+    postAnalysisParallel.addCatch(errorHandlerTask, catchConfig);
+
+    // Chain: SegmentBuilder → Map(Analyze) → Parallel(GraphBuilder, Summarize) → FinalizeWorkflow
     segmentBuilderTask
       .next(parallelSegmentProcessing)
-      .next(graphBuilderChain)
-      .next(documentSummarizerTask);
+      .next(postAnalysisParallel)
+      .next(workflowFinalizerTask);
 
     // ========================================
     // Main Workflow Definition
@@ -980,6 +1014,7 @@ export class WorkflowStack extends Stack {
       graphBatchSender,
       graphBuilderFinalizer,
       workflowErrorHandler,
+      workflowFinalizer,
       triggerFunction,
       lancedbService,
       lancedbWriter,

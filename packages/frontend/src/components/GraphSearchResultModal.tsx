@@ -154,7 +154,7 @@ export default function GraphSearchResultModal({
         >
           {/* Left: Answer content */}
           {hasAnswer && (
-            <div className="w-2/5 border-r border-slate-200 dark:border-blue-500/20 overflow-y-auto p-5">
+            <div className="w-2/5 border-r border-black/[0.08] dark:border-blue-500/20 overflow-y-auto p-5 bg-[#e8ecf4]/90 dark:bg-slate-900">
               {/* Entity chips */}
               {data.entities?.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-4">
