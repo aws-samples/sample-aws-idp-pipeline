@@ -37,7 +37,8 @@ export class SearchMcp extends Construct {
       handler: 'handler',
       runtime: Runtime.NODEJS_22_X,
       architecture: Architecture.ARM_64,
-      timeout: Duration.seconds(30),
+      timeout: Duration.minutes(5),
+      memorySize: 256,
       environment: {
         LANCEDB_FUNCTION_ARN: lancedbFunctionArn,
         DOCUMENT_STORAGE_BUCKET: documentStorageBucketName,

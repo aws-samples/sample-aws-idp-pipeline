@@ -3511,6 +3511,50 @@ a {
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
+/* Shimmer text effect for tool use indicators */
+.shimmer-text-effect {
+  background: linear-gradient(
+    90deg,
+    currentColor 0%,
+    currentColor 35%,
+    rgba(199, 210, 254, 0.95) 50%,
+    currentColor 65%,
+    currentColor 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-text 2s ease-in-out infinite;
+}
+
+:root.dark .shimmer-text-effect {
+  background: linear-gradient(
+    90deg,
+    currentColor 0%,
+    currentColor 30%,
+    rgba(224, 231, 255, 1) 45%,
+    rgba(255, 255, 255, 1) 50%,
+    rgba(224, 231, 255, 1) 55%,
+    currentColor 70%,
+    currentColor 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-text 2s ease-in-out infinite;
+}
+
+@keyframes shimmer-text {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
 /* Glass menu items - hover without triggering [class*='bg-white'] selectors */
 .glass-menu-item:hover {
   background: rgba(0, 0, 0, 0.06) !important;

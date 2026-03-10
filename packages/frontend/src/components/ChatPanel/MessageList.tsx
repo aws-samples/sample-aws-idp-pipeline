@@ -27,7 +27,13 @@ interface MessageListProps {
   onSourceClick?: (documentId: string, segmentId: string) => void;
   loadingSourceKey?: string | null;
   onImageClick?: (img: { src: string; alt: string }) => void;
-  onViewDetails?: (content: string) => void;
+  onViewDetails?: (detail: {
+    content: string;
+    sources?: { document_id: string; segment_id: string }[];
+    documents?: Document[];
+    toolName?: string;
+    toolInput?: Record<string, unknown>;
+  }) => void;
   onGraphView?: (data: GraphSearchResult) => void;
   documents: Document[];
   chatEndRef: React.RefObject<HTMLDivElement | null>;
@@ -54,7 +60,7 @@ export default function MessageList({
   const { t } = useTranslation();
 
   return (
-    <div className="p-6 space-y-6 max-w-3xl mx-auto w-full">
+    <div className="p-6 space-y-4 max-w-3xl mx-auto w-full">
       {messages.map((message) =>
         message.role === 'user' ? (
           <UserMessage key={message.id} message={message} />
@@ -106,7 +112,7 @@ export default function MessageList({
 
       {/* Streaming blocks */}
       {(sending || (voiceChatMode && streamingBlocks.length > 0)) && (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {streamingBlocks.length > 0 ? (
             streamingBlocks.map((block, idx) => {
               if (block.type === 'text') {
@@ -123,45 +129,21 @@ export default function MessageList({
               }
               if (block.type === 'stage_start') {
                 return (
-                  <div
-                    key={idx}
-                    className="rounded-xl border border-amber-200 dark:border-amber-500/40 bg-gradient-to-r from-amber-50/80 to-orange-50/80 dark:from-amber-900/20 dark:to-orange-900/20 shadow-sm overflow-hidden"
-                  >
-                    <div className="flex items-center gap-2.5 px-3 py-2.5">
-                      <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 shadow-sm flex-shrink-0">
-                        <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
-                      </div>
-                      <span className="text-sm font-medium text-slate-700 dark:text-amber-200">
-                        {t(`chat.stage.${block.stage}`, block.stage)}
-                      </span>
-                      <div className="flex-1" />
-                      <Loader2 className="w-4 h-4 animate-spin text-amber-500 dark:text-amber-400" />
-                    </div>
-                    <div className="h-0.5 bg-slate-100 dark:bg-slate-700 overflow-hidden">
-                      <div className="shimmer-bar h-full w-1/3 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-400 rounded-full" />
-                    </div>
+                  <div key={idx} className="flex items-center gap-1.5 py-0.5">
+                    <Loader2 className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 animate-spin flex-shrink-0" />
+                    <span className="text-sm shimmer-text-effect text-amber-600 dark:text-amber-300">
+                      {t(`chat.stage.${block.stage}`, block.stage)} ...
+                    </span>
                   </div>
                 );
               }
               if (block.type === 'stage_complete') {
                 return (
-                  <div
-                    key={idx}
-                    className="rounded-xl border border-emerald-200 dark:border-emerald-500/40 bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-900/15 dark:to-teal-900/15 shadow-sm overflow-hidden"
-                  >
-                    <div className="flex items-center gap-2.5 px-3 py-2.5 border-b border-emerald-100 dark:border-emerald-500/20">
-                      <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm flex-shrink-0">
-                        <Check className="w-3.5 h-3.5 text-white" />
-                      </div>
-                      <span className="text-sm font-medium text-slate-700 dark:text-emerald-200">
-                        {t(`chat.stageResult.${block.stage}`, block.stage)}
-                      </span>
-                    </div>
-                    <div className="px-4 py-3 prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-emerald-100 [&_strong]:!text-inherit">
-                      <MarkdownRenderer>
-                        {prepareMarkdown(block.result)}
-                      </MarkdownRenderer>
-                    </div>
+                  <div key={idx} className="flex items-center gap-1.5 py-0.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 flex-shrink-0" />
+                    <span className="text-sm text-emerald-600 dark:text-emerald-400">
+                      {t(`chat.stageResult.${block.stage}`, block.stage)}
+                    </span>
                   </div>
                 );
               }
@@ -294,22 +276,11 @@ function UserMessage({ message }: { message: ChatMessage }) {
 function StageResult({ message }: { message: ChatMessage }) {
   const { t } = useTranslation();
   return (
-    <div className="rounded-xl border border-emerald-200 dark:border-emerald-500/40 bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-900/15 dark:to-teal-900/15 shadow-sm overflow-hidden">
-      <div className="flex items-center gap-2.5 px-3 py-2.5 border-b border-emerald-100 dark:border-emerald-500/20">
-        <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm flex-shrink-0">
-          <Check className="w-3.5 h-3.5 text-white" />
-        </div>
-        <span className="text-sm font-medium text-slate-700 dark:text-emerald-200">
-          {t(`chat.stageResult.${message.stageName}`, message.stageName ?? '')}
-        </span>
-      </div>
-      {message.content && (
-        <div className="px-4 py-3 prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-emerald-100 [&_strong]:!text-inherit">
-          <MarkdownRenderer>
-            {prepareMarkdown(message.content)}
-          </MarkdownRenderer>
-        </div>
-      )}
+    <div className="flex items-center gap-1.5 py-0.5">
+      <Check className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 flex-shrink-0" />
+      <span className="text-sm text-emerald-600 dark:text-emerald-400">
+        {t(`chat.stageResult.${message.stageName}`, message.stageName ?? '')}
+      </span>
     </div>
   );
 }

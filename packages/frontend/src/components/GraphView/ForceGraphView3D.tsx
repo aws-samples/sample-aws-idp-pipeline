@@ -309,7 +309,6 @@ export default function ForceGraphView({
       if (fg) {
         const renderer = fg.renderer?.();
         if (renderer) {
-          renderer.forceContextLoss();
           renderer.dispose();
         }
         const scene = fg.scene?.();

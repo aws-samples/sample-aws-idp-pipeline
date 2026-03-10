@@ -21,6 +21,8 @@ import type {
   AttachedFile,
   ChatArtifact,
   GraphSearchResult,
+  ToolResultSource,
+  Document,
 } from './types';
 
 // Re-exports for backward compatibility
@@ -66,6 +68,10 @@ export default function ChatPanel({
   // Modal states
   const [toolResultDetail, setToolResultDetail] = useState<{
     content: string;
+    sources?: ToolResultSource[];
+    documents?: Document[];
+    toolName?: string;
+    toolInput?: Record<string, unknown>;
   } | null>(null);
   const [modalImage, setModalImage] = useState<{
     src: string;
@@ -407,7 +413,7 @@ export default function ChatPanel({
             onSourceClick={onSourceClick}
             loadingSourceKey={loadingSourceKey}
             onImageClick={(img) => setModalImage(img)}
-            onViewDetails={(content) => setToolResultDetail({ content })}
+            onViewDetails={(detail) => setToolResultDetail(detail)}
             onGraphView={(data) => setGraphSearchData(data)}
             documents={documents}
             chatEndRef={chatEndRef}
@@ -462,6 +468,12 @@ export default function ChatPanel({
         isOpen={!!toolResultDetail}
         onClose={() => setToolResultDetail(null)}
         content={toolResultDetail?.content ?? ''}
+        sources={toolResultDetail?.sources}
+        documents={toolResultDetail?.documents}
+        toolName={toolResultDetail?.toolName}
+        toolInput={toolResultDetail?.toolInput}
+        onSourceClick={onSourceClick}
+        loadingSourceKey={loadingSourceKey}
       />
       {/* Graph Search Result Modal */}
       {graphSearchData && (
