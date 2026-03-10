@@ -68,7 +68,7 @@ description: "Sample AWS IDP Pipeline 주요 기능 소개"
 
 ## 4. 실시간 알림
 
-워크플로우 진행 상태를 WebSocket을 통해 실시간으로 프론트엔드에 전달합니다. DynamoDB Streams가 상태 변경을 감지하고, Redis에서 활성 연결을 조회하여 WebSocket API로 이벤트를 푸시합니다.
+워크플로우 진행 상태를 WebSocket을 통해 실시간으로 프론트엔드에 전달합니다. DynamoDB Streams가 상태 변경을 감지하고, Valkey에서 활성 연결을 조회하여 WebSocket API로 이벤트를 푸시합니다.
 
 - 단계별 시작/완료/에러 알림
 - 세그먼트 분석 진행률 (X/Y 완료)

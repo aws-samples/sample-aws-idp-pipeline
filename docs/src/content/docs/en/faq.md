@@ -13,7 +13,7 @@ Yes, costs are incurred based on AWS resource usage. The main billable resources
 |----------|-------------|
 | NAT Gateway | VPC external communication (hourly + data transfer) |
 | ECS Fargate | FastAPI backend container (vCPU + memory) |
-| ElastiCache Redis | WebSocket connection management |
+| ElastiCache Valkey | WebSocket connection management |
 | S3 / S3 Express One Zone | Document storage, vector DB, sessions, artifacts |
 | SageMaker Endpoint | PaddleOCR (ml.g5.xlarge, scales up only when in use) |
 | Bedrock | Per-invocation billing (input/output tokens) |
@@ -193,7 +193,7 @@ Amazon Cognito OIDC authentication is used. When you log in through Cognito on t
 | Vector embeddings, search indices | LanceDB (S3 Express One Zone) |
 | Project/workflow metadata | Amazon DynamoDB |
 | Chat sessions, agent prompts, artifacts | Amazon S3 |
-| WebSocket connection info | Amazon ElastiCache Redis |
+| WebSocket connection info | Amazon ElastiCache Valkey |
 
 ### Can I directly access LanceDB data?
 

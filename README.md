@@ -202,7 +202,7 @@ API Gateway HTTP (IAM Auth)
 | Step Functions payload -> DynamoDB intermediate storage | Bypass Step Functions 256KB payload limit |
 | Only segment indices passed in workflow | Support for 3000+ page documents |
 | LanceDB + S3 Express One Zone | Low-latency storage optimized for vector search |
-| Neptune DB Serverless | Knowledge graph for entity relationships, scales to zero when idle |
+| Neptune DB Serverless | Knowledge graph for entity relationships |
 | PaddleOCR dual backend (Lambda + SageMaker) | CPU models on Lambda (no cold start), GPU model (VL) on SageMaker |
 | SageMaker Auto-scaling 0->1 | Cost optimization (Scale-to-zero when idle) |
 | ElastiCache Redis | WebSocket connection state management (faster than DynamoDB TTL) |
