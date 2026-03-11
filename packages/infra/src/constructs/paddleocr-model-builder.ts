@@ -65,7 +65,7 @@ RUN apt-get update && apt-get install -y \\
 
 # Install PaddlePaddle GPU (CUDA 11.8)
 RUN pip install --upgrade pip && \\
-    pip install paddlepaddle-gpu==3.2.2 --extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu118/
+    pip install paddlepaddle-gpu==3.2.2 --extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu118/ --trusted-host www.paddlepaddle.org.cn
 
 # Install PaddleOCR with all extras
 RUN pip install "paddleocr[all]" "paddlex[ocr]"
