@@ -1,4 +1,4 @@
-import { Duration, Size, Stack, StackProps } from 'aws-cdk-lib';
+import { AssetHashType, Duration, Size, Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
@@ -142,6 +142,7 @@ export class WorkflowStack extends Stack {
       );
 
       return lambda.Code.fromAsset(layerDir, {
+        assetHashType: AssetHashType.OUTPUT,
         bundling: {
           image: lambda.Runtime.PYTHON_3_14.bundlingImage,
           command: [
