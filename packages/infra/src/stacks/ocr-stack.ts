@@ -190,7 +190,7 @@ export class OcrStack extends Stack {
           tag: 'latest',
         }),
         architecture: lambda.Architecture.X86_64,
-        memorySize: 10240,
+        memorySize: 3008,
         timeout: Duration.minutes(15),
         ephemeralStorageSize: Size.gibibytes(2),
         environment: {
