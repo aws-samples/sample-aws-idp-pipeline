@@ -402,12 +402,12 @@ async function convertWorkbookToSheets(
   let fallbackWarnings: string[] = [];
 
   try {
-    wb = await new ExcelWorkbook().xlsx.load(data as any);
+    wb = await new ExcelWorkbook().xlsx.load(data as ArrayBuffer);
   } catch {
     // exceljs crashes on drawings/charts — strip them and retry
     const sanitized = await stripDrawingsFromXlsx(data);
     fallbackWarnings = sanitized.warnings;
-    wb = await new ExcelWorkbook().xlsx.load(sanitized.data as any);
+    wb = await new ExcelWorkbook().xlsx.load(sanitized.data as ArrayBuffer);
   }
 
   const warnings: string[] = [...fallbackWarnings];

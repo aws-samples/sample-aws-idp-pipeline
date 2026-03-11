@@ -49,7 +49,7 @@ This is an AWS sample project designed for experimentation, evaluation, and deve
   - Custom agents with project-specific system prompts
 
 - **Real-time Notifications**
-  - Real-time status updates via WebSocket API + ElastiCache Redis
+  - Real-time status updates via WebSocket API + ElastiCache Valkey
   - Workflow event detection through DynamoDB Streams
   - Live updates for step progress, artifact changes, and session state
 
@@ -76,7 +76,7 @@ This is an AWS sample project designed for experimentation, evaluation, and deve
 @idp-v2/infra (14 stacks)
 +-- VpcStack              - VPC (10.0.0.0/16, 2 AZ, NAT Gateway)
 +-- NeptuneStack          - Neptune DB Serverless (knowledge graph)
-+-- StorageStack          - S3 buckets, DynamoDB tables, ElastiCache Redis
++-- StorageStack          - S3 buckets, DynamoDB tables, ElastiCache Valkey
 +-- EventStack            - S3 EventBridge, SQS queues, file type detection Lambda
 +-- OcrStack              - PaddleOCR (Lambda CPU + SageMaker GPU)
 +-- BdaStack              - Bedrock Data Automation consumer
@@ -119,12 +119,12 @@ S3 Upload (Presigned URL)
 
 #### 2. Real-time Notifications (WebSocket)
 
-When workflow progress is recorded in DynamoDB, DynamoDB Streams detects the changes. The WorkflowStream Lambda inside the VPC looks up active connections in Redis, then pushes events through the WebSocket API so the frontend reflects status in real time.
+When workflow progress is recorded in DynamoDB, DynamoDB Streams detects the changes. The WorkflowStream Lambda inside the VPC looks up active connections in Valkey, then pushes events through the WebSocket API so the frontend reflects status in real time.
 
 ```
 DynamoDB Streams (state change detection)
   -> WorkflowStream Lambda (VPC)
-    -> Redis (connection lookup)
+    -> Valkey (connection lookup)
       -> WebSocket API -> Frontend
         +- Step progress
         +- Artifact changes
@@ -160,7 +160,7 @@ API Gateway HTTP (IAM Auth)
     +- Neptune      -- Knowledge graph queries
     +- Bedrock      -- Cohere Rerank v3.5
     +- S3           -- Presigned URL, sessions (DuckDB), agents, artifacts
-    +- Redis        -- Query cache
+    +- Valkey       -- Query cache
     +- Step Functions -- Reanalysis trigger
     '- Lambda       -- QA Regenerator
 ```
@@ -175,7 +175,7 @@ API Gateway HTTP (IAM Auth)
 | Neptune DB Serverless | Knowledge graph for entity relationships, scales to zero when idle |
 | PaddleOCR dual backend (Lambda + SageMaker) | CPU models on Lambda (no cold start), GPU model (VL) on SageMaker |
 | SageMaker Auto-scaling 0->1 | Cost optimization (Scale-to-zero when idle) |
-| ElastiCache Redis | WebSocket connection state management (faster than DynamoDB TTL) |
+| ElastiCache Valkey | WebSocket connection state management (faster than DynamoDB TTL) |
 | DuckDB for direct S3 queries | Query session/agent data without copying |
 | VPC Link + Private ALB | Keep backend unexposed to the internet |
 | Distributed Map (max 30 concurrency) | Balance between parallelism and Lambda concurrency limits |

@@ -13,7 +13,7 @@ description: "よくある質問"
 |----------|------|
 | NAT Gateway | VPC外部通信（時間あたり + データ転送） |
 | ECS Fargate | FastAPIバックエンドコンテナ（vCPU + メモリ） |
-| ElastiCache Redis | WebSocket接続管理 |
+| ElastiCache Valkey | WebSocket接続管理 |
 | S3 / S3 Express One Zone | ドキュメント保存、ベクトルDB、セッション、アーティファクト |
 | SageMaker Endpoint | PaddleOCR（ml.g5.xlarge、使用時のみスケールアップ） |
 | Bedrock | モデル呼び出し件あたり課金（入出力トークン） |
@@ -193,7 +193,7 @@ Amazon Cognito OIDC認証を使用しています。フロントエンドでCogn
 | ベクトル埋め込み、検索インデックス | LanceDB（S3 Express One Zone） |
 | プロジェクト/ワークフローメタデータ | Amazon DynamoDB |
 | チャットセッション、エージェントプロンプト、アーティファクト | Amazon S3 |
-| WebSocket接続情報 | Amazon ElastiCache Redis |
+| WebSocket接続情報 | Amazon ElastiCache Valkey |
 
 ### LanceDBデータを直接確認できますか？
 

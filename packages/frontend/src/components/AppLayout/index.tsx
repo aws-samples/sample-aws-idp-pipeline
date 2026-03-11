@@ -417,7 +417,7 @@ const AppLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
                 className="sidebar-user-menu-item"
                 onClick={() => {
                   window.open(
-                    'https://github.com/aws-samples/sample-aws-idp-pipeline/blob/main/README.md',
+                    'https://aws-samples.github.io/sample-aws-idp-pipeline/en',
                     '_blank',
                     'noopener,noreferrer',
                   );

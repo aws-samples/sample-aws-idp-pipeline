@@ -49,7 +49,7 @@ description: "비정형 데이터를 위한 AI 기반 지능형 문서 처리(ID
   - 프로젝트별 커스텀 에이전트 및 시스템 프롬프트
 
 - **실시간 알림**
-  - WebSocket API + ElastiCache Redis로 실시간 상태 업데이트
+  - WebSocket API + ElastiCache Valkey로 실시간 상태 업데이트
   - DynamoDB Streams 기반 워크플로우 이벤트 감지
   - 단계별 진행률, 아티팩트 변경, 세션 상태 실시간 반영
 
@@ -76,7 +76,7 @@ description: "비정형 데이터를 위한 AI 기반 지능형 문서 처리(ID
 @idp-v2/infra (14개 스택)
 ├── VpcStack              - VPC (10.0.0.0/16, 2 AZ, NAT Gateway)
 ├── NeptuneStack          - Neptune DB Serverless (지식 그래프)
-├── StorageStack          - S3 버킷, DynamoDB 테이블, ElastiCache Redis
+├── StorageStack          - S3 버킷, DynamoDB 테이블, ElastiCache Valkey
 ├── EventStack            - S3 EventBridge, SQS 큐, 파일 유형 감지 Lambda
 ├── OcrStack              - PaddleOCR (Lambda CPU + SageMaker GPU)
 ├── BdaStack              - Bedrock Data Automation 소비자
@@ -119,12 +119,12 @@ S3 Upload (Presigned URL)
 
 #### 2. 실시간 알림 (WebSocket)
 
-워크플로우 진행 상태가 DynamoDB에 기록되면, DynamoDB Streams가 변경을 감지합니다. VPC 내부의 WorkflowStream Lambda가 Redis에서 활성 연결을 조회한 후 WebSocket API로 이벤트를 푸시하여, 프론트엔드에서 실시간으로 상태를 반영합니다.
+워크플로우 진행 상태가 DynamoDB에 기록되면, DynamoDB Streams가 변경을 감지합니다. VPC 내부의 WorkflowStream Lambda가 Valkey에서 활성 연결을 조회한 후 WebSocket API로 이벤트를 푸시하여, 프론트엔드에서 실시간으로 상태를 반영합니다.
 
 ```
 DynamoDB Streams (상태 변경 감지)
   -> WorkflowStream Lambda (VPC)
-    -> Redis (연결 조회)
+    -> Valkey (연결 조회)
       -> WebSocket API -> Frontend
         +- 단계별 진행률
         +- 아티팩트 변경
@@ -160,7 +160,7 @@ API Gateway HTTP (IAM Auth)
     +- Neptune      -- 지식 그래프 조회
     +- Bedrock      -- Cohere Rerank v3.5
     +- S3           -- Presigned URL, 세션 (DuckDB), 에이전트, 아티팩트
-    +- Redis        -- 쿼리 캐시
+    +- Valkey       -- 쿼리 캐시
     +- Step Functions -- 재분석 트리거
     '- Lambda       -- QA Regenerator
 ```
@@ -175,7 +175,7 @@ API Gateway HTTP (IAM Auth)
 | Neptune DB Serverless | 엔티티 관계 지식 그래프, 미사용 시 제로 스케일링 |
 | PaddleOCR 듀얼 백엔드 (Lambda + SageMaker) | CPU 모델은 Lambda (콜드 스타트 없음), GPU 모델(VL)은 SageMaker |
 | SageMaker Auto-scaling 0->1 | 비용 최적화 (사용하지 않을 때 Scale-to-zero) |
-| ElastiCache Redis | WebSocket 연결 상태 관리 (DynamoDB TTL 대비 고속) |
+| ElastiCache Valkey | WebSocket 연결 상태 관리 (DynamoDB TTL 대비 고속) |
 | DuckDB로 S3 직접 쿼리 | 세션/에이전트 데이터 복사 없이 조회 |
 | VPC Link + Private ALB | 백엔드를 인터넷에 노출하지 않음 |
 | Distributed Map (max 30 동시성) | Lambda 동시성 제한과 병렬성의 균형 |

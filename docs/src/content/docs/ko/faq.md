@@ -13,7 +13,7 @@ description: "자주 묻는 질문"
 |--------|------|
 | NAT Gateway | VPC 외부 통신 (시간당 + 데이터 전송) |
 | ECS Fargate | FastAPI 백엔드 컨테이너 (vCPU + 메모리) |
-| ElastiCache Redis | WebSocket 연결 관리 |
+| ElastiCache Valkey | WebSocket 연결 관리 |
 | S3 / S3 Express One Zone | 문서 저장, 벡터 DB, 세션, 아티팩트 |
 | SageMaker Endpoint | PaddleOCR (ml.g5.xlarge, 사용 시에만 스케일업) |
 | Bedrock | 모델 호출 건당 과금 (입출력 토큰) |
@@ -193,7 +193,7 @@ Amazon Cognito OIDC 인증을 사용합니다. 프론트엔드에서 Cognito를 
 | 벡터 임베딩, 검색 인덱스 | LanceDB (S3 Express One Zone) |
 | 프로젝트/워크플로우 메타데이터 | Amazon DynamoDB |
 | 채팅 세션, 에이전트 프롬프트, 아티팩트 | Amazon S3 |
-| WebSocket 연결 정보 | Amazon ElastiCache Redis |
+| WebSocket 연결 정보 | Amazon ElastiCache Valkey |
 
 ### LanceDB 데이터를 직접 확인할 수 있나요?
 

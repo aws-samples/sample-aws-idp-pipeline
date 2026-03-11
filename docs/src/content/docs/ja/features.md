@@ -68,7 +68,7 @@ description: "Sample AWS IDP Pipeline 主要機能紹介"
 
 ## 4. リアルタイム通知
 
-ワークフローの進行状況をWebSocketを通じてリアルタイムでフロントエンドに配信します。DynamoDB Streamsが状態変更を検出し、Redisでアクティブな接続を検索してWebSocket APIでイベントをプッシュします。
+ワークフローの進行状況をWebSocketを通じてリアルタイムでフロントエンドに配信します。DynamoDB Streamsが状態変更を検出し、Valkeyでアクティブな接続を検索してWebSocket APIでイベントをプッシュします。
 
 - ステップごとの開始/完了/エラー通知
 - セグメント分析進行率（X/Y完了）

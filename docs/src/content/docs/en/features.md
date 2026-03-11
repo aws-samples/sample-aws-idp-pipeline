@@ -68,7 +68,7 @@ Document Upload
 
 ## 4. Real-time Notifications
 
-Workflow progress is delivered to the frontend in real-time via WebSocket. DynamoDB Streams detects state changes, looks up active connections in Redis, and pushes events through the WebSocket API.
+Workflow progress is delivered to the frontend in real-time via WebSocket. DynamoDB Streams detects state changes, looks up active connections in Valkey, and pushes events through the WebSocket API.
 
 - Step-level start / complete / error notifications
 - Segment analysis progress (X/Y completed)
