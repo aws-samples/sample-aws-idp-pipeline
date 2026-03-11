@@ -335,6 +335,7 @@ export class WorkflowStack extends Stack {
 
     const commonLambdaProps = {
       runtime: lambda.Runtime.PYTHON_3_14,
+      architecture: lambda.Architecture.ARM_64,
       timeout: Duration.minutes(5),
       memorySize: 1024,
       environment: {
