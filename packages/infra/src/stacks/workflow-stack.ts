@@ -308,7 +308,6 @@ export class WorkflowStack extends Stack {
         vpc,
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
         securityGroups: [graphServiceSg],
-        reservedConcurrentExecutions: 1,
         environment: {
           NEPTUNE_ENDPOINT: neptuneEndpoint,
           NEPTUNE_PORT: neptunePort,
@@ -568,7 +567,6 @@ export class WorkflowStack extends Stack {
       handler: 'index.handler',
       timeout: Duration.minutes(5),
       memorySize: 256,
-      reservedConcurrentExecutions: 1,
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/lancedb-writer'),
       ),
