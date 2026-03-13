@@ -37,7 +37,6 @@ Type Detection Lambda
 | Audio | `.mp3` `.wav` `.flac` `.m4a` | - | O | O | - | - |
 | Word Document | `.docx` `.doc` | - | - | - | A | - |
 | Presentation | `.pptx` `.ppt` | - | - | - | A | - |
-| Spreadsheet | `.xlsx` `.xls` `.csv` | - | - | - | A | - |
 | Text | `.txt` `.md` | - | - | - | A | - |
 | Web | `.webreq` | - | - | - | - | A |
 | CAD | `.dxf` | - | - | - | A | - |
@@ -73,7 +72,7 @@ Uses AWS Bedrock Data Automation to analyze document structure (tables, layouts,
 
 | Item | Value |
 |------|-------|
-| Target | PDF, Images, Video, Audio (excluding office documents/spreadsheets/DXF/web) |
+| Target | PDF, Images, Video, Audio (excluding office documents/DXF/web) |
 | Activation | `use_bda=true` (selected at document upload) |
 | Output | `bda-output/` (markdown, images, metadata) |
 
@@ -96,9 +95,6 @@ Extracts text using various libraries depending on file type. Runs synchronously
 | PDF | `pypdf` | Per-page text layer extraction (graphics stripping) |
 | DOCX/DOC | LibreOffice → `pypdf` + `pypdfium2` | Convert to PDF, then per-page text + PNG image generation |
 | PPTX/PPT | `python-pptx` + LibreOffice → `pypdfium2` | Per-slide text + PNG image generation |
-| XLSX | `openpyxl` | Per-sheet markdown table conversion |
-| XLS | `xlrd` | Per-sheet markdown table conversion |
-| CSV | `csv` (stdlib) | Single-sheet markdown table conversion |
 | TXT/MD | Direct read | Text chunking (15,000 chars, 500 char overlap) |
 | DXF | `ezdxf` + `matplotlib` | Per-layout text extraction + PNG rendering |
 
@@ -244,26 +240,6 @@ Type Detection
 | Automatic Preprocessing | Format Parser |
 | Text Extraction | Slide text + tables + speaker notes |
 
-### Spreadsheet (XLSX/XLS/CSV)
-
-```
-XLSX/XLS/CSV Upload
-  ↓
-Type Detection
-  └─ Workflow Queue → Step Functions
-      ├─ Segment Prep: Create 1 placeholder
-      ├─ Format Parser: Per-sheet markdown table conversion
-      └─ Segment Builder: Override segments with Format Parser results
-```
-
-| Item | Value |
-|------|-------|
-| Segment Type | `TEXT` (one per sheet) |
-| Segment Count | Number of sheets (1 for CSV) |
-| Images | None |
-| Automatic Preprocessing | Format Parser |
-| Output Format | Markdown table (`## Sheet: {name}\n\| col1 \| col2 \|...`) |
-
 ### Text (TXT/MD)
 
 ```
@@ -351,7 +327,6 @@ Segment count is determined from different sources depending on file type:
 | PDF | Segment Prep (number of PDF pages) |
 | Image | Segment Prep (always 1) |
 | DOCX/DOC, PPTX/PPT, DXF | Format Parser (pages/slides/layouts after conversion) |
-| XLSX/XLS/CSV | Format Parser (number of sheets) |
 | TXT/MD | Format Parser (number of chunks) |
 | Video | Segment Prep (1) or BDA (number of chapters) |
 | Audio | Segment Prep (always 1) |

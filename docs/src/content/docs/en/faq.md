@@ -24,6 +24,40 @@ Yes, costs are incurred based on AWS resource usage. The main billable resources
 The SageMaker endpoint is configured with 0→1 auto-scaling by default, so instances scale down to 0 when not in use.
 :::
 
+### AI analysis fails silently or shows Marketplace subscription errors
+
+You may experience the following symptoms:
+- AI chat returns no response, or document analysis workflow fails
+- Logs show `AccessDeniedException` or Marketplace subscription-related errors
+
+Since September 2025, Bedrock automatically enables all serverless models via IAM — no manual console activation is needed. However, on the **first invocation** of a third-party model (Anthropic, Cohere, etc.), Bedrock initiates an AWS Marketplace subscription in the background. During this process (up to 15 minutes), calls may fail. Once the subscription completes, everything works normally.
+
+**Things to check:**
+- Ensure the deploying IAM role has `aws-marketplace:Subscribe`, `aws-marketplace:Unsubscribe`, and `aws-marketplace:ViewSubscriptions` permissions
+- For Anthropic models, a one-time **FTU (First Time Use)** form must be submitted via the Bedrock console or `PutUseCaseForModelAccess` API
+
+### OCR stack deployment fails (Lambda memory limit)
+
+The OCR Lambda requires 5,120MB of memory for processing large documents. Lambda memory can normally be configured up to 10,240MB, but some new or free-tier accounts have a default quota of 3,008MB, which causes deployment to fail. This quota cannot be manually requested — it increases automatically based on account usage.
+
+:::note
+Check your current memory quota in the Service Quotas dashboard. On new accounts, the OCR stack deployment may be blocked until the quota auto-increases.
+:::
+
+### Lambda concurrency errors during workflow execution
+
+The default Lambda concurrent execution limit is 1,000 per region, but some accounts may have a lower quota. Processing multiple documents simultaneously or running parallel segment analysis can exceed this limit.
+
+**Action:** Check your current quota in the Service Quotas dashboard and request an increase if it is low. It may take up to one day for the increase to take effect.
+
+### Bedrock quota limits during large document analysis
+
+When analyzing documents with many pages, you may hit Bedrock service quotas (requests per minute, tokens per minute, etc.), causing analysis to fail or slow down. Start by testing with small documents first, then request a Bedrock quota increase via the Service Quotas dashboard if needed.
+
+### Neptune Serverless deployment fails (free-tier account)
+
+Neptune Serverless is not available on AWS free-tier accounts. A non-free-tier account is required to use the knowledge graph feature.
+
 ### Deployment failed. What should I do?
 
 Refer to the [Quick Deploy Guide - Troubleshooting](./deployment.md#troubleshooting) section. You can check the failure cause through CodeBuild logs.
@@ -106,7 +140,7 @@ Documents (PDF, DOC, TXT), images (PNG, JPG, GIF, TIFF), videos (MP4, MOV, AVI),
 
 ### Can it handle large documents (thousands of pages)?
 
-Yes. Large documents are supported through segment-based processing with Step Functions + DynamoDB. DynamoDB is used as intermediate storage to bypass the Step Functions payload limit (256KB), and Distributed Map processes up to 30 segments simultaneously.
+Yes. Large documents are supported through segment-based processing with Step Functions + DynamoDB. Documents up to 3,000 pages have been tested. However, processing time and Bedrock invocation costs increase significantly with page count, so we recommend starting with smaller documents and scaling up gradually.
 
 ### What OCR engines are used? What are the differences?
 

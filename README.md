@@ -92,7 +92,6 @@ An AI-powered IDP prototype that transforms unstructured data into actionable in
   | Videos | MP4, MOV, AVI, MKV, WebM |
   | Audio | MP3, WAV, FLAC, M4A |
   | Presentations | PPTX, PPT |
-  | Spreadsheets | XLSX, XLS, CSV |
   | CAD | DXF |
   | Web | .webreq (URL crawling) |
 

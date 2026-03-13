@@ -1,0 +1,18 @@
+---
+import Default from '@astrojs/starlight/components/SiteTitle.astro';
+import rootPkg from '../../../package.json';
+---
+
+<Default {...Astro.props}><slot /></Default>
+<span class="version-tag">v{rootPkg.version}</span>
+
+<style>
+  .version-tag {
+    display: block;
+    font-size: 0.65rem;
+    color: var(--sl-color-gray-3);
+    margin-top: -0.25rem;
+    padding-left: 0.25rem;
+    letter-spacing: 0.02em;
+  }
+</style>

@@ -3,6 +3,11 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import mermaid from 'astro-mermaid';
 import { stripMdLinksIntegration } from './remark-strip-md-links.mjs';
+import { readFileSync } from 'node:fs';
+
+const rootPkg = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf-8'),
+);
 
 // https://astro.build/config
 export default defineConfig({
@@ -12,6 +17,9 @@ export default defineConfig({
     mermaid(),
     starlight({
       title: 'AWS IDP Pipeline',
+      components: {
+        SiteTitle: './src/components/SiteTitle.astro',
+      },
       social: [
         {
           icon: 'github',
@@ -166,10 +174,27 @@ export default defineConfig({
         {
           label: 'Deployment',
           translations: {
-            ko: '배포 가이드',
-            ja: 'デプロイガイド',
+            ko: '배포',
+            ja: 'デプロイ',
           },
-          link: '/deployment',
+          items: [
+            {
+              label: 'Guide',
+              translations: {
+                ko: '가이드',
+                ja: 'ガイド',
+              },
+              link: '/deployment',
+            },
+            {
+              label: 'Required Permissions',
+              translations: {
+                ko: '필요 권한',
+                ja: '必要な権限',
+              },
+              link: '/permissions',
+            },
+          ],
         },
         {
           label: 'FAQ',
