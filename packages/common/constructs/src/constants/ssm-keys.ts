@@ -42,4 +42,5 @@ export const SSM_KEYS = {
     '/idp-v2/ocr/lambda-processor-function-name',
   // Lance Service
   TOKA_FUNCTION_NAME: '/idp-v2/lance-service/toka/function-name',
+  LANCE_SERVICE_FUNCTION_ARN: '/idp-v2/lance-service/function-arn',
 } as const;

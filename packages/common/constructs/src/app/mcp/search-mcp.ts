@@ -26,7 +26,7 @@ export class SearchMcp extends Construct {
 
     const lancedbFunctionArn = StringParameter.valueForStringParameter(
       this,
-      SSM_KEYS.LANCEDB_FUNCTION_ARN,
+      SSM_KEYS.LANCE_SERVICE_FUNCTION_ARN,
     );
 
     this.function = new NodejsFunction(this, 'Function', {
