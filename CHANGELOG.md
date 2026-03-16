@@ -1,3 +1,39 @@
+## 0.2.3 (Draft)
+
+### Security
+
+- Bump **jsdom** to ^29.0.0 (#101)
+- Bump **undici** to >=7.24.0 (#115)
+- Bump **express-rate-limit** to >=8.2.2 (#104)
+- Bump **@modelcontextprotocol/sdk** to >=1.27.1 (#104)
+- Bump **file-type** to >=21.3.2 (#113)
+- Bump **ajv** to >=8.18.0 (#74)
+- Bump **devalue** to >=5.6.4 (#107)
+- Bump **yauzl** to >=3.2.1 (#117)
+- Bump **flatted** to >=3.4.0 (#118)
+- Bump **svgo** to >=4.0.1 (#99, #100)
+- Bump **pillow** to >=12.1.1 (#61)
+
+### Dependencies
+
+- Bump **pyjwt** from 2.10.1 to 2.12.0 (#211)
+- Bump **hono** from 4.12.4 to 4.12.7 (#199)
+
+### Documentation
+
+- Add permissions docs and update FAQ (#210)
+
+### Bug Fixes
+
+- Fix `chunk_pdf_path` UnboundLocalError in finally block (#208)
+- Fix ajv override breaking eslint on Node 25 (#213)
+
+### Features
+
+- Add toka multilingual tokenizer Lambda (Rust, cargo-lambda-cdk) (#212)
+- Add LanceServiceStack for LanceDB related services (#212)
+- Replace kiwipiepy with toka Lambda in lancedb-service for multilingual keyword extraction (#212)
+
 ## 0.2.2 (2026-03-13)
 ### Workflow Orchestration
 - Integrate OCR, BDA, Transcribe, and WebCrawler preprocessing into Step Functions state machine with polling loops for async job
