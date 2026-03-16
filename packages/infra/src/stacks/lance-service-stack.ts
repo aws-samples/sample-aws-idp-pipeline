@@ -11,6 +11,7 @@ export class LanceServiceStack extends Stack {
     const tokaFunction = new RustFunction(this, 'TokaFunction', {
       functionName: 'idp-v2-toka',
       manifestPath: '../lambda/toka/Cargo.toml',
+      memorySize: 1024,
     });
 
     new StringParameter(this, 'TokaFunctionNameParam', {
