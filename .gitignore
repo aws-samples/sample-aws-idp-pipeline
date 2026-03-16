@@ -50,3 +50,6 @@ vitest.config.*.timestamp*
 /reports
 # Lambda layers (generated during CDK synth)
 packages/infra/src/lambda-layers/
+
+# Rust
+target/
