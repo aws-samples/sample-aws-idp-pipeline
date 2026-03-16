@@ -13,6 +13,7 @@ import { WorkerStack } from './stacks/worker-stack.js';
 import { WebcrawlerStack } from './stacks/webcrawler-stack.js';
 import { NeptuneStack } from './stacks/neptune-stack.js';
 import { WebsocketStack } from './stacks/websocket-stack.js';
+import { LanceServiceStack } from './stacks/lance-service-stack.js';
 
 const app = new App();
 
@@ -72,6 +73,9 @@ const webcrawlerStack = new WebcrawlerStack(app, 'IDP-V2-Webcrawler', {
 webcrawlerStack.addDependency(eventStack);
 webcrawlerStack.addDependency(agentStack);
 
+const lanceServiceStack = new LanceServiceStack(app, 'IDP-V2-LanceService', { env });
+lanceServiceStack.addDependency(storageStack);
+
 const workflowStack = new WorkflowStack(app, 'IDP-V2-Workflow', { env });
 workflowStack.addDependency(storageStack);
 workflowStack.addDependency(eventStack);
@@ -110,6 +114,7 @@ applicationStack.addDependency(vpcStack);
 //   env,
 //   gateway: mcpStack.gateway,
 // });
+// new LanceServiceStack(app, 'IDP-V2-LanceService', { env });
 // new WebcrawlerStack(app, 'IDP-V2-Webcrawler', { env });
 // new ApplicationStack(app, 'IDP-V2-Application', {
 //   env,

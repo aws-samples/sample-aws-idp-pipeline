@@ -40,4 +40,6 @@ export const SSM_KEYS = {
   GRAPH_DELETE_QUEUE_URL: '/idp-v2/graph/delete-queue-url',
   OCR_LAMBDA_PROCESSOR_FUNCTION_NAME:
     '/idp-v2/ocr/lambda-processor-function-name',
+  // Lance Service
+  TOKA_FUNCTION_NAME: '/idp-v2/lance-service/toka/function-name',
 } as const;
