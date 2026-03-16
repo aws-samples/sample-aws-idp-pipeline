@@ -250,6 +250,16 @@ export class WorkflowStack extends Stack {
     // LanceDB Service (Container Lambda)
     // ========================================
 
+    const tokaFunctionName = ssm.StringParameter.valueForStringParameter(
+      this,
+      SSM_KEYS.TOKA_FUNCTION_NAME,
+    );
+    const tokaFunction = lambda.Function.fromFunctionName(
+      this,
+      'TokaFunction',
+      tokaFunctionName,
+    );
+
     const lancedbService = new lambda.DockerImageFunction(
       this,
       'LanceDBService',
@@ -264,8 +274,13 @@ export class WorkflowStack extends Stack {
         architecture: lambda.Architecture.ARM_64,
         timeout: Duration.minutes(5),
         memorySize: 2048,
+        environment: {
+          TOKA_FUNCTION_NAME: tokaFunctionName,
+        },
       },
     );
+
+    tokaFunction.grantInvoke(lancedbService);
 
     // ========================================
     // GraphService (Neptune DB Serverless Gateway Lambda)

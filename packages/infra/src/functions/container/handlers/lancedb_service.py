@@ -8,15 +8,16 @@ import lancedb
 from lancedb.pydantic import LanceModel, Vector
 from lancedb.embeddings import TextEmbeddingFunction, register
 from pydantic import PrivateAttr
-from kiwipiepy import Kiwi
 
 LANCEDB_EXPRESS_BUCKET_SSM_KEY = '/idp-v2/lancedb/express/bucket-name'
 LANCEDB_LOCK_TABLE_SSM_KEY = '/idp-v2/lancedb/lock/table-name'
 
 _db_connection = None
-_kiwi = None
+_lambda_client = None
 _bucket_name = None
 _lock_table_name = None
+
+TOKA_FUNCTION_NAME = os.environ.get('TOKA_FUNCTION_NAME', 'idp-v2-toka')
 
 
 def get_ssm_parameter(key: str) -> str:
@@ -48,31 +49,23 @@ def get_lancedb_connection():
     return _db_connection
 
 
-def get_kiwi():
-    global _kiwi
-    if _kiwi is None:
-        _kiwi = Kiwi()
-    return _kiwi
+def get_lambda_client():
+    global _lambda_client
+    if _lambda_client is None:
+        _lambda_client = boto3.client('lambda', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
+    return _lambda_client
 
 
-def extract_keywords(text: str) -> str:
-    kiwi = get_kiwi()
-    results = []
-    tokens = kiwi.tokenize(text, normalize_coda=True)
-
-    for token in tokens:
-        if token.tag == 'XSN':
-            if results:
-                results[-1] += token.form
-            continue
-
-        if token.tag in ['NNG', 'NNP', 'NR', 'NP', 'SL', 'SN', 'SH']:
-            if token.tag not in ['SL', 'SN', 'SH'] and len(token.form) == 1:
-                if token.form in ['것', '수', '등', '때', '곳']:
-                    continue
-            results.append(token.form)
-
-    return ' '.join(results)
+def extract_keywords(text: str, lang: str = 'ko') -> str:
+    client = get_lambda_client()
+    response = client.invoke(
+        FunctionName=TOKA_FUNCTION_NAME,
+        InvocationType='RequestResponse',
+        Payload=json.dumps({'text': text, 'lang': lang}),
+    )
+    result = json.loads(response['Payload'].read())
+    tokens = result.get('tokens', [])
+    return ' '.join(tokens)
 
 
 EMBEDDING_MODEL_ID = os.environ.get('EMBEDDING_MODEL_ID', 'amazon.nova-2-multimodal-embeddings-v1:0')
@@ -195,8 +188,9 @@ def action_add_record(params: dict) -> dict:
     segment_id = f'{workflow_id}_{segment_index:04d}'
     qa_id = f'{workflow_id}_{segment_index:04d}_{qa_index:02d}'
     content = params.get('content_combined', '')
-    print(f'[add_record] Extracting keywords from content (len={len(content)})')
-    keywords = extract_keywords(content) if content else ''
+    lang = params.get('language', 'ko')
+    print(f'[add_record] Extracting keywords from content (len={len(content)}), lang={lang}')
+    keywords = extract_keywords(content, lang) if content else ''
     print(f'[add_record] Keywords: {keywords[:100]}...')
     created_at_str = params.get('created_at', '')
 
@@ -307,7 +301,8 @@ def action_hybrid_search(params: dict) -> dict:
 
     table = db.open_table(project_id)
     table.create_fts_index('keywords', replace=True)
-    keywords = extract_keywords(query)
+    lang = params.get('language', 'ko')
+    keywords = extract_keywords(query, lang)
     search_query = table.search(query=keywords, query_type='hybrid').limit(limit)
 
     if document_id:
