@@ -512,6 +512,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-bedrockruntime"
+version = "1.127.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7dcd5ccbed3bd50d342077d3f731de46d9608340386c87d07566c4c507891eda"
+dependencies = [
+ "aws-credential-types",
+ "aws-runtime",
+ "aws-sigv4",
+ "aws-smithy-async",
+ "aws-smithy-eventstream",
+ "aws-smithy-http 0.63.6",
+ "aws-smithy-json 0.62.5",
+ "aws-smithy-observability",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "aws-types",
+ "bytes",
+ "fastrand",
+ "http 0.2.12",
+ "http 1.4.0",
+ "http-body-util",
+ "regex-lite",
+ "tracing",
+]
+
+[[package]]
 name = "aws-sdk-dynamodb"
 version = "1.86.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3646,10 +3673,12 @@ dependencies = [
  "arrow-array",
  "arrow-schema",
  "aws-config",
+ "aws-sdk-bedrockruntime",
  "aws-sdk-lambda",
  "dotenvy",
  "futures",
  "lambda_runtime",
+ "lance-index",
  "lancedb",
  "serde",
  "serde_json",

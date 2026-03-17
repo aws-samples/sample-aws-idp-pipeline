@@ -48,6 +48,35 @@ impl Segment {
     }
 }
 
+#[derive(Serialize)]
+pub struct ScoredSegment {
+    #[serde(flatten)]
+    pub segment: Segment,
+    pub keywords: String,
+    pub file_uri: String,
+    pub score: f32,
+}
+
+impl ScoredSegment {
+    pub fn from_batch(batch: &RecordBatch) -> Vec<Self> {
+        let segments = Segment::from_batch(batch);
+        let keywords_col = batch.column_by_name("keywords").unwrap().as_string::<i32>();
+        let file_uris = batch.column_by_name("file_uri").unwrap().as_string::<i32>();
+        let scores = batch.column_by_name("_relevance_score").unwrap().as_primitive::<arrow_array::types::Float32Type>();
+
+        segments
+            .into_iter()
+            .enumerate()
+            .map(|(i, segment)| ScoredSegment {
+                segment,
+                keywords: keywords_col.value(i).to_string(),
+                file_uri: file_uris.value(i).to_string(),
+                score: scores.value(i),
+            })
+            .collect()
+    }
+}
+
 /// Full Arrow schema for a document record in LanceDB.
 /// A "document record" is the storage unit — one row per segment (or QA pair) of a document.
 /// Tables are partitioned by project_id.
