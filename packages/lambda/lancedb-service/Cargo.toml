@@ -6,6 +6,8 @@ edition = "2024"
 [dependencies]
 arrow-array = "57"
 arrow-schema = "57"
+aws-config = "1"
+aws-sdk-lambda = "1"
 futures = "0.3"
 lambda_runtime = "0.13"
 lancedb = { version = "0.27.0", features = ["dynamodb"] }

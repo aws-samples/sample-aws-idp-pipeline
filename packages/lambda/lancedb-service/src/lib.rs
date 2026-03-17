@@ -1,4 +1,5 @@
 pub mod action;
+pub mod client;
 pub mod db;
 
 use action::*;
