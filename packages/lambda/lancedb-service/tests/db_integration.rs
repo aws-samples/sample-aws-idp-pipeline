@@ -1,3 +1,5 @@
+use futures::TryStreamExt;
+use lancedb::query::{ExecutableQuery, QueryBase};
 use lancedb_service::db;
 use tracing::info;
 
@@ -39,4 +41,19 @@ async fn test_count() {
     let db = db::connect().await.unwrap();
     let (exists, count) = db::table::count(&db, "keywords").await.unwrap();
     info!("exists: {exists}, count: {count}");
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_inspect_schema() {
+    init_tracing();
+    dotenvy::dotenv().ok();
+    let db = db::connect().await.unwrap();
+    let table = db.open_table("proj_HLEpYD_QD5iT6VwptGxYJ").execute().await.unwrap();
+    let batches: Vec<_> = table.query().limit(1).execute().await.unwrap().try_collect().await.unwrap();
+    if let Some(batch) = batches.first() {
+        for field in batch.schema().fields() {
+            info!("field: {} -> {:?}", field.name(), field.data_type());
+        }
+    }
 }

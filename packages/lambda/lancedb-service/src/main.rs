@@ -1,6 +1,6 @@
 use lambda_runtime::{Error, LambdaEvent, service_fn};
 use lancedb_service::LanceDbAction;
-use lancedb_service::action::{count, list_tables};
+use lancedb_service::action::{count, get_by_segment_ids, get_segments, list_tables};
 use lancedb_service::db;
 use tracing::info;
 
@@ -14,6 +14,8 @@ async fn handler(event: LambdaEvent<LanceDbAction>) -> Result<serde_json::Value,
     let response = match action {
         LanceDbAction::ListTables => serde_json::to_value(list_tables::execute(&conn).await?)?,
         LanceDbAction::Count(params) => serde_json::to_value(count::execute(&conn, params).await?)?,
+        LanceDbAction::GetSegments(params) => serde_json::to_value(get_segments::execute(&conn, params).await?)?,
+        LanceDbAction::GetBySegmentIds(params) => serde_json::to_value(get_by_segment_ids::execute(&conn, params).await?)?,
         _ => serde_json::json!({ "success": false, "error": "not implemented" }),
     };
 

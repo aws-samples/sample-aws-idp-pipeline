@@ -3604,8 +3604,10 @@ dependencies = [
 name = "lancedb-service"
 version = "0.1.0"
 dependencies = [
+ "arrow-array",
  "arrow-schema",
  "dotenvy",
+ "futures",
  "lambda_runtime",
  "lancedb",
  "serde",
