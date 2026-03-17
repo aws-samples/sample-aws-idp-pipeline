@@ -1,13 +1,23 @@
 use lambda_runtime::{Error, LambdaEvent, service_fn};
 use lancedb_service::LanceDbAction;
-use serde::Serialize;
+use lancedb_service::action::{count, list_tables};
+use lancedb_service::db;
+use tracing::info;
 
-#[derive(Serialize)]
-struct Response {}
+async fn handler(event: LambdaEvent<LanceDbAction>) -> Result<serde_json::Value, Error> {
+    let (action, _context) = event.into_parts();
 
-async fn handler(event: LambdaEvent<LanceDbAction>) -> Result<Response, Error> {
-    let (_action, _context) = event.into_parts();
-    Ok(Response {})
+    info!("[handler] Connecting to LanceDB...");
+    let conn = db::connect().await?;
+    info!("[handler] Connected");
+
+    let response = match action {
+        LanceDbAction::ListTables => serde_json::to_value(list_tables::execute(&conn).await?)?,
+        LanceDbAction::Count(params) => serde_json::to_value(count::execute(&conn, params).await?)?,
+        _ => serde_json::json!({ "success": false, "error": "not implemented" }),
+    };
+
+    Ok(response)
 }
 
 #[tokio::main]
