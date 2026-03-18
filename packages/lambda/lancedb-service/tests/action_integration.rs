@@ -1,5 +1,6 @@
 use lancedb_service::action::{
-    count, get_by_segment_ids, get_segments, hybrid_search, list_tables,
+    count, delete_by_workflow, drop_table, get_by_segment_ids, get_segments, hybrid_search,
+    list_tables,
 };
 use lancedb_service::db;
 use tracing::info;
@@ -67,6 +68,41 @@ async fn test_action_get_by_segment_ids() {
         get_by_segment_ids::GetBySegmentIdsParams {
             project_id: "proj_HLEpYD_QD5iT6VwptGxYJ".to_string(),
             segment_ids: vec!["wf_adF_cHMvTcCFOdESChdyH_0000".to_string()],
+        },
+    )
+    .await
+    .unwrap();
+    info!("output: {:?}", serde_json::to_value(&output).unwrap());
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_action_delete_by_workflow() {
+    init_tracing();
+    dotenvy::dotenv().ok();
+    let conn = db::connect().await.unwrap();
+    let output = delete_by_workflow::execute(
+        &conn,
+        delete_by_workflow::DeleteByWorkflowParams {
+            project_id: "proj_HLEpYD_QD5iT6VwptGxYJ".to_string(),
+            workflow_id: "wf_adF_cHMvTcCFOdESChdyH".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    info!("output: {:?}", serde_json::to_value(&output).unwrap());
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_action_drop_table() {
+    init_tracing();
+    dotenvy::dotenv().ok();
+    let conn = db::connect().await.unwrap();
+    let output = drop_table::execute(
+        &conn,
+        drop_table::DropTableParams {
+            project_id: "test".to_string(),
         },
     )
     .await

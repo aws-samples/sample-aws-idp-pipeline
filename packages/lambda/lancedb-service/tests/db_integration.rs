@@ -49,8 +49,20 @@ async fn test_inspect_schema() {
     init_tracing();
     dotenvy::dotenv().ok();
     let db = db::connect().await.unwrap();
-    let table = db.open_table("proj_HLEpYD_QD5iT6VwptGxYJ").execute().await.unwrap();
-    let batches: Vec<_> = table.query().limit(1).execute().await.unwrap().try_collect().await.unwrap();
+    let table = db
+        .open_table("proj_HLEpYD_QD5iT6VwptGxYJ")
+        .execute()
+        .await
+        .unwrap();
+    let batches: Vec<_> = table
+        .query()
+        .limit(1)
+        .execute()
+        .await
+        .unwrap()
+        .try_collect()
+        .await
+        .unwrap();
     if let Some(batch) = batches.first() {
         for field in batch.schema().fields() {
             info!("field: {} -> {:?}", field.name(), field.data_type());

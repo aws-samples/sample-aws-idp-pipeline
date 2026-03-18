@@ -1,6 +1,6 @@
 use lambda_runtime::{Error, LambdaEvent, service_fn};
 use lancedb_service::LanceDbAction;
-use lancedb_service::action::{count, get_by_segment_ids, get_segments, hybrid_search, list_tables};
+use lancedb_service::action::{count, delete_by_workflow, drop_table, get_by_segment_ids, get_segments, hybrid_search, list_tables};
 use lancedb_service::db;
 use serde::Serialize;
 use tracing::info;
@@ -61,6 +61,12 @@ async fn handler(
             .map_err(|e| (500, e.to_string()))
             .and_then(|v| serde_json::to_value(v).map_err(|e| (500, e.to_string()))),
         LanceDbAction::HybridSearch(params) => hybrid_search::execute(&conn, lambda_client, bedrock_client, params).await
+            .map_err(|e| (500, e.to_string()))
+            .and_then(|v| serde_json::to_value(v).map_err(|e| (500, e.to_string()))),
+        LanceDbAction::DeleteByWorkflow(params) => delete_by_workflow::execute(&conn, params).await
+            .map_err(|e| (500, e.to_string()))
+            .and_then(|v| serde_json::to_value(v).map_err(|e| (500, e.to_string()))),
+        LanceDbAction::DropTable(params) => drop_table::execute(&conn, params).await
             .map_err(|e| (500, e.to_string()))
             .and_then(|v| serde_json::to_value(v).map_err(|e| (500, e.to_string()))),
         _ => Err((400, "not implemented".to_string())),

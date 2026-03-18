@@ -113,7 +113,7 @@ export class Backend extends Construct {
     );
     const lancedbFunctionArn = StringParameter.valueForStringParameter(
       this,
-      SSM_KEYS.LANCEDB_FUNCTION_ARN,
+      SSM_KEYS.LANCE_SERVICE_FUNCTION_ARN,
     );
     const graphServiceFunctionArn = StringParameter.valueForStringParameter(
       this,
