@@ -250,37 +250,15 @@ export class WorkflowStack extends Stack {
     // LanceDB Service (Container Lambda)
     // ========================================
 
-    const tokaFunctionName = ssm.StringParameter.valueForStringParameter(
+    const lancedbServiceFunctionArn = ssm.StringParameter.valueForStringParameter(
       this,
-      SSM_KEYS.TOKA_FUNCTION_NAME,
+      SSM_KEYS.LANCE_SERVICE_FUNCTION_ARN,
     );
-    const tokaFunction = lambda.Function.fromFunctionName(
-      this,
-      'TokaFunction',
-      tokaFunctionName,
-    );
-
-    const lancedbService = new lambda.DockerImageFunction(
+    const lancedbService = lambda.Function.fromFunctionArn(
       this,
       'LanceDBService',
-      {
-        functionName: 'idp-v2-lancedb-service',
-        code: lambda.DockerImageCode.fromImageAsset(
-          path.join(__dirname, '../functions/container'),
-          {
-            platform: Platform.LINUX_ARM64,
-          },
-        ),
-        architecture: lambda.Architecture.ARM_64,
-        timeout: Duration.minutes(5),
-        memorySize: 2048,
-        environment: {
-          TOKA_FUNCTION_NAME: tokaFunctionName,
-        },
-      },
+      lancedbServiceFunctionArn,
     );
-
-    tokaFunction.grantInvoke(lancedbService);
 
     // ========================================
     // GraphService (Neptune DB Serverless Gateway Lambda)
@@ -1652,7 +1630,6 @@ export class WorkflowStack extends Stack {
       workflowFinalizer,
       workflowFailureCatcher,
       triggerFunction,
-      lancedbService,
       lancedbWriter,
       qaRegenerator,
       bdaStart,
@@ -1745,11 +1722,6 @@ export class WorkflowStack extends Stack {
     new ssm.StringParameter(this, 'QaRegeneratorFunctionArn', {
       parameterName: SSM_KEYS.QA_REGENERATOR_FUNCTION_ARN,
       stringValue: qaRegenerator.functionArn,
-    });
-
-    new ssm.StringParameter(this, 'LanceDBFunctionArn', {
-      parameterName: SSM_KEYS.LANCEDB_FUNCTION_ARN,
-      stringValue: lancedbService.functionArn,
     });
 
     new ssm.StringParameter(this, 'GraphServiceFunctionArn', {

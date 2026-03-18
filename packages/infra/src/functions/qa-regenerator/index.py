@@ -14,7 +14,7 @@ from shared.ddb_client import get_steps, get_table, now_iso
 from shared.s3_analysis import get_segment_analysis, save_segment_analysis
 
 BEDROCK_MODEL_ID = os.environ['BEDROCK_MODEL_ID']
-LANCEDB_FUNCTION_NAME = os.environ.get('LANCEDB_FUNCTION_NAME', 'idp-v2-lancedb-service')
+LANCEDB_FUNCTION_NAME = os.environ.get('LANCEDB_FUNCTION_NAME', 'idp-v2-lance-service')
 GRAPH_SERVICE_FUNCTION_NAME = os.environ.get('GRAPH_SERVICE_FUNCTION_NAME', '')
 GRAPH_BUILDER_FUNCTION_NAME = os.environ.get('GRAPH_BUILDER_FUNCTION_NAME', '')
 

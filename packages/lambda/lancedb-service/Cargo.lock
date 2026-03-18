@@ -3647,6 +3647,7 @@ dependencies = [
  "aws-config",
  "aws-sdk-bedrockruntime",
  "aws-sdk-lambda",
+ "chrono",
  "dotenvy",
  "futures",
  "lambda_runtime",

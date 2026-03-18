@@ -4,7 +4,7 @@ import os
 import boto3
 
 lambda_client = None
-LANCEDB_FUNCTION_NAME = os.environ.get('LANCEDB_FUNCTION_NAME', 'idp-v2-lancedb-service')
+LANCEDB_FUNCTION_NAME = os.environ.get('LANCEDB_FUNCTION_NAME', 'idp-v2-lance-service')
 
 
 def get_lambda_client():

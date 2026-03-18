@@ -17,7 +17,7 @@ from shared.s3_analysis import (
 sqs_client = None
 lambda_client = None
 LANCEDB_WRITE_QUEUE_URL = os.environ.get('LANCEDB_WRITE_QUEUE_URL')
-LANCEDB_FUNCTION_NAME = os.environ.get('LANCEDB_FUNCTION_NAME', 'idp-v2-lancedb-service')
+LANCEDB_FUNCTION_NAME = os.environ.get('LANCEDB_FUNCTION_NAME', 'idp-v2-lance-service')
 PAGE_DESCRIPTION_MODEL_ID = os.environ.get('PAGE_DESCRIPTION_MODEL_ID', '')
 ENTITY_EXTRACTION_MODEL_ID = os.environ.get('ENTITY_EXTRACTION_MODEL_ID', '')
 PROMPTS = None
