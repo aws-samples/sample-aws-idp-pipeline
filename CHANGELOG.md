@@ -18,6 +18,8 @@
 
 - Bump **pyjwt** from 2.10.1 to 2.12.0 (#211)
 - Bump **hono** from 4.12.4 to 4.12.7 (#199)
+- Bump **pyasn1** from 0.6.2 to 0.6.3 (#216)
+- Bump **aws-sdk-dynamodb** in lancedb-service (#215)
 
 ### Documentation
 
@@ -27,12 +29,12 @@
 
 - Fix `chunk_pdf_path` UnboundLocalError in finally block (#208)
 - Fix ajv override breaking eslint on Node 25 (#213)
+- Fix imported Lambda permission issue using `fromFunctionAttributes` with `sameEnvironment`
 
 ### Features
 
-- Add toka multilingual tokenizer Lambda (Rust, cargo-lambda-cdk) (#212)
-- Add LanceServiceStack for LanceDB related services (#212)
-- Replace kiwipiepy with toka Lambda in lancedb-service for multilingual keyword extraction (#212)
+- Add toka multilingual tokenizer Lambda for keyword extraction (#212)
+- Migrate lancedb-service from Python Docker Lambda to Rust Lambda with cargo-lambda-cdk (#214, #217, #218)
 
 ## 0.2.2 (2026-03-13)
 ### Workflow Orchestration
