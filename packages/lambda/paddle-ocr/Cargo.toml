@@ -1,0 +1,20 @@
+[package]
+name = "paddle-ocr"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0.102"
+aws-config = "1"
+aws-sdk-s3 = "1"
+image = "0.25"
+lambda_runtime = "1.0.2"
+ocr-rs = "=2.1.0"
+pdfium-auto = "0.3"
+pdfium-render = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }

@@ -13,6 +13,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 
+import { RustFunction } from 'cargo-lambda-cdk';
+
 import { SSM_KEYS } from ':idp-v2/common-constructs';
 import {
   PaddleOcrModelBuilder,
@@ -205,6 +207,36 @@ export class OcrStack extends Stack {
     documentBucket.grantPut(ocrLambdaProcessor);
     modelArtifactsBucket.grantRead(ocrLambdaProcessor);
     modelArtifactsBucket.grantPut(ocrLambdaProcessor);
+
+    // ========================================
+    // Rust PaddleOCR Lambda (MNN-based, CPU)
+    // ========================================
+
+    const paddleOcrFunction = new RustFunction(this, 'PaddleOcrFunction', {
+      functionName: 'idp-v2-paddle-ocr',
+      manifestPath: '../lambda/paddle-ocr',
+      architecture: lambda.Architecture.X86_64,
+      memorySize: 2048,
+      timeout: Duration.minutes(5),
+      bundling: {
+        commandHooks: {
+          beforeBundling(_inputDir: string, _outputDir: string): string[] {
+            return [];
+          },
+          afterBundling(_inputDir: string, outputDir: string): string[] {
+            const modelsDir = path.resolve(__dirname, '../../../lambda/paddle-ocr/models');
+            return [
+              `cp -r ${modelsDir} ${outputDir}/models`,
+            ];
+          },
+        },
+      },
+      environment: {
+        DOCUMENT_BUCKET: documentBucketName,
+      },
+    });
+
+    documentBucket.grantRead(paddleOcrFunction);
 
     // ========================================
     // OCR Complete Handler Lambda (SNS triggered)
