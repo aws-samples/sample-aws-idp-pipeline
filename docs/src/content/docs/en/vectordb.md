@@ -1,20 +1,22 @@
 ---
 title: "Vector Database"
-description: "Serverless Vector Storage and Korean Morphological Search"
+description: "Serverless Vector Storage and Multilingual Hybrid Search"
 ---
 
 ## Overview
 
-This project uses [LanceDB](https://lancedb.com/) as the vector database instead of Amazon OpenSearch Service. LanceDB is an open-source, serverless vector database that stores data directly on S3, eliminating the need for dedicated cluster infrastructure. Combined with [Kiwi](https://github.com/bab2min/Kiwi), a Korean morphological analyzer, it enables hybrid search (vector + full-text) for Korean documents.
+This project uses [LanceDB](https://lancedb.com/) as the vector database instead of Amazon OpenSearch Service. LanceDB is an open-source, serverless vector database that stores data directly on S3, eliminating the need for dedicated cluster infrastructure. Combined with [Lindera](https://github.com/lindera/lindera) and [ICU4X](https://github.com/unicode-org/icu4x) for multilingual tokenization, it enables hybrid search (vector + full-text) across documents in multiple languages.
 
 ### Multi-language Search Support
 
 | Language | Semantic Search (Vector) | Full-Text Search (FTS) | Search Mode |
 |----------|:---:|:---:|-------------|
 | **Korean** | O | O | Hybrid (Vector + FTS) |
-| **English and others** | O | X | Semantic search only |
+| **Japanese** | O | O | Hybrid (Vector + FTS) |
+| **Chinese** | O | O | Hybrid (Vector + FTS) |
+| **English and others** | O | O | Hybrid (Vector + FTS) |
 
-Kiwi is a Korean-specific morphological analyzer, so FTS keywords are accurately extracted only from Korean documents. Documents in English and other languages are searched via semantic search using Bedrock Nova vector embeddings. Since vector search operates on meaning regardless of language, documents in all languages can be retrieved.
+Lindera provides dictionary-based tokenization for CJK languages (Korean, Japanese, Chinese), while ICU4X handles word segmentation for other languages. This enables accurate FTS keyword extraction across all supported languages.
 
 ### Why LanceDB for PoC?
 
@@ -39,14 +41,14 @@ OpenSearch provides richer features (dashboards, k-NN plugin, fine-grained acces
 ```
 Write Path:
   Analysis Finalizer → SQS (Write Queue) → LanceDB Writer Lambda
-    → LanceDB Service Lambda (Container)
-        ├─ Kiwi: keyword extraction
+    → LanceDB Service Lambda (Rust)
+        ├─ Toka Lambda (Rust): keyword extraction (Lindera / ICU4X)
         ├─ Bedrock Nova: vector embedding (1024d)
         └─ LanceDB: store to S3 Express One Zone
 
 Read Path:
   MCP Search Tool Lambda
-    → LanceDB Service Lambda (Container): hybrid search (vector + FTS)
+    → LanceDB Service Lambda (Rust): hybrid search (vector + FTS)
     → Bedrock Claude Haiku: summarize search results
 
 Delete Path:
@@ -75,18 +77,17 @@ DynamoDB (Lock Table)
 
 ## Components
 
-### 1. LanceDB Service Lambda (Container Image)
+### 1. LanceDB Service Lambda (Rust)
 
-The core vector DB service. Uses a Docker container image because `lancedb` and `kiwipiepy` together exceed the 250MB Lambda deployment limit.
+The core vector DB service. Implemented in Rust using `cargo-lambda-cdk` for optimized memory usage and cold start performance.
 
 | Item | Value |
 |------|-------|
-| Function Name | `idp-v2-lancedb-service` |
-| Runtime | Python 3.12 (Container Image) |
-| Memory | 2048 MB |
+| Function Name | `idp-v2-lance-service` |
+| Runtime | Rust (cargo-lambda-cdk) |
+| Architecture | ARM64 |
+| Memory | 1024 MB |
 | Timeout | 5 min |
-| Base Image | `public.ecr.aws/lambda/python:3.12` |
-| Dependencies | `lancedb>=0.26.0`, `kiwipiepy>=0.22.0`, `boto3` |
 
 **Supported Actions:**
 
@@ -102,11 +103,23 @@ The core vector DB service. Uses a Docker container image because `lancedb` and 
 | `delete_by_workflow` | Delete all records for a workflow |
 | `drop_table` | Drop an entire project table |
 
-**Why Container Lambda:**
+**Why Rust Lambda:**
 
-Kiwi's Korean language model files and LanceDB's native binaries total several hundred MB, exceeding Lambda's 250MB zip limit. Using a Docker container image (up to 10GB) resolves this constraint.
+Rust provides significantly lower memory usage and faster cold starts compared to the previous Docker Python Lambda approach, which is critical for a serverless vector DB service that may scale to zero.
 
-### 2. LanceDB Writer Lambda
+### 2. Toka Lambda (Rust)
+
+A multilingual tokenizer service used by LanceDB Service for FTS keyword extraction.
+
+| Item | Value |
+|------|-------|
+| Function Name | `idp-v2-toka` |
+| Runtime | Rust (cargo-lambda-cdk) |
+| Architecture | ARM64 |
+| Memory | 1024 MB |
+| Tokenizers | Lindera (CJK dictionary-based), ICU4X (Unicode word segmentation) |
+
+### 3. LanceDB Writer Lambda
 
 An SQS consumer that receives write requests from the analysis pipeline and delegates to the LanceDB Service.
 
@@ -121,7 +134,7 @@ An SQS consumer that receives write requests from the analysis pipeline and dele
 
 Concurrency is set to 1 to prevent concurrent write conflicts on LanceDB tables.
 
-### 3. MCP Search Tool
+### 4. MCP Search Tool
 
 The Agent's MCP tool invokes the LanceDB Service Lambda directly to perform document retrieval during AI chat.
 
@@ -155,7 +168,7 @@ class DocumentRecord(LanceModel):
     question: str               # AI-generated question
     content: str                # content_combined (SourceField for embedding)
     vector: Vector(1024)        # Bedrock Nova embedding (VectorField)
-    keywords: str               # Kiwi-extracted keywords (FTS indexed)
+    keywords: str               # Tokenized keywords (FTS indexed)
     file_uri: str               # Original file S3 URI
     file_type: str              # MIME type
     image_uri: Optional[str]    # Segment image S3 URI
@@ -166,41 +179,34 @@ class DocumentRecord(LanceModel):
 - **Per-QA storage**: Multiple QAs per segment are stored as independent records (uniquely identified by `qa_id`)
 - **`content`**: Merged text from all preprocessing (OCR + BDA + PDF text + AI analysis)
 - **`vector`**: Auto-generated by LanceDB's embedding function (Bedrock Nova, 1024 dimensions)
-- **`keywords`**: Kiwi-extracted Korean morphemes for FTS index. Non-Korean languages use space-based tokenization
+- **`keywords`**: Lindera/ICU4X-extracted tokens for FTS index. Lindera handles CJK languages with dictionary-based tokenization, ICU4X handles other languages with Unicode word segmentation
 
 ---
 
-## Kiwi: Korean Morphological Analyzer
+## Toka: Multilingual Tokenizer
 
-[Kiwi (Korean Intelligent Word Identifier)](https://github.com/bab2min/Kiwi) is an open-source Korean morphological analyzer written in C++ with Python bindings (`kiwipiepy`).
+Toka is a Rust-based multilingual tokenizer Lambda that combines [Lindera](https://github.com/lindera/lindera) and [ICU4X](https://github.com/unicode-org/icu4x) for accurate keyword extraction across languages.
 
-### Why Kiwi?
+### Why a Custom Tokenizer?
 
-LanceDB's built-in FTS tokenizer does not support Korean. Korean is an agglutinative language where words cannot be separated by spaces alone. For example:
+LanceDB's built-in FTS tokenizer does not support CJK languages well. CJK languages (Korean, Japanese, Chinese) are agglutinative or lack word boundaries, so simple space-based tokenization is insufficient. For example:
 
 ```
-Input:  "인공지능 기반 문서 분석 시스템을 구축했습니다"
-Kiwi:   "인공 지능 기반 문서 분석 시스템 구축"  (nouns extracted)
+Korean input:  "인공지능 기반 문서 분석 시스템을 구축했습니다."
+Toka output:   ["인공지능", "기반", "분석", "시스템", "구축", "했", "."]
+
+Japanese input: "文書分析システムを構築しました"
+Toka output:    ["文書", "分析", "システム", "構築", "し"]
 ```
 
-Without morphological analysis, searching for "시스템" would miss documents containing "시스템을" or "시스템에서".
+### Tokenizer Selection
 
-### Extraction Rules
-
-| POS Tag | Description | Example |
-|---------|-------------|---------|
-| NNG | Common noun | 문서, 분석, 시스템 |
-| NNP | Proper noun | AWS, Bedrock |
-| NR | Numeral | 하나, 둘 |
-| NP | Pronoun | 이것, 그것 |
-| SL | Foreign word | Lambda, Python |
-| SN | Number | 1024, 3.5 |
-| SH | Chinese character | |
-| XSN | Suffix | Attached to previous token |
-
-**Filters:**
-- Single-character Korean stop words: 것, 수, 등, 때, 곳
-- Single-character foreign words, numbers, and Chinese characters are preserved
+| Language | Tokenizer | Method |
+|----------|-----------|--------|
+| Korean | Lindera (lindera-ko-dic) | Dictionary-based morphological analysis |
+| Japanese | Lindera (lindera-ipadic) | Dictionary-based morphological analysis |
+| Chinese | Lindera (lindera-cc-cedict) | Dictionary-based segmentation |
+| Others | ICU4X | Unicode word segmentation |
 
 ---
 
@@ -211,8 +217,8 @@ All searches are processed by the LanceDB Service Lambda. It uses LanceDB's nati
 ```
 Search Query: "문서 분석 결과 조회"
   │
-  ├─ [1] Kiwi keyword extraction (LanceDB Service Lambda)
-  │     → "문서 분석 결과 조회"
+  ├─ [1] Toka keyword extraction (via LanceDB Service Lambda)
+  │     → ["문서", "분석", "결과", "조회"]
   │
   ├─ [2] LanceDB native hybrid search
   │     → table.search(query=keywords, query_type='hybrid')
@@ -284,7 +290,8 @@ graph TB
     end
 
     subgraph Core["Core Service"]
-        Service["LanceDB Service<br/>(Container Lambda)"]
+        Service["LanceDB Service<br/>(Rust Lambda)"]
+        Toka["Toka<br/>(Rust Lambda)"]
     end
 
     subgraph Storage["Storage Layer"]
@@ -298,6 +305,7 @@ graph TB
     Backend -->|invoke<br/>drop_table| Service
 
     Service --> S3 & DDB
+    Service -->|invoke| Toka
 
     style Storage fill:#fff3e0,stroke:#ff9900
     style Core fill:#e8f5e9,stroke:#2ea043
@@ -308,7 +316,8 @@ graph TB
 
 | Component | Stack | Access Type | Description |
 |-----------|-------|-------------|-------------|
-| **LanceDB Service** | WorkflowStack | Read/Write | Core DB service (Container Lambda) |
+| **LanceDB Service** | LanceServiceStack | Read/Write | Core DB service (Rust Lambda) |
+| **Toka** | LanceServiceStack | Tokenization | Multilingual tokenizer (Rust Lambda) |
 | **LanceDB Writer** | WorkflowStack | Write (via Service) | SQS consumer, delegates to Service |
 | **Analysis Finalizer** | WorkflowStack | Write (via SQS/Service) | Sends segments to write queue, deletes on reanalysis |
 | **QA Regenerator** | WorkflowStack | Write (via Service) | Updates Q&A segments |
@@ -325,7 +334,7 @@ If migrating to Amazon OpenSearch Service for production, the following componen
 
 | Component | Current (LanceDB) | Target (OpenSearch) | Scope |
 |-----------|-------------------|---------------------|-------|
-| **LanceDB Service Lambda** | Container Lambda + LanceDB | OpenSearch client (CRUD + search) | Replace entirely |
+| **LanceDB Service Lambda** | Rust Lambda + LanceDB | OpenSearch client (CRUD + search) | Replace entirely |
 | **LanceDB Writer Lambda** | SQS → invoke LanceDB Service | SQS → write to OpenSearch index | Replace invoke target |
 | **MCP Search Tool** | Lambda invoke → LanceDB Service | Lambda invoke → OpenSearch search | Replace invoke target |
 | **StorageStack** | S3 Express + DDB lock table | OpenSearch domain (VPC) | Replace resources |
@@ -344,7 +353,7 @@ If migrating to Amazon OpenSearch Service for production, the following componen
 Phase 1: Replace Storage Layer
   - Create OpenSearch domain in VPC
   - Replace StorageStack resources (remove S3 Express + DDB lock)
-  - Configure Nori analyzer for Korean tokenization
+  - Configure Nori analyzer for Korean tokenization (replaces Toka/Lindera)
 
 Phase 2: Replace Write Path
   - Modify LanceDB Service → OpenSearch indexing service
@@ -353,11 +362,10 @@ Phase 2: Replace Write Path
 
 Phase 3: Replace Read Path
   - Update MCP Search Tool Lambda invoke target to OpenSearch search service
-  - Remove Kiwi dependency (Nori handles Korean tokenization)
+  - Remove Toka dependency (Nori handles Korean tokenization)
 
 Phase 4: Remove LanceDB Dependencies
-  - Remove lancedb, kiwipiepy from requirements
-  - Remove Container Lambda (standard Lambda may suffice)
+  - Remove Rust Lambda functions (LanceDB Service, Toka)
   - Remove S3 Express bucket and DDB lock table
 ```
 
@@ -365,7 +373,7 @@ Phase 4: Remove LanceDB Dependencies
 
 | Item | Notes |
 |------|-------|
-| Korean tokenization | OpenSearch includes [Nori analyzer](https://opensearch.org/docs/latest/analyzers/language-analyzers/#korean-nori) for Korean. Kiwi can be removed. |
+| Korean tokenization | OpenSearch includes [Nori analyzer](https://opensearch.org/docs/latest/analyzers/language-analyzers/#korean-nori) for Korean. Toka/Lindera can be removed. |
 | Vector search | OpenSearch k-NN plugin (HNSW/IVF) replaces LanceDB vector search |
 | Embedding | OpenSearch neural search can auto-embed via ingest pipelines, or use pre-computed embeddings |
 | Cost | OpenSearch requires a running cluster. Minimum 2-node cluster for HA. |

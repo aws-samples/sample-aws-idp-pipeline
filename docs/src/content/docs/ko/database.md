@@ -135,7 +135,7 @@ Step Functions Workflow
   │   ├─ SegmentAnalyzer: AI 분석 (Claude Sonnet 4.5)
   │   └─ AnalysisFinalizer:
   │       ├─ SQS → LanceDB Writer → LanceDB Service
-  │       │   → 키워드 추출 (Kiwi) + 벡터 임베딩 (Nova) + 저장
+  │       │   → 키워드 추출 (Toka) + 벡터 임베딩 (Nova) + 저장
   │       └─ 엔티티/관계 추출 (Strands Agent) → S3에 저장
   │
   ├─ GraphBuilder:
@@ -150,6 +150,6 @@ AnalysisFinalizer에서 벡터 임베딩과 엔티티 추출이 세그먼트별�
 
 ## 하위 페이지
 
-- [Vector Database](/vectordb) — LanceDB, S3 Express One Zone, Kiwi 한국어 형태소 분석, 하이브리드 검색
+- [Vector Database](/vectordb) — LanceDB, S3 Express One Zone, Lindera/ICU4X 다국어 토큰화, 하이브리드 검색
 - [Graph Database](/graphdb) — Neptune DB Serverless, openCypher, 엔티티 추출, 그래프 탐색
 - [DynamoDB](/dynamodb) — One Table Design, 워크플로우 상태 관리, 세그먼트 메타데이터

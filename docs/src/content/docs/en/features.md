@@ -110,7 +110,7 @@ A conversational AI interface powered by Bedrock Agent Core. IDP Agent and Resea
 The AI Agent automatically searches project documents during conversations.
 
 - Vector search + Full-Text Search (FTS)
-- Korean morphological analysis (Kiwi)
+- Multilingual tokenization (Lindera / ICU4X)
 - Cohere Rerank v3.5 result reranking
 
 ### Custom Agents

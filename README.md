@@ -63,7 +63,7 @@ An AI-powered IDP prototype that transforms unstructured data into actionable in
 
 - **[Hybrid Search](docs/src/content/docs/en/vectordb.md)**
   - LanceDB vector search + Full-Text Search (FTS)
-  - Kiwi Korean morphological analyzer for keyword extraction
+  - Lindera / ICU4X tokenizer for keyword extraction
   - Result reranking with Bedrock Cohere Rerank v3.5
 
 - **Knowledge Graph**
@@ -401,8 +401,12 @@ sample-aws-idp-pipeline/
 - LanceDB + S3 Express One Zone (vector storage)
 - Neptune DB Serverless (knowledge graph)
 - DynamoDB (One Table Design)
-- Kiwi (Korean morphological analyzer)
 - DuckDB (direct S3 queries)
+
+### Lambda Services (Rust)
+- Lindera / ICU4X (multilingual tokenizer)
+- LanceDB Service (vector search + FTS)
+- PaddleOCR (MNN-based CPU inference)
 
 ### Frontend (TypeScript)
 - React 19 + TanStack Router

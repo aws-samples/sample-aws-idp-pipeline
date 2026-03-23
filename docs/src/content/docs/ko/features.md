@@ -110,7 +110,7 @@ Bedrock Agent Core 기반의 대화형 AI 인터페이스입니다. IDP Agent와
 채팅 중 AI Agent가 자동으로 프로젝트 문서를 검색합니다.
 
 - 벡터 검색 + 전문 검색 (FTS)
-- 한국어 형태소 분석 (Kiwi)
+- 다국어 토큰화 (Lindera / ICU4X)
 - Cohere Rerank v3.5 결과 리랭킹
 
 ### 커스텀 에이전트

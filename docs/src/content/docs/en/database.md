@@ -135,7 +135,7 @@ Step Functions Workflow
   │   ├─ SegmentAnalyzer: AI analysis (Claude Sonnet 4.5)
   │   └─ AnalysisFinalizer:
   │       ├─ SQS → LanceDB Writer → LanceDB Service
-  │       │   → Keyword extraction (Kiwi) + Vector embedding (Nova) + Store
+  │       │   → Keyword extraction (Toka) + Vector embedding (Nova) + Store
   │       └─ Entity/relationship extraction (Strands Agent) → Save to S3
   │
   ├─ GraphBuilder:
@@ -150,6 +150,6 @@ Vector embedding and entity extraction run in parallel per segment within Analys
 
 ## Sub-pages
 
-- [Vector Database](/vectordb) — LanceDB, S3 Express One Zone, Kiwi Korean morphological analysis, hybrid search
+- [Vector Database](/vectordb) — LanceDB, S3 Express One Zone, Lindera/ICU4X multilingual tokenization, hybrid search
 - [Graph Database](/graphdb) — Neptune DB Serverless, openCypher, entity extraction, graph traversal
 - [DynamoDB](/dynamodb) — One Table Design, workflow state management, segment metadata
