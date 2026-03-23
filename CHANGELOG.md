@@ -33,8 +33,14 @@
 
 ### Features
 
+- Add Rust PaddleOCR Lambda with MNN-based CPU inference, replacing Docker container Lambda (#229)
+- Refactor OCR processor to two-Lambda architecture: Python adapter + Rust inference
+- Remove `use_doc_unwarping` and `use_textline_orientation` OCR options from UI
+- Remove entity types and cluster nodes from Neptune graph; simplify Entity ID hash to `SHA256(project_id:name)`
+- Replace CodeBuild-based Rust Lambda builds with cargo-lambda-cdk RustFunction construct (#220)
 - Add toka multilingual tokenizer Lambda for keyword extraction (#212)
 - Migrate lancedb-service from Python Docker Lambda to Rust Lambda with cargo-lambda-cdk (#214, #217, #218)
+- Pass language parameter to LanceDB for keyword extraction
 
 ## 0.2.2 (2026-03-13)
 ### Workflow Orchestration

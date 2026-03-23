@@ -33,7 +33,7 @@ description: "IDP Pipeline 배포에 필요한 최소 IAM 권한"
 | Lambda | `lambda:*` | 모든 Lambda 함수 및 레이어 |
 | ECS | `ecs:*` | 백엔드 Fargate 서비스 |
 | ECR | `ecr:*` | Lambda 및 ECS 컨테이너 이미지 |
-| CodeBuild | `codebuild:*` | OCR 컨테이너 이미지 빌드 |
+| CodeBuild | `codebuild:*` | Rust Lambda 빌드 (cargo-lambda) |
 | Step Functions | `states:*` | 문서 분석 워크플로우 |
 
 ### 스토리지
@@ -165,7 +165,7 @@ description: "IDP Pipeline 배포에 필요한 최소 IAM 권한"
 
 | 할당량 | 기본 한도 | 필요값 | 비고 |
 |--------|----------|--------|------|
-| Lambda 함수 메모리 | 10,240 MB (일부 신규 계정: 3,008 MB) | 5,120 MB | OCR Lambda에 필요. 일부 신규 계정은 사용량에 따라 자동 증가, 수동 요청 불가 |
+| Lambda 함수 메모리 | 10,240 MB (일부 신규 계정: 3,008 MB) | 2,048 MB | Rust PaddleOCR Lambda에 필요. 일부 신규 계정은 사용량에 따라 자동 증가, 수동 요청 불가 |
 | Lambda 동시 실행 수 | 리전당 1,000 (낮게 설정된 경우 있음) | 1,000 | Service Quotas에서 증가 요청 가능. 반영까지 최대 하루 소요 |
 
 자세한 내용은 [FAQ](./faq#ocr-스택-배포가-실패합니다-lambda-메모리-제한)를 참고하세요.

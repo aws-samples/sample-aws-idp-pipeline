@@ -33,7 +33,7 @@ description: "IDP Pipelineのデプロイに必要な最小IAM権限"
 | Lambda | `lambda:*` | すべてのLambda関数およびレイヤー |
 | ECS | `ecs:*` | バックエンドFargateサービス |
 | ECR | `ecr:*` | LambdaおよびECSコンテナイメージ |
-| CodeBuild | `codebuild:*` | OCRコンテナイメージビルド |
+| CodeBuild | `codebuild:*` | Rust Lambdaビルド（cargo-lambda） |
 | Step Functions | `states:*` | ドキュメント分析ワークフロー |
 
 ### ストレージ
@@ -165,7 +165,7 @@ description: "IDP Pipelineのデプロイに必要な最小IAM権限"
 
 | クォータ | デフォルト上限 | 必要値 | 備考 |
 |---------|-------------|--------|------|
-| Lambda関数メモリ | 10,240 MB（一部の新規アカウント: 3,008 MB） | 5,120 MB | OCR Lambdaに必要。一部の新規アカウントは使用量に応じて自動増加、手動申請不可 |
+| Lambda関数メモリ | 10,240 MB（一部の新規アカウント: 3,008 MB） | 2,048 MB | Rust PaddleOCR Lambdaに必要。一部の新規アカウントは使用量に応じて自動増加、手動申請不可 |
 | Lambda同時実行数 | リージョンあたり1,000（低く設定されている場合あり） | 1,000 | Service Quotasで増加リクエスト可能。反映まで最大1日 |
 
 詳細は[FAQ](./faq#ocrスタックのデプロイが失敗しますlambdaメモリ制限)を参照してください。

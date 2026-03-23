@@ -102,7 +102,7 @@ An AI-powered IDP prototype that transforms unstructured data into actionable in
 ### CDK Stack Structure
 
 ```
-@idp-v2/infra (14 stacks)
+@idp-v2/infra (15 stacks)
 ├── VpcStack              - VPC (10.0.0.0/16, 2 AZ, NAT Gateway)
 ├── NeptuneStack          - Neptune DB Serverless (knowledge graph)
 ├── StorageStack          - S3 buckets, DynamoDB tables, ElastiCache Redis
@@ -110,6 +110,7 @@ An AI-powered IDP prototype that transforms unstructured data into actionable in
 ├── OcrStack              - PaddleOCR (Lambda CPU + SageMaker GPU)
 ├── BdaStack              - Bedrock Data Automation consumer
 ├── TranscribeStack       - AWS Transcribe consumer
+├── LanceServiceStack     - LanceDB Service (Rust) + Toka tokenizer (Rust)
 ├── WorkflowStack         - Step Functions workflow (Distributed Map)
 ├── WebsocketStack        - WebSocket API, real-time notifications
 ├── McpStack              - MCP Gateway (search, graph, artifact tools)

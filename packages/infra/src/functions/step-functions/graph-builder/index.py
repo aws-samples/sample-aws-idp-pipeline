@@ -125,7 +125,7 @@ def create_analysis_nodes(segments, workflow_id, project_id, document_id):
         send_batches_parallel(
             'add_analyses', 'analyses', analyses,
             {'project_id': project_id, 'workflow_id': workflow_id, 'document_id': document_id},
-            batch_size=200,
+            batch_size=50,
         )
 
     return analyses
@@ -364,7 +364,7 @@ def handler(event, _context):
                 'action': 'add_analyses',
                 'item_key': 'analyses',
                 's3_key': key,
-                'batch_size': 200,
+                'batch_size': 50,
                 'extra_params': {'project_id': project_id, 'workflow_id': workflow_id, 'document_id': document_id},
             })
 

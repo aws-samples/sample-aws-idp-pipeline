@@ -15,7 +15,7 @@ The Segment Analyzer is a **ReAct (Reasoning + Acting) agent** built on Strands 
 
 ```
 Upstream Preprocessing (parallel)
-  ├─ PaddleOCR (SageMaker)     ── text extraction (automatic)
+  ├─ PaddleOCR (Lambda/SageMaker) ── text extraction (automatic)
   ├─ Bedrock Data Automation   ── document structure analysis (optional)
   ├─ Format Parser             ── PDF text layer extraction (automatic, PDF only)
   └─ AWS Transcribe            ── audio/video transcription (automatic)

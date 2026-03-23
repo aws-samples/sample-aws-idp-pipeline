@@ -72,7 +72,7 @@ description: "비정형 데이터를 위한 AI 기반 지능형 문서 처리(ID
 ### CDK 스택 구조
 
 ```
-@idp-v2/infra (14개 스택)
+@idp-v2/infra (15개 스택)
 ├── VpcStack              - VPC (10.0.0.0/16, 2 AZ, NAT Gateway)
 ├── NeptuneStack          - Neptune DB Serverless (지식 그래프)
 ├── StorageStack          - S3 버킷, DynamoDB 테이블, ElastiCache Redis
@@ -80,6 +80,7 @@ description: "비정형 데이터를 위한 AI 기반 지능형 문서 처리(ID
 ├── OcrStack              - PaddleOCR (Lambda CPU + SageMaker GPU)
 ├── BdaStack              - Bedrock Data Automation 소비자
 ├── TranscribeStack       - AWS Transcribe 소비자
+├── LanceServiceStack     - LanceDB Service (Rust) + Toka 토크나이저 (Rust)
 ├── WorkflowStack         - Step Functions 워크플로우 (Distributed Map)
 ├── WebsocketStack        - WebSocket API, 실시간 알림
 ├── McpStack              - MCP Gateway (검색, 그래프, 아티팩트 도구)

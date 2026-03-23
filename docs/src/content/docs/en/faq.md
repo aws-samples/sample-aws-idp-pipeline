@@ -38,10 +38,10 @@ Since September 2025, Bedrock automatically enables all serverless models via IA
 
 ### OCR stack deployment fails (Lambda memory limit)
 
-The OCR Lambda requires 5,120MB of memory for processing large documents. Lambda memory can normally be configured up to 10,240MB, but some new or free-tier accounts have a default quota of 3,008MB, which causes deployment to fail. This quota cannot be manually requested — it increases automatically based on account usage.
+The Rust PaddleOCR Lambda requires 2,048MB of memory. Lambda memory can normally be configured up to 10,240MB, but some new or free-tier accounts have a default quota of 3,008MB. In most cases this should not be an issue, but if your account quota is unusually low, deployment may fail. This quota cannot be manually requested — it increases automatically based on account usage.
 
 :::note
-Check your current memory quota in the Service Quotas dashboard. On new accounts, the OCR stack deployment may be blocked until the quota auto-increases.
+Check your current memory quota in the Service Quotas dashboard.
 :::
 
 ### Lambda concurrency errors during workflow execution
@@ -146,7 +146,7 @@ Yes. Large documents are supported through segment-based processing with Step Fu
 
 | OCR Engine | Description |
 |------------|-------------|
-| **PaddleOCR** | Open-source OCR running on SageMaker. Supports 80+ languages. Optimized for text extraction |
+| **PaddleOCR** | Open-source OCR running on Lambda (Rust, MNN inference) or SageMaker (GPU). Supports 80+ languages. Optimized for text extraction |
 | **Bedrock Data Automation (BDA)** | AWS managed service. Analyzes document structure (tables, forms, etc.) together. Selectable in project settings |
 
 > For details, see [PaddleOCR on SageMaker](./ocr.md).

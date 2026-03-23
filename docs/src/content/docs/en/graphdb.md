@@ -63,7 +63,7 @@ Node and relationship structure stored in Neptune. Uses openCypher as the query 
 | **Document** | Document | `id`, `project_id`, `workflow_id`, `file_name`, `file_type` |
 | **Segment** | Document page/section | `id`, `project_id`, `workflow_id`, `document_id`, `segment_index` |
 | **Analysis** | QA analysis result | `id`, `project_id`, `workflow_id`, `document_id`, `segment_index`, `qa_index`, `question` |
-| **Entity** | Extracted entity | `id`, `project_id`, `name`, `type` |
+| **Entity** | Extracted entity | `id`, `project_id`, `name` |
 
 ### Relationships (Edges)
 
@@ -85,24 +85,24 @@ Neptune does not support secondary indexes — the node's `~id` property is the 
 | **Document** | `{document_id}` | `doc_abc123` |
 | **Segment** | `{workflow_id}_{segment_index:04d}` | `wf_abc123_0042` |
 | **Analysis** | `{workflow_id}_{segment_index:04d}_{qa_index:02d}` | `wf_abc123_0042_00` |
-| **Entity** | First 16 chars of SHA256(`{project_id}:{name}:{type}`) | `a1b2c3d4e5f6g7h8` |
+| **Entity** | First 16 chars of SHA256(`{project_id}:{name}`) | `a1b2c3d4e5f6g7h8` |
 
 - **Segment/Analysis**: Composed of workflow ID + segment index (+ QA index), so the parent relationship can be inferred from the ID alone
-- **Entity**: Uses a hash of project ID + normalized name + type, so the same entity extracted from multiple segments is naturally merged (MERGE) into a single node
+- **Entity**: Uses a hash of project ID + normalized name, so the same entity extracted from multiple segments is naturally merged (MERGE) into a single node
 
 ### Graph Structure Example
 
 ```
 Document (report.pdf)
   ├── Segment (page 0) ──NEXT──→ Segment (page 1) ──NEXT──→ ...
-  │     └── Analysis (QA 1) ←──MENTIONED_IN── Entity ("AWS Bedrock", TECH)
-  │     └── Analysis (QA 2) ←──MENTIONED_IN── Entity ("Claude", PRODUCT)
+  │     └── Analysis (QA 1) ←──MENTIONED_IN── Entity ("AWS Bedrock")
+  │     └── Analysis (QA 2) ←──MENTIONED_IN── Entity ("Claude")
   │                                                  │
   │                                           RELATES_TO
   │                                                  ▼
-  │                                            Entity ("Anthropic", ORG)
+  │                                            Entity ("Anthropic")
   └── Segment (page 1)
-        └── Analysis (QA 1) ←──MENTIONED_IN── Entity ("Anthropic", ORG)
+        └── Analysis (QA 1) ←──MENTIONED_IN── Entity ("Anthropic")
 ```
 
 ---
@@ -172,7 +172,7 @@ Runs after Map(SegmentAnalyzer) completion and before DocumentSummarizer in the 
 2. **Load segment analysis results from S3** — Collect analysis data from all segments
 3. **Create Analysis nodes** — Batch create Analysis nodes per QA pair (200 per batch)
 4. **Collect Entities/Relationships** — Gather entities and relationships already extracted per segment by AnalysisFinalizer
-5. **Entity deduplication** — Merge identical entities by name + type
+5. **Entity deduplication** — Merge identical entities by name
 6. **Batch save to Neptune** — Save Entities and Relationships in batches of 50, up to 10 parallel workers
 
 ### 4. Graph MCP Tool
@@ -227,7 +227,6 @@ Uses Strands Agent for LLM-based entity and relationship extraction.
 
 - Entity names use canonical forms (e.g., "the transformer model" → "Transformer")
 - Generic references are excluded (e.g., "Figure 1", "Table 2", "the author")
-- Entity types in uppercase English (e.g., PERSON, ORG, CONCEPT, TECH, PRODUCT)
 - Entity names, context, and relationship labels are written in the document language
 - Every QA pair is guaranteed to have at least one entity connection
 
@@ -238,7 +237,6 @@ Uses Strands Agent for LLM-based entity and relationship extraction.
   "entities": [
     {
       "name": "Amazon Bedrock",
-      "type": "TECH",
       "mentioned_in": [
         {
           "segment_index": 0,
@@ -252,9 +250,7 @@ Uses Strands Agent for LLM-based entity and relationship extraction.
   "relationships": [
     {
       "source": "Amazon Bedrock",
-      "source_type": "TECH",
       "target": "Claude",
-      "target_type": "PRODUCT",
       "relationship": "hosts"
     }
   ]
