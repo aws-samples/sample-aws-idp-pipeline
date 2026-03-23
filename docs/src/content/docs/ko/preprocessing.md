@@ -58,7 +58,7 @@ PDF와 이미지에서 텍스트를 추출합니다. Lambda(CPU) 또는 SageMake
 | 항목 | 값 |
 |------|-----|
 | 대상 | PDF, 이미지 (DXF 제외) |
-| Lambda 모델 | `pp-ocrv5`, `pp-structurev3` (CPU) |
+| Lambda 모델 | `pp-ocrv5` (CPU, Rust) |
 | SageMaker 모델 | `paddleocr-vl` (GPU) |
 | 출력 | `paddleocr/result.json` (페이지별 텍스트 + 블록 좌표) |
 

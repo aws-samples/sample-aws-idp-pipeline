@@ -33,7 +33,7 @@ The deploying IAM user or role requires permissions to create and manage resourc
 | Lambda | `lambda:*` | All Lambda functions and layers |
 | ECS | `ecs:*` | Backend Fargate service |
 | ECR | `ecr:*` | Container images for Lambda and ECS |
-| CodeBuild | `codebuild:*` | OCR container image build |
+| CodeBuild | `codebuild:*` | SageMaker model image build |
 | Step Functions | `states:*` | Document analysis workflow |
 
 ### Storage

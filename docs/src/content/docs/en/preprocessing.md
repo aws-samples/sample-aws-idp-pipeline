@@ -58,7 +58,7 @@ Extracts text from PDFs and images. Supports dual backends: Lambda (CPU) or Sage
 | Item | Value |
 |------|-------|
 | Target | PDF, Images (excluding DXF) |
-| Lambda Models | `pp-ocrv5`, `pp-structurev3` (CPU) |
+| Lambda Models | `pp-ocrv5` (CPU, Rust) |
 | SageMaker Models | `paddleocr-vl` (GPU) |
 | Output | `paddleocr/result.json` (per-page text + block coordinates) |
 

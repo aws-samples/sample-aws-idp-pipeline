@@ -172,7 +172,7 @@ API Gateway HTTP (IAM Auth)
 | セグメントインデックスのみワークフローに渡す | 3000ページ以上の文書サポート |
 | LanceDB + S3 Express One Zone | ベクトル検索に最適化された低レイテンシストレージ |
 | Neptune DB Serverless | エンティティ関係のナレッジグラフ、アイドル時ゼロスケーリング |
-| PaddleOCRデュアルバックエンド（Lambda + SageMaker） | CPUモデルはLambda（コールドスタートなし）、GPUモデル（VL）はSageMaker |
+| PaddleOCRデュアルバックエンド（Lambda + SageMaker） | CPUモデル（PP-OCRv5）はRust Lambda、GPUモデル（VL）はSageMaker |
 | SageMaker Auto-scaling 0->1 | コスト最適化（アイドル時Scale-to-zero） |
 | ElastiCache Redis | WebSocket接続状態管理（DynamoDB TTLより高速） |
 | DuckDBでS3直接クエリ | セッション/エージェントデータのコピーなしで照会 |
@@ -282,7 +282,7 @@ pnpm nx lint @idp-v2/infra --configuration=fix  # 自動修正
 
 | モデル | 用途 | 説明 |
 |--------|------|------|
-| PP-OCRv5 / PP-StructureV3 | OCR（CPU） | Lambdaコンテナ、汎用テキスト抽出 |
+| PP-OCRv5 | OCR（CPU） | Rust Lambda（MNNベース）、汎用テキスト抽出 |
 | PaddleOCR-VL | OCR（GPU） | SageMaker g5.xlarge、Vision-Languageモデル、Auto-scaling 0->1 |
 | Bedrock Data Automation | 文書分析 | 非同期文書構造分析（オプション） |
 | AWS Transcribe | 音声変換 | 音声/動画テキスト変換 |
