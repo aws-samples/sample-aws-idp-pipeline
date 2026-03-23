@@ -33,7 +33,7 @@ description: "비정형 데이터를 위한 AI 기반 지능형 문서 처리(ID
 
 - **[하이브리드 검색](./vectordb.md)**
   - LanceDB 벡터 검색 + FTS(Full-Text Search)
-  - Kiwi 한국어 형태소 분석기 기반 키워드 추출
+  - Lindera / ICU4X 토크나이저 기반 키워드 추출
   - Bedrock Cohere Rerank v3.5로 결과 재순위화
 
 - **지식 그래프**
@@ -347,8 +347,12 @@ sample-aws-idp-pipeline/
 - LanceDB + S3 Express One Zone (벡터 스토리지)
 - Neptune DB Serverless (지식 그래프)
 - DynamoDB (One Table Design)
-- Kiwi (한국어 형태소 분석기)
 - DuckDB (S3 직접 쿼리)
+
+### Lambda 서비스 (Rust)
+- Lindera / ICU4X (다국어 토크나이저)
+- LanceDB Service (벡터 검색 + FTS)
+- PaddleOCR (MNN 기반 CPU 추론)
 
 ### 프론트엔드 (TypeScript)
 - React 19 + TanStack Router
