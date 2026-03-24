@@ -181,9 +181,9 @@ async fn test_action_search_graph_keywords() {
         &conn,
         &bedrock_client,
         search_graph_keywords::SearchGraphKeywordsParams {
-            project_id: "proj_HLEpYD_QD5iT6VwptGxYJ".to_string(),
+            project_id: "proj_test".to_string(),
             query: "떡볶이".to_string(),
-            limit: None,
+            limit: Some(5),
         },
     )
     .await
