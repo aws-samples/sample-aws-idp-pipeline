@@ -9,4 +9,4 @@ pub mod get_graph_keywords;
 pub mod get_segments;
 pub mod hybrid_search;
 pub mod list_tables;
-pub mod search_keywords;
+pub mod search_graph_keywords;

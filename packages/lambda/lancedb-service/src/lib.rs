@@ -32,8 +32,8 @@ pub enum LanceDbAction {
     #[serde(rename = "hybrid_search")]
     HybridSearch(hybrid_search::HybridSearchParams),
 
-    #[serde(rename = "search_keywords")]
-    SearchKeywords(search_keywords::SearchKeywordsParams),
+    #[serde(rename = "search_graph_keywords")]
+    SearchGraphKeywords(search_graph_keywords::SearchGraphKeywordsParams),
 
     #[serde(rename = "list_tables")]
     ListTables,

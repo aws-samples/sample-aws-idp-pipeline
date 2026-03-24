@@ -13,14 +13,14 @@ use crate::db::model::{ScoredKeyword, GRAPH_KEYWORDS_TABLE};
 use super::get_graph_keywords::SELECT_COLUMNS;
 
 #[derive(Deserialize)]
-pub struct SearchKeywordsParams {
+pub struct SearchGraphKeywordsParams {
     pub project_id: String,
     pub query: String,
     pub limit: Option<i64>,
 }
 
 #[derive(Serialize)]
-pub struct SearchKeywordsOutput {
+pub struct SearchGraphKeywordsOutput {
     pub success: bool,
     pub results: Vec<ScoredKeyword>,
 }
@@ -28,14 +28,14 @@ pub struct SearchKeywordsOutput {
 pub async fn execute(
     conn: &Connection,
     bedrock_client: &aws_sdk_bedrockruntime::Client,
-    params: SearchKeywordsParams,
-) -> lancedb::error::Result<SearchKeywordsOutput> {
+    params: SearchGraphKeywordsParams,
+) -> lancedb::error::Result<SearchGraphKeywordsOutput> {
     let table = conn.open_table(GRAPH_KEYWORDS_TABLE).execute().await?;
     let filter = format!("project_id = '{}'", params.project_id);
     let limit = params.limit.unwrap_or(5) as usize;
 
     info!(
-        "[search_keywords] Hybrid search: {}, project_id: {}",
+        "[search_graph_keywords] Hybrid search: {}, project_id: {}",
         params.query, params.project_id
     );
 
@@ -67,9 +67,9 @@ pub async fn execute(
         .await?;
 
     let results: Vec<ScoredKeyword> = batches.iter().flat_map(ScoredKeyword::from_batch).collect();
-    info!("[search_keywords] Found {} results", results.len());
+    info!("[search_graph_keywords] Found {} results", results.len());
 
-    Ok(SearchKeywordsOutput {
+    Ok(SearchGraphKeywordsOutput {
         success: true,
         results,
     })
