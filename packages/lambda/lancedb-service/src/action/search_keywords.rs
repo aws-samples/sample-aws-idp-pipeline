@@ -10,7 +10,7 @@ use tracing::info;
 use crate::client;
 use crate::db::model::{ScoredKeyword, GRAPH_KEYWORDS_TABLE};
 
-use super::get_keywords::SELECT_COLUMNS;
+use super::get_graph_keywords::SELECT_COLUMNS;
 
 #[derive(Deserialize)]
 pub struct SearchKeywordsParams {

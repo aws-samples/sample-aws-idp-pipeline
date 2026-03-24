@@ -1,6 +1,6 @@
 use lancedb_service::action::{
     add_graph_keywords, add_record, count, delete_by_workflow, delete_record, drop_table,
-    get_by_segment_ids, get_keywords, get_segments, hybrid_search, list_tables, search_keywords,
+    get_by_segment_ids, get_graph_keywords, get_segments, hybrid_search, list_tables, search_keywords,
 };
 use lancedb_service::db;
 use tracing::info;
@@ -152,13 +152,13 @@ async fn test_action_drop_table() {
 
 #[tokio::test]
 #[ignore]
-async fn test_action_get_keywords() {
+async fn test_action_get_graph_keywords() {
     init_tracing();
     dotenvy::dotenv().ok();
     let conn = db::connect().await.unwrap();
-    let output = get_keywords::execute(
+    let output = get_graph_keywords::execute(
         &conn,
-        get_keywords::GetKeywordsParams {
+        get_graph_keywords::GetGraphKeywordsParams {
             project_id: "proj_HLEpYD_QD5iT6VwptGxYJ".to_string(),
             limit: None,
         },

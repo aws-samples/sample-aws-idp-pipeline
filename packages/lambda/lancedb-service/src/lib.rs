@@ -20,8 +20,8 @@ pub enum LanceDbAction {
     #[serde(rename = "delete_by_workflow")]
     DeleteByWorkflow(delete_by_workflow::DeleteByWorkflowParams),
 
-    #[serde(rename = "get_keywords")]
-    GetKeywords(get_keywords::GetKeywordsParams),
+    #[serde(rename = "get_graph_keywords")]
+    GetGraphKeywords(get_graph_keywords::GetGraphKeywordsParams),
 
     #[serde(rename = "get_segments")]
     GetSegments(get_segments::GetSegmentsParams),

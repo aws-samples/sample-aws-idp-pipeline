@@ -1,6 +1,6 @@
 use lambda_runtime::{Error, LambdaEvent, service_fn};
 use lancedb_service::LanceDbAction;
-use lancedb_service::action::{add_graph_keywords, add_record, count, delete_by_workflow, delete_record, drop_table, get_by_segment_ids, get_keywords, get_segments, hybrid_search, list_tables, search_keywords};
+use lancedb_service::action::{add_graph_keywords, add_record, count, delete_by_workflow, delete_record, drop_table, get_by_segment_ids, get_graph_keywords, get_segments, hybrid_search, list_tables, search_keywords};
 use lancedb_service::db;
 use serde::Serialize;
 use tracing::info;
@@ -57,7 +57,7 @@ async fn handler(
         LanceDbAction::Count(params) => count::execute(&conn, params).await
             .map_err(|e| (500, e.to_string()))
             .and_then(|v| serde_json::to_value(v).map_err(|e| (500, e.to_string()))),
-        LanceDbAction::GetKeywords(params) => get_keywords::execute(&conn, params).await
+        LanceDbAction::GetGraphKeywords(params) => get_graph_keywords::execute(&conn, params).await
             .map_err(|e| (500, e.to_string()))
             .and_then(|v| serde_json::to_value(v).map_err(|e| (500, e.to_string()))),
         LanceDbAction::GetSegments(params) => get_segments::execute(&conn, params).await
