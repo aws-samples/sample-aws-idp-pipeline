@@ -1,9 +1,12 @@
+pub mod add_graph_keywords;
 pub mod add_record;
 pub mod count;
 pub mod delete_by_workflow;
 pub mod delete_record;
 pub mod drop_table;
 pub mod get_by_segment_ids;
+pub mod get_keywords;
 pub mod get_segments;
 pub mod hybrid_search;
 pub mod list_tables;
+pub mod search_keywords;

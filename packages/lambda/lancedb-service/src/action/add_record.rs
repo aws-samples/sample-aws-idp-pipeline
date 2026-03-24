@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use arrow_array::{
-    Float32Array, Int64Array, RecordBatch, StringArray, TimestampMicrosecondArray,
-    FixedSizeListArray,
+    FixedSizeListArray, Float32Array, Int64Array, RecordBatch, StringArray,
+    TimestampMicrosecondArray,
 };
 use arrow_schema::{DataType, Field};
 use chrono::{DateTime, Utc};
@@ -58,16 +58,22 @@ pub async fn execute(
 
     // Get or create table
     info!("[add_record] Getting or creating table...");
-    let table = db::document::get_or_create_table(conn, project_id).await?;
+    let table = db::table::get_or_create_table(conn, project_id, document_record_schema()).await?;
 
     // Extract keywords via Toka Lambda
-    info!("[add_record] Extracting keywords from content (len={}), lang={lang}", content.len());
+    info!(
+        "[add_record] Extracting keywords from content (len={}), lang={lang}",
+        content.len()
+    );
     let keywords = if content.is_empty() {
         String::new()
     } else {
         client::toka::extract_keywords(lambda_client, content, lang).await?
     };
-    info!("[add_record] Keywords: {}...", &keywords.chars().take(100).collect::<String>());
+    info!(
+        "[add_record] Keywords: {}...",
+        &keywords.chars().take(100).collect::<String>()
+    );
 
     // Generate embedding via Bedrock
     info!("[add_record] Generating embedding...");
@@ -75,8 +81,7 @@ pub async fn execute(
 
     // Parse created_at
     let created_at = if let Some(ref s) = params.created_at {
-        s.parse::<DateTime<Utc>>()
-            .unwrap_or_else(|_| Utc::now())
+        s.parse::<DateTime<Utc>>().unwrap_or_else(|_| Utc::now())
     } else {
         Utc::now()
     };

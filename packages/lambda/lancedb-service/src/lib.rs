@@ -8,6 +8,9 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 #[serde(tag = "action", content = "params")]
 pub enum LanceDbAction {
+    #[serde(rename = "add_graph_keywords")]
+    AddGraphKeywords(add_graph_keywords::AddGraphKeywordsParams),
+
     #[serde(rename = "add_record")]
     AddRecord(add_record::AddRecordParams),
 
@@ -17,6 +20,9 @@ pub enum LanceDbAction {
     #[serde(rename = "delete_by_workflow")]
     DeleteByWorkflow(delete_by_workflow::DeleteByWorkflowParams),
 
+    #[serde(rename = "get_keywords")]
+    GetKeywords(get_keywords::GetKeywordsParams),
+
     #[serde(rename = "get_segments")]
     GetSegments(get_segments::GetSegmentsParams),
 
@@ -25,6 +31,9 @@ pub enum LanceDbAction {
 
     #[serde(rename = "hybrid_search")]
     HybridSearch(hybrid_search::HybridSearchParams),
+
+    #[serde(rename = "search_keywords")]
+    SearchKeywords(search_keywords::SearchKeywordsParams),
 
     #[serde(rename = "list_tables")]
     ListTables,

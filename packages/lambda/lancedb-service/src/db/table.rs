@@ -1,13 +1,32 @@
-use lancedb::Connection;
-use tracing::info;
+use std::sync::Arc;
 
-use super::model::document_record_schema;
+use arrow_schema::Schema;
+use lancedb::{Connection, Table};
+use tracing::info;
 
 pub async fn list_tables(db: &Connection) -> lancedb::error::Result<Vec<String>> {
     info!("[list_tables] Getting table names...");
     let table_names = db.table_names().execute().await?;
     info!("[list_tables] Found {} tables", table_names.len());
     Ok(table_names)
+}
+
+pub async fn get_or_create_table(
+    db: &Connection,
+    table_name: &str,
+    schema: Arc<Schema>,
+) -> lancedb::error::Result<Table> {
+    let table_names = db.table_names().execute().await?;
+
+    if table_names.contains(&table_name.to_string()) {
+        info!("[get_or_create_table] Opening existing table: {table_name}");
+        db.open_table(table_name).execute().await
+    } else {
+        info!("[get_or_create_table] Creating new table: {table_name}");
+        let table = db.create_empty_table(table_name, schema).execute().await?;
+        info!("[get_or_create_table] Table created successfully");
+        Ok(table)
+    }
 }
 
 pub async fn drop_table(db: &Connection, project_id: &str) -> lancedb::error::Result<()> {
@@ -31,12 +50,4 @@ pub async fn count(db: &Connection, project_id: &str) -> lancedb::error::Result<
     let count = table.count_rows(None).await?;
     info!("[count] Table {project_id} has {count} rows");
     Ok((true, count as u64))
-}
-
-pub async fn create_table(db: &Connection, project_id: &str) -> lancedb::error::Result<()> {
-    info!("[create_table] Creating table: {project_id}");
-    let schema = document_record_schema();
-    db.create_empty_table(project_id, schema).execute().await?;
-    info!("[create_table] Table created successfully");
-    Ok(())
 }

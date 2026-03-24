@@ -77,6 +77,73 @@ impl ScoredSegment {
     }
 }
 
+#[derive(Serialize)]
+pub struct Keyword {
+    pub entity_id: String,
+    pub project_id: String,
+    pub name: String,
+}
+
+impl Keyword {
+    pub fn from_batch(batch: &RecordBatch) -> Vec<Self> {
+        let entity_ids = batch.column_by_name("entity_id").unwrap().as_string::<i32>();
+        let project_ids = batch.column_by_name("project_id").unwrap().as_string::<i32>();
+        let names = batch.column_by_name("name").unwrap().as_string::<i32>();
+
+        (0..batch.num_rows())
+            .map(|i| Keyword {
+                entity_id: entity_ids.value(i).to_string(),
+                project_id: project_ids.value(i).to_string(),
+                name: names.value(i).to_string(),
+            })
+            .collect()
+    }
+}
+
+#[derive(Serialize)]
+pub struct ScoredKeyword {
+    #[serde(flatten)]
+    pub keyword: Keyword,
+    pub score: f32,
+}
+
+impl ScoredKeyword {
+    pub fn from_batch(batch: &RecordBatch) -> Vec<Self> {
+        let keywords = Keyword::from_batch(batch);
+        let scores = batch.column_by_name("_relevance_score").unwrap().as_primitive::<arrow_array::types::Float32Type>();
+
+        keywords
+            .into_iter()
+            .enumerate()
+            .map(|(i, keyword)| ScoredKeyword {
+                keyword,
+                score: scores.value(i),
+            })
+            .collect()
+    }
+}
+
+pub const GRAPH_KEYWORDS_TABLE: &str = "graph_keywords";
+
+/// Arrow schema for the keywords table in LanceDB.
+/// Each row represents a named entity extracted from documents.
+/// Tables are partitioned by project_id.
+pub fn keyword_record_schema() -> Arc<Schema> {
+    Arc::new(Schema::new(vec![
+        Field::new("entity_id", DataType::Utf8, false),
+        Field::new("project_id", DataType::Utf8, false),
+        Field::new("name", DataType::Utf8, false),
+        Field::new(
+            "vector",
+            DataType::FixedSizeList(
+                Arc::new(Field::new("item", DataType::Float32, true)),
+                VECTOR_DIMENSION,
+            ),
+            false,
+        ),
+    ]))
+}
+
 /// Full Arrow schema for a document record in LanceDB.
 /// A "document record" is the storage unit — one row per segment (or QA pair) of a document.
 /// Tables are partitioned by project_id.

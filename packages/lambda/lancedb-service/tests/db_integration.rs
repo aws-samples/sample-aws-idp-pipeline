@@ -26,7 +26,8 @@ async fn test_get_or_create_table() {
     init_tracing();
     dotenvy::dotenv().ok();
     let db = db::connect().await.unwrap();
-    let table = db::document::get_or_create_table(&db, "keywords")
+    let schema = db::model::keyword_record_schema();
+    let table = db::table::get_or_create_table(&db, "graph_keywords", schema)
         .await
         .unwrap();
     let count = table.count_rows(None).await.unwrap();
@@ -49,11 +50,7 @@ async fn test_inspect_schema() {
     init_tracing();
     dotenvy::dotenv().ok();
     let db = db::connect().await.unwrap();
-    let table = db
-        .open_table("proj_HLEpYD_QD5iT6VwptGxYJ")
-        .execute()
-        .await
-        .unwrap();
+    let table = db.open_table("keywords").execute().await.unwrap();
     let batches: Vec<_> = table
         .query()
         .limit(1)

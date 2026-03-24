@@ -5,7 +5,6 @@ use lancedb::query::{ExecutableQuery, QueryBase, Select};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use crate::db;
 use crate::db::model::Segment;
 
 #[derive(Deserialize)]
@@ -24,7 +23,7 @@ pub async fn execute(
     conn: &Connection,
     params: GetSegmentsParams,
 ) -> lancedb::error::Result<GetSegmentsOutput> {
-    let table = db::document::get_or_create_table(conn, &params.project_id).await?;
+    let table = conn.open_table(&params.project_id).execute().await?;
 
     info!("[get_segments] Querying workflow_id: {}", params.workflow_id);
     let filter = format!("workflow_id = '{}'", params.workflow_id);

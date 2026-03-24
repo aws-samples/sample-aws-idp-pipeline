@@ -5,7 +5,6 @@ use lancedb::query::{ExecutableQuery, QueryBase, Select};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use crate::db;
 use crate::db::model::Segment;
 
 #[derive(Deserialize)]
@@ -31,7 +30,7 @@ pub async fn execute(
         });
     }
 
-    let table = db::document::get_or_create_table(conn, &params.project_id).await?;
+    let table = conn.open_table(&params.project_id).execute().await?;
 
     let id_list = params
         .segment_ids
