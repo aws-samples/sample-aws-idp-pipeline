@@ -169,6 +169,7 @@ export class OcrStack extends Stack {
       memorySize: 3008,
       timeout: Duration.minutes(10),
       bundling: {
+        forcedDockerBundling: true,
         dockerOptions: {
           user: 'root',
         },

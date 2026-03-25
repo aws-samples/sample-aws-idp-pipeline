@@ -53,6 +53,10 @@ export class LanceServiceStack extends Stack {
           LANCEDB_LOCK_TABLE_NAME: lancedbLockTableName,
         },
         bundling: {
+          forcedDockerBundling: true,
+          dockerOptions: {
+            user: 'root',
+          },
           commandHooks: {
             beforeBundling(): string[] {
               return [

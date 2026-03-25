@@ -1318,6 +1318,7 @@ dependencies = [
 dev = [
     { name = "boto3-stubs", extra = ["dynamodb"] },
     { name = "fastapi", extra = ["standard"] },
+    { name = "ruff" },
 ]
 
 [package.metadata]
@@ -1338,6 +1339,7 @@ requires-dist = [
 dev = [
     { name = "boto3-stubs", extras = ["dynamodb"] },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.132.0" },
+    { name = "ruff", specifier = ">=0.14.10" },
 ]
 
 [[package]]
