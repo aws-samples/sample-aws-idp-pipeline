@@ -26,8 +26,8 @@ pub enum LanceDbAction {
     #[serde(rename = "get_graph_keywords")]
     GetGraphKeywords(get_graph_keywords::GetGraphKeywordsParams),
 
-    #[serde(rename = "get_segments")]
-    GetSegments(get_segments::GetSegmentsParams),
+    #[serde(rename = "get_segments_by_document_id")]
+    GetSegmentsByDocumentId(get_segments_by_document_id::GetSegmentsByDocumentIdParams),
 
     #[serde(rename = "get_by_segment_ids")]
     GetBySegmentIds(get_by_segment_ids::GetBySegmentIdsParams),

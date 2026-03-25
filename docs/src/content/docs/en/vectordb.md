@@ -95,7 +95,7 @@ The core vector DB service. Implemented in Rust using `cargo-lambda-cdk` for opt
 |--------|-------------|
 | `add_record` | Add a QA record (keyword extraction + embedding + store) |
 | `delete_record` | Delete by QA ID or segment ID |
-| `get_segments` | Retrieve all segments for a workflow |
+| `get_segments_by_document_id` | Retrieve all segments for a document |
 | `get_by_segment_ids` | Retrieve content by segment ID list (used by Graph MCP) |
 | `hybrid_search` | Hybrid search (vector + FTS, `query_type='hybrid'`) |
 | `list_tables` | List all project tables |

@@ -95,7 +95,7 @@ DynamoDB (Lock Table)
 |------|------|
 | `add_record` | QA 레코드 추가 (키워드 추출 + 임베딩 + 저장) |
 | `delete_record` | QA ID 또는 세그먼트 ID로 삭제 |
-| `get_segments` | 워크플로우의 모든 세그먼트 조회 |
+| `get_segments_by_document_id` | 문서의 모든 세그먼트 조회 |
 | `get_by_segment_ids` | 세그먼트 ID 목록으로 본문 조회 (Graph MCP에서 사용) |
 | `hybrid_search` | 하이브리드 검색 (벡터 + FTS, `query_type='hybrid'`) |
 | `list_tables` | 전체 프로젝트 테이블 목록 |

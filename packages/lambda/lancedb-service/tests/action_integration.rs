@@ -1,6 +1,6 @@
 use lancedb_service::action::{
     add_graph_keywords, add_record, count, delete_by_workflow, delete_record, drop_table,
-    get_by_segment_ids, get_graph_keywords, get_segments, hybrid_search, list_tables,
+    get_by_segment_ids, get_graph_keywords, get_segments_by_document_id, hybrid_search, list_tables,
     search_graph_keywords,
 };
 use lancedb_service::db;
@@ -42,15 +42,15 @@ async fn test_action_list_tables() {
 
 #[tokio::test]
 #[ignore]
-async fn test_action_get_segments() {
+async fn test_action_get_segments_by_document_id() {
     init_tracing();
     dotenvy::dotenv().ok();
     let conn = db::connect().await.unwrap();
-    let output = get_segments::execute(
+    let output = get_segments_by_document_id::execute(
         &conn,
-        get_segments::GetSegmentsParams {
+        get_segments_by_document_id::GetSegmentsByDocumentIdParams {
             project_id: "proj_HLEpYD_QD5iT6VwptGxYJ".to_string(),
-            workflow_id: "wf_adF_cHMvTcCFOdESChdyH".to_string(),
+            document_id: "doc_test".to_string(),
         },
     )
     .await

@@ -255,7 +255,7 @@ aws lambda invoke --function-name idp-v2-lancedb-service \
 
 ```bash
 aws lambda invoke --function-name idp-v2-lancedb-service \
-    --payload '{"action": "get_segments", "params": {"project_id": "YOUR_PROJECT_ID", "workflow_id": "YOUR_WORKFLOW_ID"}}' \
+    --payload '{"action": "get_segments_by_document_id", "params": {"project_id": "YOUR_PROJECT_ID", "document_id": "YOUR_DOCUMENT_ID"}}' \
     --cli-binary-format raw-in-base64-out \
     /dev/stdout 2>/dev/null | jq .
 ```
