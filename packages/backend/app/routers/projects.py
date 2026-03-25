@@ -19,6 +19,13 @@ from app.ddb import (
 )
 from app.ddb.documents import query_documents
 from app.ddb.workflows import delete_workflow_item, query_workflows
+from app.lancedb import (
+    DeleteGraphKeywordsByProjectIdInput,
+    DropTableInput,
+    LanceDbError,
+)
+from app.lancedb import delete_graph_keywords_by_project_id as lancedb_delete_graph_keywords
+from app.lancedb import drop_table as lancedb_drop_table
 from app.s3 import delete_s3_prefix
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -256,22 +263,10 @@ async def delete_project(project_id: str, user_id: str = Header(alias="x-user-id
 
     # 2. Delete from LanceDB via Lambda
     try:
-        import json
-        import os
-
-        import boto3
-
-        lancedb_fn = os.environ.get("LANCEDB_FUNCTION_NAME", "idp-v2-lancedb-service")
-        lambda_client = boto3.client("lambda", region_name=config.aws_region)
-        resp = lambda_client.invoke(
-            FunctionName=lancedb_fn,
-            InvocationType="RequestResponse",
-            Payload=json.dumps({"action": "drop_table", "params": {"project_id": project_id}}),
-        )
-        payload = json.loads(resp["Payload"].read().decode("utf-8"))
-        if payload.get("statusCode") == 200:
-            deleted_info.lancedb_objects_deleted = 1
-    except Exception as e:
+        lancedb_drop_table(DropTableInput(project_id=project_id))
+        lancedb_delete_graph_keywords(DeleteGraphKeywordsByProjectIdInput(project_id=project_id))
+        deleted_info.lancedb_objects_deleted = 1
+    except LanceDbError as e:
         deleted_info.lancedb_error = str(e)
 
     # 3. Delete workflow items from DynamoDB (including STEP, SEG#*, etc.)

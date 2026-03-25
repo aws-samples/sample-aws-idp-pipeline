@@ -5,6 +5,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.config import get_config
+from app.lancedb import DeleteByWorkflowInput, LanceDbError
+from app.lancedb import delete_by_workflow as lancedb_delete_by_workflow
 from app.ddb import (
     Document,
     DocumentData,
@@ -303,30 +305,9 @@ def delete_document(project_id: str, document_id: str) -> DeleteDocumentResponse
     # 1. Delete from LanceDB via Lambda
     if workflow_id and config.lancedb_function_name:
         try:
-            import json
-
-            import boto3
-
-            lambda_client = boto3.client("lambda", region_name=config.aws_region)
-            resp = lambda_client.invoke(
-                FunctionName=config.lancedb_function_name,
-                InvocationType="RequestResponse",
-                Payload=json.dumps(
-                    {
-                        "action": "delete_by_workflow",
-                        "params": {
-                            "project_id": project_id,
-                            "workflow_id": workflow_id,
-                        },
-                    }
-                ),
-            )
-            payload = json.loads(resp["Payload"].read())
-            if resp.get("FunctionError") or payload.get("statusCode") != 200:
-                deleted_info.lancedb_error = payload.get("error", "Unknown error")
-            else:
-                deleted_info.lancedb_deleted = True
-        except Exception as e:
+            lancedb_delete_by_workflow(DeleteByWorkflowInput(project_id=project_id, workflow_id=workflow_id))
+            deleted_info.lancedb_deleted = True
+        except LanceDbError as e:
             deleted_info.lancedb_error = str(e)
 
     # 1b. Queue graph deletion via SQS (async, handles large documents)
