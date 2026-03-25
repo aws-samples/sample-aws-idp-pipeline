@@ -20,6 +20,9 @@ pub enum LanceDbAction {
     #[serde(rename = "delete_by_workflow")]
     DeleteByWorkflow(delete_by_workflow::DeleteByWorkflowParams),
 
+    #[serde(rename = "delete_graph_keywords_by_project_id")]
+    DeleteGraphKeywordsByProjectId(delete_graph_keywords_by_project_id::DeleteGraphKeywordsByProjectIdParams),
+
     #[serde(rename = "get_graph_keywords")]
     GetGraphKeywords(get_graph_keywords::GetGraphKeywordsParams),
 
