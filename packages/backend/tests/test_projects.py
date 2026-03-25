@@ -511,12 +511,20 @@ class TestListProjectWorkflows:
 
 
 class TestDeleteProject:
+    @patch("app.routers.projects.lancedb_delete_graph_keywords")
+    @patch("app.routers.projects.lancedb_drop_table")
     @patch("app.ddb.workflows.get_table")
     @patch("app.s3.delete_s3_prefix")
     @patch("app.ddb.client.get_table")
     @patch("app.ddb.projects.get_table")
     def test_delete_project_success(
-        self, mock_proj_get_table, mock_client_get_table, mock_delete_s3_prefix, mock_wf_get_table
+        self,
+        mock_proj_get_table,
+        mock_client_get_table,
+        mock_delete_s3_prefix,
+        mock_wf_get_table,
+        mock_lancedb_drop_table,
+        mock_lancedb_delete_graph_keywords,
     ):
         mock_table = MagicMock()
         mock_table.get_item.return_value = {

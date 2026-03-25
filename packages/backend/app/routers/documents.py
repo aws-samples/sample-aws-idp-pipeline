@@ -5,8 +5,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.config import get_config
-from app.lancedb import DeleteByWorkflowInput, LanceDbError
-from app.lancedb import delete_by_workflow as lancedb_delete_by_workflow
 from app.ddb import (
     Document,
     DocumentData,
@@ -19,6 +17,8 @@ from app.ddb import (
     update_document_data,
 )
 from app.ddb.workflows import delete_workflow_item, get_steps_batch, query_workflows
+from app.lancedb import DeleteByWorkflowInput, LanceDbError
+from app.lancedb import delete_by_workflow as lancedb_delete_by_workflow
 from app.s3 import delete_s3_prefix, get_s3_client
 
 router = APIRouter(prefix="/projects/{project_id}/documents", tags=["documents"])
