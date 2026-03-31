@@ -179,7 +179,10 @@ export class OcrStack extends Stack {
             ];
           },
           afterBundling(inputDir: string, outputDir: string): string[] {
-            return [`cp -r ${inputDir}/models ${outputDir}/models`];
+            return [
+              `cp -r ${inputDir}/models ${outputDir}/models`,
+              `chown -R 1000:1000 ${outputDir}`,
+            ];
           },
         },
       },

@@ -53,14 +53,17 @@ export class LanceServiceStack extends Stack {
           LANCEDB_LOCK_TABLE_NAME: lancedbLockTableName,
         },
         bundling: {
+          dockerOptions: {
+            user: 'root',
+          },
           commandHooks: {
             beforeBundling(): string[] {
               return [
                 'apt-get update -qq && apt-get install -y -qq protobuf-compiler > /dev/null 2>&1',
               ];
             },
-            afterBundling(): string[] {
-              return [];
+            afterBundling(_inputDir: string, outputDir: string): string[] {
+              return [`chown -R 1000:1000 ${outputDir}`];
             },
           },
         },

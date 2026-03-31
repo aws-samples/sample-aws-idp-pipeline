@@ -542,10 +542,11 @@ export class WorkflowStack extends Stack {
         {
           bundling: {
             image: lambda.Runtime.PYTHON_3_14.bundlingImage,
+            platform: 'linux/arm64',
             command: [
               'bash',
               '-c',
-              'pip install pypdfium2 -t /asset-output && cp -r /asset-input/* /asset-output/',
+              'pip install pypdfium2 --platform manylinux2014_aarch64 --only-binary=:all: -t /asset-output && cp -r /asset-input/* /asset-output/',
             ],
           },
         },
