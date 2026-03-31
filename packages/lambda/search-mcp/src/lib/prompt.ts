@@ -1,4 +1,4 @@
-import type { HybridResult } from './types';
+import type { HybridResult } from '../types.js';
 
 export function buildPrompt(query: string, results: HybridResult[]): string {
   const searchResultsText = results

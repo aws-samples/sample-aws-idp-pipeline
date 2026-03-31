@@ -1,4 +1,4 @@
-import { handler as summarize } from './search.js';
+import { handler as summarize } from './actions/search_summarize.js';
 import type { SearchInput, OverviewInput } from './types.js';
 
 interface LambdaContext {
@@ -19,8 +19,12 @@ export const handler = async (event: unknown, context: LambdaContext) => {
   switch (action) {
     case 'summarize':
       return summarize(event as SearchInput);
+    case 'rerank': {
+      const { handler: rerank } = await import('./actions/search_rerank.js');
+      return rerank(event as SearchInput);
+    }
     case 'overview': {
-      const { handler: overview } = await import('./overview.js');
+      const { handler: overview } = await import('./actions/overview.js');
       return overview(event as OverviewInput);
     }
     default:

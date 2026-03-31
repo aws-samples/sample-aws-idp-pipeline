@@ -1,6 +1,6 @@
-import { invokeLanceDB } from './clients';
-import { summarizeWithHaiku } from './summarize';
-import type { SearchInput, HybridResult, SearchAnswer } from './types';
+import { invokeLanceDB } from '../lib/clients.js';
+import { summarizeWithHaiku } from '../lib/summarize.js';
+import type { SearchInput, HybridResult, SearchAnswer } from '../types.js';
 
 export const handler = async (event: SearchInput): Promise<SearchAnswer> => {
   const { project_id, query, document_id, limit = 10, language } = event;

@@ -1,9 +1,11 @@
 import { ConverseCommand } from '@aws-sdk/client-bedrock-runtime';
-import { bedrockClient } from './clients';
-import { buildPrompt } from './prompt';
-import type { HybridResult, SearchAnswer } from './types';
+import { bedrockClient } from './clients.js';
+import { buildPrompt } from './prompt.js';
+import type { HybridResult, SearchAnswer } from '../types.js';
 
-const MODEL_ID = 'global.anthropic.claude-haiku-4-5-20251001-v1:0';
+const MODEL_ID =
+  process.env.SUMMARIZE_MODEL_ID ??
+  'global.anthropic.claude-haiku-4-5-20251001-v1:0';
 
 export async function summarizeWithHaiku(
   query: string,

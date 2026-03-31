@@ -42,6 +42,8 @@ export class SearchMcp extends Construct {
       environment: {
         LANCEDB_FUNCTION_ARN: lancedbFunctionArn,
         DOCUMENT_STORAGE_BUCKET: documentStorageBucketName,
+        SUMMARIZE_MODEL_ID: 'global.anthropic.claude-haiku-4-5-20251001-v1:0',
+        RERANK_MODEL_ID: 'cohere.rerank-v3-5:0',
       },
     });
 
@@ -56,7 +58,7 @@ export class SearchMcp extends Construct {
 
     this.function.addToRolePolicy(
       new PolicyStatement({
-        actions: ['bedrock:InvokeModel'],
+        actions: ['bedrock:InvokeModel', 'bedrock:Rerank'],
         resources: ['*'],
       }),
     );

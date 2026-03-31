@@ -60,5 +60,36 @@
         }
       }
     }
+  },
+  {
+    "name": "rerank",
+    "description": "Search for relevant information in documents and return results reranked by semantic relevance.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "The unique identifier of the project"
+        },
+        "query": {
+          "type": "string",
+          "description": "The search query"
+        },
+        "document_id": {
+          "type": "string",
+          "description": "Optional document ID to limit search scope"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of results to return (default: 10)"
+        },
+        "language": {
+          "type": "string",
+          "enum": ["ko", "en", "ja", "zh"],
+          "description": "Language code for keyword extraction. 'ko' for Korean, 'en' for English, 'ja' for Japanese, 'zh' for Chinese."
+        }
+      },
+      "required": ["project_id", "query"]
+    }
   }
 ]

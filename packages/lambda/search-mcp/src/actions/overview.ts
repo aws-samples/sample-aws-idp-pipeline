@@ -3,7 +3,11 @@ import {
   ListObjectsV2Command,
   GetObjectCommand,
 } from '@aws-sdk/client-s3';
-import type { OverviewInput, OverviewOutput, DocumentOverview } from './types';
+import type {
+  OverviewInput,
+  OverviewOutput,
+  DocumentOverview,
+} from '../types.js';
 
 const s3Client = new S3Client({});
 
