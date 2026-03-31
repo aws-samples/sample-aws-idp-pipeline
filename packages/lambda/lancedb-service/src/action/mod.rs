@@ -5,6 +5,7 @@ pub mod delete_by_workflow;
 pub mod delete_graph_keywords_by_project_id;
 pub mod delete_record;
 pub mod drop_table;
+pub mod get_by_qa_ids;
 pub mod get_by_segment_ids;
 pub mod get_graph_keywords;
 pub mod get_segments_by_document_id;

@@ -29,6 +29,9 @@ pub enum LanceDbAction {
     #[serde(rename = "get_segments_by_document_id")]
     GetSegmentsByDocumentId(get_segments_by_document_id::GetSegmentsByDocumentIdParams),
 
+    #[serde(rename = "get_by_qa_ids")]
+    GetByQaIds(get_by_qa_ids::GetByQaIdsParams),
+
     #[serde(rename = "get_by_segment_ids")]
     GetBySegmentIds(get_by_segment_ids::GetBySegmentIdsParams),
 

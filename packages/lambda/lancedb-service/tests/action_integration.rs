@@ -1,7 +1,7 @@
 use lancedb_service::action::{
     add_graph_keywords, add_record, count, delete_by_workflow, delete_record, drop_table,
-    get_by_segment_ids, get_graph_keywords, get_segments_by_document_id, hybrid_search, list_tables,
-    search_graph_keywords,
+    get_by_qa_ids, get_by_segment_ids, get_graph_keywords, get_segments_by_document_id,
+    hybrid_search, list_tables, search_graph_keywords,
 };
 use lancedb_service::db;
 use tracing::info;
@@ -69,6 +69,24 @@ async fn test_action_get_by_segment_ids() {
         get_by_segment_ids::GetBySegmentIdsParams {
             project_id: "proj_HLEpYD_QD5iT6VwptGxYJ".to_string(),
             segment_ids: vec!["wf_adF_cHMvTcCFOdESChdyH_0000".to_string()],
+        },
+    )
+    .await
+    .unwrap();
+    info!("output: {:?}", serde_json::to_value(&output).unwrap());
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_action_get_by_qa_ids() {
+    init_tracing();
+    dotenvy::dotenv().ok();
+    let conn = db::connect().await.unwrap();
+    let output = get_by_qa_ids::execute(
+        &conn,
+        get_by_qa_ids::GetByQaIdsParams {
+            project_id: "proj_HLEpYD_QD5iT6VwptGxYJ".to_string(),
+            qa_ids: vec!["wf_j5LitVvu_ypoE4lt1u_bU_0002_00".to_string()],
         },
     )
     .await
