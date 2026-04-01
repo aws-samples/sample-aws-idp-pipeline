@@ -53,7 +53,7 @@ pub async fn execute(
     let new_keywords: Vec<String> = params
         .keywords
         .into_iter()
-        .filter(|k| !existing_names.contains(k))
+        .filter(|k| !existing_names.contains(k.as_str()))
         .collect();
 
     let count = new_keywords.len();
