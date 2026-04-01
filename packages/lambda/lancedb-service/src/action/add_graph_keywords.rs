@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
@@ -9,6 +10,8 @@ use tracing::info;
 use crate::client;
 use crate::db;
 use crate::db::model::{keyword_record_schema, GRAPH_KEYWORDS_TABLE};
+
+use super::get_graph_keywords::{self, GetGraphKeywordsParams};
 
 #[derive(Deserialize)]
 pub struct AddGraphKeywordsParams {
@@ -27,17 +30,48 @@ pub async fn execute(
     bedrock_client: &aws_sdk_bedrockruntime::Client,
     params: AddGraphKeywordsParams,
 ) -> Result<AddGraphKeywordsOutput, Box<dyn std::error::Error + Send + Sync>> {
-    let count = params.keywords.len();
-    info!("[add_graph_keywords] project_id: {}, count: {count}", params.project_id);
+    info!("[add_graph_keywords] project_id: {}, count: {}", params.project_id, params.keywords.len());
 
     let table = db::table::get_or_create_table(conn, GRAPH_KEYWORDS_TABLE, keyword_record_schema()).await?;
+
+    // 기존 키워드 조회하여 중복 필터링
+    let existing = get_graph_keywords::execute(
+        conn,
+        GetGraphKeywordsParams {
+            project_id: params.project_id.clone(),
+            limit: Some(i64::MAX),
+        },
+    )
+    .await?;
+
+    let existing_names: HashSet<&str> = existing
+        .keywords
+        .iter()
+        .map(|k| k.name.as_str())
+        .collect();
+
+    let new_keywords: Vec<String> = params
+        .keywords
+        .into_iter()
+        .filter(|k| !existing_names.contains(k))
+        .collect();
+
+    let count = new_keywords.len();
+    info!("[add_graph_keywords] {} new keywords after filtering {} existing", count, existing.keywords.len());
+
+    if count == 0 {
+        return Ok(AddGraphKeywordsOutput {
+            success: true,
+            count: 0,
+        });
+    }
 
     let mut entity_ids = Vec::with_capacity(count);
     let mut project_ids = Vec::with_capacity(count);
     let mut names = Vec::with_capacity(count);
     let mut all_embeddings: Vec<f32> = Vec::with_capacity(count * 1024);
 
-    for chunk in params.keywords.chunks(10) {
+    for chunk in new_keywords.chunks(10) {
         info!("[add_graph_keywords] Generating embeddings for chunk of {}", chunk.len());
         let futures: Vec<_> = chunk
             .iter()
