@@ -141,7 +141,8 @@
       "h3": ">=1.15.6",
       "handlebars": ">=4.7.9",
       "picomatch": ">=4.0.4",
-      "path-to-regexp": ">=0.1.13"
+      "path-to-regexp": ">=0.1.13",
+      "@xmldom/xmldom": ">=0.8.12 <0.9.0"
     },
     "onlyBuiltDependencies": [
       "duckdb"
