@@ -19,7 +19,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1020.0",
     "@aws-sdk/signature-v4": "^3.374.0",
     "@aws-sdk/util-format-url": "^3.972.8",
-    "@aws/nx-plugin": "0.89.0",
+    "@aws/nx-plugin": "0.90.1",
     "@fortune-sheet/react": "^1.0.4",
     "@hono/node-server": "^1.19.12",
     "@hono/standard-validator": "^0.2.2",
@@ -137,7 +137,8 @@
       "yauzl": ">=3.2.1",
       "devalue": ">=5.6.4",
       "file-type": ">=21.3.2",
-      "h3": ">=1.15.6"
+      "h3": ">=1.15.6",
+      "handlebars": ">=4.7.9"
     },
     "onlyBuiltDependencies": [
       "duckdb"
