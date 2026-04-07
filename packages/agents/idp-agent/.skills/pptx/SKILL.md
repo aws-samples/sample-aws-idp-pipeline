@@ -1,7 +1,6 @@
 ---
 name: pptx
-description: "PowerPoint presentation (.pptx) creation, editing, reading, and manipulation skill."
-whenToUse: "Use when the user wants to create, read, edit, or manipulate PowerPoint presentations (.pptx files). Triggers include: any mention of 'slides', 'deck', 'presentation', '.pptx', or requests for slide decks, pitch decks. Also for deliverables as .pptx. When an S3 URI with .pptx extension is provided. Do NOT use for PDFs, Word documents, or Google Slides."
+description: "PowerPoint presentation (.pptx) creation, editing, reading, and manipulation skill. Use when the user wants to create, read, edit, or manipulate PowerPoint presentations (.pptx files). Triggers include: any mention of 'slides', 'deck', 'presentation', '.pptx', or requests for slide decks, pitch decks. Also for deliverables as .pptx. When an S3 URI with .pptx extension is provided. Do NOT use for PDFs, Word documents, or Google Slides."
 ---
 
 # PPTX creation, editing, and analysis

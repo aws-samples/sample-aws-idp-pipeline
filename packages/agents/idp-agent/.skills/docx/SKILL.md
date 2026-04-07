@@ -1,7 +1,6 @@
 ---
 name: docx
-description: "Word document (.docx) creation, editing, reading, and manipulation skill."
-whenToUse: "Use when the user wants to create, read, edit, or manipulate Word documents (.docx files). Triggers include: any mention of 'Word doc', 'word document', '.docx', or requests for professional documents with formatting. Also for 'report', 'memo', 'letter', 'template' deliverables as .docx. When an S3 URI with .docx extension is provided. Do NOT use for PDFs, spreadsheets, or Google Docs."
+description: "Word document (.docx) creation, editing, reading, and manipulation skill. Use when the user wants to create, read, edit, or manipulate Word documents (.docx files). Triggers include: any mention of 'Word doc', 'word document', '.docx', or requests for professional documents with formatting. Also for 'report', 'memo', 'letter', 'template' deliverables as .docx. When an S3 URI with .docx extension is provided. Do NOT use for PDFs, spreadsheets, or Google Docs."
 ---
 
 # DOCX creation, editing, and analysis

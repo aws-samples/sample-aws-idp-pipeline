@@ -1,7 +1,6 @@
 ---
 name: markdown
-description: "Markdown document (.md) creation and editing skill."
-whenToUse: "Use when the user wants to create or edit Markdown files (.md). Triggers include: any mention of 'markdown', '.md', or requests for documents where Markdown is the appropriate format — such as README files, documentation, technical notes, or when the user explicitly asks for Markdown output. Also when an S3 URI with .md extension is provided. Do NOT use for Word documents (.docx), PDFs, or presentations."
+description: "Markdown document (.md) creation and editing skill. Use when the user wants to create or edit Markdown files (.md). Triggers include: any mention of 'markdown', '.md', or requests for documents where Markdown is the appropriate format — such as README files, documentation, technical notes, or when the user explicitly asks for Markdown output. Also when an S3 URI with .md extension is provided. Do NOT use for Word documents (.docx), PDFs, or presentations."
 ---
 
 # Markdown creation and editing

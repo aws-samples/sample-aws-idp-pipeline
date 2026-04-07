@@ -1,7 +1,6 @@
 ---
 name: diagram
-description: "Diagram creation skill using Mermaid syntax — flowcharts, sequence diagrams, ER diagrams, Gantt charts, mindmaps, and more."
-whenToUse: "Use when the user wants to create structural or process diagrams — NOT data charts. Triggers include: 'flowchart', 'flow diagram', 'sequence diagram', 'ER diagram', 'entity relationship', 'class diagram', 'state diagram', 'Gantt chart', 'timeline', 'mindmap', 'architecture diagram', or any request to visualize processes, workflows, system interactions, or relationships. Also when the user mentions 'mermaid' or '.mmd'. Do NOT use for data-driven charts (bar, line, pie, scatter, heatmap) — those belong to the chart skill."
+description: "Diagram creation skill using Mermaid syntax — flowcharts, sequence diagrams, ER diagrams, Gantt charts, mindmaps, and more. Use when the user wants to create structural or process diagrams — NOT data charts. Triggers include: 'flowchart', 'flow diagram', 'sequence diagram', 'ER diagram', 'entity relationship', 'class diagram', 'state diagram', 'Gantt chart', 'timeline', 'mindmap', 'architecture diagram', or any request to visualize processes, workflows, system interactions, or relationships. Also when the user mentions 'mermaid' or '.mmd'. Do NOT use for data-driven charts (bar, line, pie, scatter, heatmap) — those belong to the chart skill."
 ---
 
 # Diagram creation with Mermaid

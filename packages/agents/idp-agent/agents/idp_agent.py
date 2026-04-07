@@ -1,10 +1,9 @@
 from contextlib import ExitStack, contextmanager
-from venv import create
 
 import boto3
 from botocore.config import Config as BotocoreConfig
 from mcp import StdioServerParameters, stdio_client
-from strands import Agent
+from strands import Agent, AgentSkills
 from strands.hooks.registry import HookProvider
 from strands.models import BedrockModel
 from strands.session import S3SessionManager
@@ -138,12 +137,15 @@ def get_agent(
         ImageArtifactSaverHook(user_id=user_id, project_id=project_id),
     ]
 
+    skills_plugin = AgentSkills(skills="./.skills/")
+
     def create_agent():
         return Agent(
             model=bedrock_model,
             system_prompt=system_prompt,
             tools=tools,
             hooks=hooks,
+            plugins=[skills_plugin],
             session_manager=session_manager,
             agent_id=agent_id or "default",
         )

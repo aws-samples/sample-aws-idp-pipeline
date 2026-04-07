@@ -1,7 +1,6 @@
 ---
 name: qa-analysis
-description: "Add additional QA analysis to document segments"
-whenToUse: "When the user asks for additional analysis, deeper analysis, more questions about a specific document or segment. Triggers: '추가분석', 'additional analysis', 'analyze more', 'add QA', or when asking to examine a document segment more closely."
+description: "Add additional QA analysis to document segments. When the user asks for additional analysis, deeper analysis, more questions about a specific document or segment. Triggers: '추가분석', 'additional analysis', 'analyze more', 'add QA', or when asking to examine a document segment more closely."
 ---
 
 # QA Analysis Skill

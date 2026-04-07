@@ -1,7 +1,6 @@
 ---
 name: xlsx
-description: "Excel spreadsheet (.xlsx) creation, editing, reading, and manipulation skill."
-whenToUse: "Use when the user wants to create, read, edit, or manipulate Excel spreadsheets (.xlsx, .xlsm, .csv, .tsv files). Triggers include: any mention of 'spreadsheet', 'Excel', '.xlsx', or requests for tabular data deliverables. Also for adding columns, computing formulas, formatting, charting, cleaning messy data, or converting between tabular file formats. When an S3 URI with .xlsx extension is provided. Do NOT use for PDFs, Word documents, or Google Sheets."
+description: "Excel spreadsheet (.xlsx) creation, editing, reading, and manipulation skill. Use when the user wants to create, read, edit, or manipulate Excel spreadsheets (.xlsx, .xlsm, .csv, .tsv files). Triggers include: any mention of 'spreadsheet', 'Excel', '.xlsx', or requests for tabular data deliverables. Also for adding columns, computing formulas, formatting, charting, cleaning messy data, or converting between tabular file formats. When an S3 URI with .xlsx extension is provided. Do NOT use for PDFs, Word documents, or Google Sheets."
 ---
 
 # XLSX creation, editing, and analysis

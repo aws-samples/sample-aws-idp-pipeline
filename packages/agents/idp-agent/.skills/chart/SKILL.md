@@ -1,7 +1,6 @@
 ---
 name: chart
-description: "Data chart and graph creation skill using Matplotlib."
-whenToUse: "Use when the user wants to create data visualizations — bar charts, line charts, pie charts, scatter plots, heatmaps, histograms, or any data-driven graph. Triggers include: any mention of 'chart', 'graph', 'plot', 'visualization', 'visualize', or requests to display data visually. Also when the user provides numeric data and asks to 'show' or 'compare' it. Do NOT use for diagrams (flowcharts, sequence diagrams, ER diagrams) — those belong to a diagram skill."
+description: "Data chart and graph creation skill using Matplotlib. Use when the user wants to create data visualizations — bar charts, line charts, pie charts, scatter plots, heatmaps, histograms, or any data-driven graph. Triggers include: any mention of 'chart', 'graph', 'plot', 'visualization', 'visualize', or requests to display data visually. Also when the user provides numeric data and asks to 'show' or 'compare' it. Do NOT use for diagrams (flowcharts, sequence diagrams, ER diagrams) — those belong to a diagram skill."
 ---
 
 # Chart creation with Matplotlib

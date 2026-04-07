@@ -1,7 +1,6 @@
 ---
 name: searching
-description: "Search documents and knowledge graph for information. Combines hybrid search, graph traversal, and keyword graph lookup. Use when user asks questions, requests information lookup, needs explanations, summaries, or comparisons from uploaded documents."
-whenToUse: "Any user question requiring information lookup. When in doubt, use this skill."
+description: "Search documents and knowledge graph for information. Combines hybrid search, graph traversal, and keyword graph lookup. Use when user asks questions, requests information lookup, needs explanations, summaries, or comparisons from uploaded documents. Any user question requiring information lookup. When in doubt, use this skill."
 ---
 
 # Search Skill

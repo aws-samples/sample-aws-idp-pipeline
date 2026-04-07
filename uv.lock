@@ -337,16 +337,16 @@ wheels = [
 
 [[package]]
 name = "aws-sdk-bedrock-runtime"
-version = "0.3.0"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "smithy-aws-core", extra = ["eventstream", "json"] },
     { name = "smithy-core" },
     { name = "smithy-http", extra = ["awscrt"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e9/c4/13a271d57d9e569ae225aadb996a56dbf45a2056cb21b1bf845d05c31194/aws_sdk_bedrock_runtime-0.3.0.tar.gz", hash = "sha256:ff6faae66770a92e8ec6e678cc002b7b4d6d4b050c72d6f88ac1eda101bf9ae8", size = 160461, upload-time = "2026-01-02T17:45:47.056Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c8/c4/149d119e07b4961580f105dd9cde6bacff143bd445d30e911deb6d21fddc/aws_sdk_bedrock_runtime-0.4.0.tar.gz", hash = "sha256:4b18e0e32cbb93ea11dfaf6a8d2ee78ce7da4445c3b1937e4f2b467bd24d1e8a", size = 159373, upload-time = "2026-02-24T18:55:24.473Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3d/84/93be85059dd96fc7ccec5b1f082cb63ba421c0296ed882196e2abc35f4f1/aws_sdk_bedrock_runtime-0.3.0-py3-none-any.whl", hash = "sha256:74dc6d5137d6154aed05c946f4e0762a6afd497a0d83ccc4cb704cd23d7768a2", size = 81742, upload-time = "2026-01-02T17:45:46.131Z" },
+    { url = "https://files.pythonhosted.org/packages/73/87/aff9e04863295ba842804a71f2b2eca977a575b714819e60967f5ef9e9d3/aws_sdk_bedrock_runtime-0.4.0-py3-none-any.whl", hash = "sha256:28c60a0dca35ae40f2faa9b4677a2f83bbaa04e35eb6b075a767176308759051", size = 84261, upload-time = "2026-02-24T18:55:22.79Z" },
 ]
 
 [[package]]
@@ -1331,7 +1331,7 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.26.0" },
     { name = "nanoid", specifier = ">=2.0.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
-    { name = "strands-agents", specifier = ">=1.27.0" },
+    { name = "strands-agents", specifier = ">=1.34.1" },
     { name = "strands-agents-tools", specifier = ">=0.2.16" },
 ]
 
@@ -3647,16 +3647,16 @@ wheels = [
 
 [[package]]
 name = "smithy-aws-core"
-version = "0.3.0"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aws-sdk-signers" },
     { name = "smithy-core" },
     { name = "smithy-http" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1f/3c/6c9acfeabe9d0c682d1dea57242c2e064beec688936ff3b586d00517a9c1/smithy_aws_core-0.3.0.tar.gz", hash = "sha256:514bc9f26ae7d3d2c96a6e8ce3e8a6fdffaf4abb276d0c7b099be45e395aced3", size = 11372, upload-time = "2026-01-02T17:42:04.768Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/84/14/0f00836c3d6d2309f4090df98b918ea07980cea97f01c1254b6d4e5cc9f8/smithy_aws_core-0.4.0.tar.gz", hash = "sha256:579caef8b2519e2593006ded4e6a369f99387d69f06e857fffda8fc4ad1eb11d", size = 11431, upload-time = "2026-02-24T18:55:22.066Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/93/f5/418440394ee4892e9d66b25baac7051ae6c355cb283e5b370acf89bfc658/smithy_aws_core-0.3.0-py3-none-any.whl", hash = "sha256:ceb07135e7a2445a153a83128a16c3e4fd58bbd1d1b9c82bb482e1e78eec6f71", size = 18966, upload-time = "2026-01-02T17:42:03.981Z" },
+    { url = "https://files.pythonhosted.org/packages/ae/87/4a8d4e14357abb8a207cc8d4bf47d11ebc9792ca2d20a940231576714287/smithy_aws_core-0.4.0-py3-none-any.whl", hash = "sha256:004164599a0a2911ea80889dd2c954fd7da17ff3e8d208fb732b1e778a1450f1", size = 18965, upload-time = "2026-02-24T18:55:21.181Z" },
 ]
 
 [package.optional-dependencies]
@@ -3938,7 +3938,7 @@ wheels = [
 
 [[package]]
 name = "strands-agents"
-version = "1.27.0"
+version = "1.34.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3" },
@@ -3950,12 +3950,13 @@ dependencies = [
     { name = "opentelemetry-instrumentation-threading" },
     { name = "opentelemetry-sdk" },
     { name = "pydantic" },
+    { name = "pyyaml" },
     { name = "typing-extensions" },
     { name = "watchdog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b9/54/bf0910a1c40feacaedcf5d30840be990eabd09eff5375fa40525ba530c8d/strands_agents-1.27.0.tar.gz", hash = "sha256:84d0b670e534d7c281104a22035c10de8d43e9ad8ee589bde16f54a8387b2c56", size = 712878, upload-time = "2026-02-19T17:18:23.327Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/be/22/f958d52a794e508a31ace8b8cbba0379226a98fac9826f3b757f95912b70/strands_agents-1.34.1.tar.gz", hash = "sha256:d1ff614dc364ce54348c24b011bbef6c466a0dd33e19996bd1a4ec4aab846cb1", size = 796829, upload-time = "2026-04-01T20:37:29.755Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6a/ca/d5c269f83929bdc753dce3c6091a1671e50268769b0ace009264424bf165/strands_agents-1.27.0-py3-none-any.whl", hash = "sha256:d9012515a7b4f324a600cacc539e837a51b3f7fe21da7efe1764186ade3be498", size = 351988, upload-time = "2026-02-19T17:18:19Z" },
+    { url = "https://files.pythonhosted.org/packages/19/eb/b0db0fb9ae691d3ed0ac9f9604b60f9154671baf4c61853c0b6607e2a91e/strands_agents-1.34.1-py3-none-any.whl", hash = "sha256:edc5ccd4fbc64bf203ced282083ed011953f628cf8f060e1c88e6a2fd8429f3a", size = 393990, upload-time = "2026-04-01T20:37:27.906Z" },
 ]
 
 [package.optional-dependencies]

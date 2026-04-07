@@ -4,7 +4,6 @@ import logging
 import boto3
 
 from config import get_config
-from skills import build_skills_registry
 
 logger = logging.getLogger(__name__)
 
@@ -86,57 +85,19 @@ Execute the plan step by step:
 - Do NOT provide overly long responses when a brief answer suffices.
 - Do NOT repeat the user's question back to them unnecessarily.
 - Do NOT retry failed tool calls repeatedly. If a tool call fails, report the error and ask the user for guidance.
-"""
 
-SKILLS_SYSTEM_PROMPT = """
-<skills_system>
-You have access to a skills system that extends your capabilities
-through dynamically loaded instruction files.
-Skills are text-based guides (not running services)
-that teach you best practices for specific tasks.
+## Skill Selection Rules
 
-<how_skills_work>
-Skills follow a just-in-time loading pattern integrated with your Plan-then-Execute workflow:
-
-DISCOVERY (provided below)
-A registry of available skills with name, description, whenToUse, and file path.
-During the planning phase (Step 2), check the <whenToUse> field of each skill
-to identify which skills are needed for each step.
-
-LOADING (just-in-time, per step)
-Read the relevant SKILL.md using the file_read tool BEFORE executing the step that needs it.
-Only load the skill for the current step — do NOT load all skills upfront.
-If a step requires multiple skills, read all of them before executing that step.
-Once a skill is loaded, you do not need to re-read it for subsequent steps.
-
-EXECUTION (internal resources)
-Skill files may reference helper scripts, templates, or assets using relative paths.
-Resolve these relative to the skill's <base_directory>.
-Example: if base_directory is `/skills/docx` and the skill references `scripts/validate.py`,
-the full path is `/skills/docx/scripts/validate.py`.
-</how_skills_work>
-
-<skill_selection_rules>
-- The "search" skill is the DEFAULT skill. When the user asks any question,
-  requests information, or needs to look something up, ALWAYS load and follow
-  the search skill FIRST — even if you think you already know the answer.
+- The "searching" skill is the DEFAULT skill. When the user asks any question,
+  requests information, or needs to look something up, ALWAYS activate the
+  searching skill FIRST — even if you think you already know the answer.
   (See Core Principle #1: Document-first)
-- Match the user's request against each skill's <whenToUse> field first.
-  If <whenToUse> is present and matches, select that skill.
-- If multiple skills could match, prefer the one whose <whenToUse> is most
+- If multiple skills could match, prefer the one whose description is most
   specific to the user's request.
-  The search skill can be used alongside other skills.
-- Read the SKILL.md BEFORE writing any code or producing any output
-  for the step that needs it.
+  The searching skill can be used alongside other skills.
 - If no skill matches the task, proceed with your general knowledge.
 - If a skill's instructions conflict with the user's explicit request, follow the user.
 - Skills are read-only. Never modify skill files.
-</skill_selection_rules>
-
-<available_skills>
-{{SKILLS_REGISTRY}}
-</available_skills>
-</skills_system>
 """
 
 
@@ -158,11 +119,6 @@ def build_system_prompt(
         Complete system prompt string
     """
     system_prompt = fetch_system_prompt() or DEFAULT_SYSTEM_PROMPT
-
-    skills_registry = build_skills_registry()
-    if skills_registry:
-        skills_prompt = SKILLS_SYSTEM_PROMPT.replace("{{SKILLS_REGISTRY}}", skills_registry)
-        system_prompt += skills_prompt
 
     if agent_id and user_id and project_id:
         custom_prompt = fetch_custom_agent_prompt(user_id, project_id, agent_id)
