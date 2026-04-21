@@ -404,7 +404,7 @@ wheels = [
 
 [[package]]
 name = "bedrock-agentcore"
-version = "1.3.2"
+version = "1.6.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3" },
@@ -416,23 +416,23 @@ dependencies = [
     { name = "uvicorn" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/05/90/a11e5a3208b7f607a3eabc8567b7c36767c6e094ec8128fba7ed2f5b3020/bedrock_agentcore-1.3.2.tar.gz", hash = "sha256:1dfae10fd315e078c002e49fd9d9686c41aee71ec8495f21e898a1ef3f782fa3", size = 421197, upload-time = "2026-02-23T20:52:56.202Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2a/78/90b00222b15b1c667eed72f2abeb8a2bb7c992aa3dd8415fdf3bf962438b/bedrock_agentcore-1.6.3.tar.gz", hash = "sha256:3876840713aba033232165e3cf442ee959df291e3d410b602f08baaea6aee883", size = 517941, upload-time = "2026-04-16T23:55:22.447Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/36/b7/a5cc566901af27314408b95701f8e1d9c286b0aecfa50fc76c53d73efa6f/bedrock_agentcore-1.3.2-py3-none-any.whl", hash = "sha256:3a4e7122f777916f8bd74b42f29eb881415e37fda784a5ff8fab3c813b921706", size = 121703, upload-time = "2026-02-23T20:52:55.038Z" },
+    { url = "https://files.pythonhosted.org/packages/95/e0/cba6bfcc239bc94e6735ab2bdfe507692c9f395520acb156d02453ecaaf8/bedrock_agentcore-1.6.3-py3-none-any.whl", hash = "sha256:88a83e214c674a20157ad658876c5a5ee1b874bae87b45e42984b23c883e7210", size = 165854, upload-time = "2026-04-16T23:55:20.958Z" },
 ]
 
 [[package]]
 name = "boto3"
-version = "1.42.56"
+version = "1.42.93"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "botocore" },
     { name = "jmespath" },
     { name = "s3transfer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fe/dc/990222f8c0cd7453c03410bc8b367ccb35ae01d9642ff1f79231cd3f3d8f/boto3-1.42.56.tar.gz", hash = "sha256:8b0779431b349582f4d61b55a2858b943d5295f4b5de62e2d669fdbbcda96bd6", size = 112814, upload-time = "2026-02-24T20:28:51.825Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/dd/ac/e6b2b24d53c830500176f710594efcde626186b5b3c9aead6f8837976956/boto3-1.42.93.tar.gz", hash = "sha256:ff81c6bac708cb95c4f8b27e331ac67d95c6908dd86bcb7b15b8941960f2bc4c", size = 113218, upload-time = "2026-04-21T21:30:39.733Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/59/bb/a7fd6f4f38cf0f6cd91c152442cbe5b5f270275a60a5c7147ae5560f2f25/boto3-1.42.56-py3-none-any.whl", hash = "sha256:e09f91170b19e0ecd5e514321d99323be3e91a58dfa73fd58cf73b7b8b179c84", size = 140556, upload-time = "2026-02-24T20:28:49.815Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/2d/fcc35bde9fa47ac463a3023c73838e23e9281cde7f5e86fe7c459c3b72aa/boto3-1.42.93-py3-none-any.whl", hash = "sha256:51e34e30e65bea4df0ff77f91abdcb97297eb74c3b27eb576b2abbd758452967", size = 140554, upload-time = "2026-04-21T21:30:36.581Z" },
 ]
 
 [[package]]
@@ -455,16 +455,16 @@ dynamodb = [
 
 [[package]]
 name = "botocore"
-version = "1.42.56"
+version = "1.42.93"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jmespath" },
     { name = "python-dateutil" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b8/2f/f6351cca2e3a087fb82a5c19e4d60e93a5dae27e9a085cc5fcb7faca8bd4/botocore-1.42.56.tar.gz", hash = "sha256:b1d7d3cf2fbe4cc1804a6567a051fc7141d21bcdcfde0336257b8dd2085272c2", size = 14939515, upload-time = "2026-02-24T20:28:40.55Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1b/d4/eb53f7ed81836696abf7103c9c901a0cace9217328094ca93419016a78c9/botocore-1.42.93.tar.gz", hash = "sha256:9ce49863c50b43f7942edd295fb16bfc6d227264ce6fc32c8f2426ef11b9351b", size = 15239759, upload-time = "2026-04-21T21:30:23.707Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5a/09/dcc3f79de57f684d844ca853eeebff1786e5d672cf600f8ee6a118a9f015/botocore-1.42.56-py3-none-any.whl", hash = "sha256:111089dea212438a5197e909e5b528e7c30fd8cbd02c8c7d469359b368929343", size = 14612466, upload-time = "2026-02-24T20:28:36.379Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/0c/ccc57c9a7bcd4553620bf6f50a3640ba68d189330fc4787dbddb2d851534/botocore-1.42.93-py3-none-any.whl", hash = "sha256:96ae26cd6302a7c7563398517b90a438168a4efdf4f73ab38882cefb8df721cc", size = 14923656, upload-time = "2026-04-21T21:30:17.597Z" },
 ]
 
 [[package]]
@@ -1324,7 +1324,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aws-opentelemetry-distro", specifier = ">=0.15.0" },
-    { name = "bedrock-agentcore", specifier = ">=1.3.2" },
+    { name = "bedrock-agentcore", specifier = ">=1.6.0" },
     { name = "boto3", specifier = ">=1.42.55" },
     { name = "duckduckgo-mcp-server", specifier = ">=0.1.1" },
     { name = "fastapi", specifier = ">=0.132.0" },
@@ -1332,7 +1332,7 @@ requires-dist = [
     { name = "nanoid", specifier = ">=2.0.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
     { name = "strands-agents", specifier = ">=1.34.1" },
-    { name = "strands-agents-tools", specifier = ">=0.2.16" },
+    { name = "strands-agents-tools", specifier = ">=0.3.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -3295,11 +3295,11 @@ wheels = [
 
 [[package]]
 name = "python-dotenv"
-version = "1.2.1"
+version = "1.2.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f0/26/19cadc79a718c5edbec86fd4919a6b6d3f681039a2f6d66d14be94e75fb9/python_dotenv-1.2.1.tar.gz", hash = "sha256:42667e897e16ab0d66954af0e60a9caa94f0fd4ecf3aaf6d2d260eec1aa36ad6", size = 44221, upload-time = "2025-10-26T15:12:10.434Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/82/ed/0301aeeac3e5353ef3d94b6ec08bbcabd04a72018415dcb29e588514bba8/python_dotenv-1.2.2.tar.gz", hash = "sha256:2c371a91fbd7ba082c2c1dc1f8bf89ca22564a087c2c287cd9b662adde799cf3", size = 50135, upload-time = "2026-03-01T16:00:26.196Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/14/1b/a298b06749107c305e1fe0f814c6c74aea7b2f1e10989cb30f544a1b3253/python_dotenv-1.2.1-py3-none-any.whl", hash = "sha256:b81ee9561e9ca4004139c6cbba3a238c32b03e4894671e181b671e8cb8425d61", size = 21230, upload-time = "2025-10-26T15:12:09.109Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/d7/1959b9648791274998a9c3526f6d0ec8fd2233e4d4acce81bbae76b44b2a/python_dotenv-1.2.2-py3-none-any.whl", hash = "sha256:1d8214789a24de455a8b8bd8ae6fe3c6b69a5e3d64aa8a8e5d68e694bbcb285a", size = 22101, upload-time = "2026-03-01T16:00:25.09Z" },
 ]
 
 [[package]]
@@ -3980,7 +3980,7 @@ bidi-all = [
 
 [[package]]
 name = "strands-agents-tools"
-version = "0.2.21"
+version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -4001,9 +4001,9 @@ dependencies = [
     { name = "tzdata", marker = "sys_platform == 'win32'" },
     { name = "watchdog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/61/63/7cc5cdce4c04c6b5c0f8b595f514937f15252ef29f22d5e09a9483627282/strands_agents_tools-0.2.21.tar.gz", hash = "sha256:d48d7ceb1e058319467db9a1d9eaa4003f8681e5af028d5f6cd1b2b3d1678ce8", size = 474115, upload-time = "2026-02-19T17:42:19.185Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d2/37/cb34bd20aedef7f315a183691dfa0e36ed7f3bd9a7c4e55cf7e67a3f2d76/strands_agents_tools-0.5.0.tar.gz", hash = "sha256:e90641525392931d1de413bb184dcacb5f7efbdeea4d1077caff12f7dd79fce2", size = 481773, upload-time = "2026-04-17T20:44:41.309Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/21/ad/0250fec20fb445b60c750f90009b7e5d81999ed58e41f455c842a0a43a74/strands_agents_tools-0.2.21-py3-none-any.whl", hash = "sha256:7e925b66d21cbf1626f7c58db9b200c6530f82f366d67b1525cad30aca5af967", size = 312775, upload-time = "2026-02-19T17:42:17.549Z" },
+    { url = "https://files.pythonhosted.org/packages/86/65/30d5d1a34ee5d88cc07b3aa4c15f89795ad208161b7e5988cdf002e3de06/strands_agents_tools-0.5.0-py3-none-any.whl", hash = "sha256:0e10e26308fddaab570e63abf8549d23a2b133203739d6626db5d390c9d4ccfb", size = 315694, upload-time = "2026-04-17T20:44:39.177Z" },
 ]
 
 [[package]]
