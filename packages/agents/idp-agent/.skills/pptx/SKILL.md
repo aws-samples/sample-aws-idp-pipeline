@@ -9,41 +9,144 @@ description: "PowerPoint presentation (.pptx) creation, editing, reading, and ma
 
 - **ALL code execution MUST use the `code_interpreter` tool.** Do NOT use the `shell` tool.
 - **NEVER call `!pip install`.** `python-pptx`, `boto3`, `Pillow`, `lxml`, `matplotlib`, `numpy`, `requests`, `markitdown` are pre-installed in the AgentCore Code Interpreter sandbox. Import directly. If an import fails, stop and report the error to the user — do not attempt to install anything.
-- **Generate the COMPLETE presentation and upload to S3 in a SINGLE `code_interpreter` call.** Do NOT split into multiple calls.
+- **Build the presentation INCREMENTALLY across multiple small `code_interpreter` calls, one or two slides per call.** Do NOT cram the entire deck into a single 30+ KB script. See the Incremental Workflow below.
+- **EVERY `code_interpreter` call MUST end with a `print(...)` that reports progress.** Empty stdout is interpreted by the runtime as a failure. Always print at least one line describing what was accomplished.
 - Before calling `code_interpreter`, call `artifact_path(filename="presentation.pptx")` to get the S3 bucket and key.
-- After completion, report the `artifact_ref` to the user.
+- After the final upload, report the `artifact_ref` to the user.
 - **If `code_interpreter` fails with an error, do NOT retry automatically.** Report the error to the user and ask for clarification or guidance. Do not make multiple retry attempts without user input.
 
-### Workflow
+## Incremental Workflow
 
-1. Call `artifact_path(filename="presentation.pptx")` — returns `{ s3_uri, bucket, key, artifact_ref }`
-2. **Copy the actual `s3_uri` string value** from the artifact_path result and **hardcode it as a string literal** in your code_interpreter script. Do NOT use variable references — the code_interpreter runs in an isolated sandbox and cannot access the agent's tool results.
-3. Call `code_interpreter` ONCE with a single script that does everything: create the presentation, save it, and upload to S3.
+The AgentCore Code Interpreter preserves session state between calls — files written to `/tmp` in one `code_interpreter` invocation remain available in the next call of the same session. Use this to build the deck one slide at a time instead of generating all slides in a single monolithic script.
+
+**Benefits:**
+- Each call is small (~1–3 KB of code) and generates in ~15–25 seconds instead of 4+ minutes.
+- Failures affect only one slide — previous slides stay saved in `/tmp/deck.pptx`.
+- Users see real-time progress: "slide 3/12 added" appears in the UI after each call.
+
+### Call sequence (typical 10-slide deck)
+
+1. `artifact_path(filename="presentation.pptx")` — get S3 URI (ONCE)
+2. **Call #1** — Create empty deck, set slide size/theme, save to `/tmp/deck.pptx`
+3. **Call #2** — Load deck, add slide 1 (title slide), save
+4. **Call #3** — Load deck, add slide 2 (content), save
+5. ... one call per slide (or two slides per call if small) ...
+6. **Call #N+1** — Load deck, upload `/tmp/deck.pptx` to S3
+7. Report `artifact_ref`
+
+### Call #1 — Create empty deck
 
 ```python
 from pptx import Presentation
+from pptx.util import Inches
+
+pres = Presentation()
+pres.slide_width = Inches(13.333)   # 16:9
+pres.slide_height = Inches(7.5)
+pres.save('/tmp/deck.pptx')
+print(f"Created blank deck: 16:9, 0 slides. Target total: 10 slides.")
+```
+
+### Call #2 — Title slide
+
+```python
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.dml.color import RGBColor
+from pptx.enum.text import PP_ALIGN
+
+pres = Presentation('/tmp/deck.pptx')   # load existing
+slide = pres.slides.add_slide(pres.slide_layouts[6])   # blank layout
+
+# Title
+title_box = slide.shapes.add_textbox(Inches(0.5), Inches(2.8), Inches(12.3), Inches(1.5))
+tf = title_box.text_frame
+p = tf.paragraphs[0]
+p.text = "<presentation title>"
+p.alignment = PP_ALIGN.CENTER
+p.runs[0].font.size = Pt(44)
+p.runs[0].font.bold = True
+p.runs[0].font.color.rgb = RGBColor(0x1F, 0x39, 0x64)
+
+# Subtitle
+sub_box = slide.shapes.add_textbox(Inches(0.5), Inches(4.5), Inches(12.3), Inches(0.8))
+sub_p = sub_box.text_frame.paragraphs[0]
+sub_p.text = "<subtitle / author / date>"
+sub_p.alignment = PP_ALIGN.CENTER
+sub_p.runs[0].font.size = Pt(20)
+sub_p.runs[0].font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+
+pres.save('/tmp/deck.pptx')
+print(f"Slide 1/{TOTAL} (title) added. Deck now has {len(pres.slides)} slides.")
+```
+
+### Call #3…N — Each content slide follows the same load → add → save → print pattern
+
+```python
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.dml.color import RGBColor
+
+pres = Presentation('/tmp/deck.pptx')
+slide = pres.slides.add_slide(pres.slide_layouts[6])
+
+# Slide title
+title = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(12.3), Inches(0.8))
+t_p = title.text_frame.paragraphs[0]
+t_p.text = "<slide title>"
+t_p.runs[0].font.size = Pt(28)
+t_p.runs[0].font.bold = True
+t_p.runs[0].font.color.rgb = RGBColor(0x1F, 0x39, 0x64)
+
+# Body content (bullet list example — replace bullets with actual content)
+body = slide.shapes.add_textbox(Inches(0.5), Inches(1.5), Inches(12.3), Inches(5.5))
+body_tf = body.text_frame
+body_tf.word_wrap = True
+bullets = ["<bullet 1>", "<bullet 2>", "<bullet 3>"]
+for i, bullet in enumerate(bullets):
+    p = body_tf.add_paragraph() if i > 0 else body_tf.paragraphs[0]
+    p.text = f"• {bullet}"
+    p.runs[0].font.size = Pt(20)
+
+pres.save('/tmp/deck.pptx')
+print(f"Slide {len(pres.slides)}/{TOTAL} added.")
+```
+
+### Call #N+1 — Upload
+
+```python
 import boto3
 
-# IMPORTANT: Replace with the ACTUAL s3_uri value returned by artifact_path
-S3_URI = "s3://my-bucket/user123/proj456/artifacts/art_abc123/presentation.pptx"  # ← paste the actual s3_uri here
-
-# Parse S3 URI into bucket and key
+S3_URI = "s3://idp-v2-agent-storage-008165007574/user/proj/artifacts/art_xxx/deck.pptx"   # paste from artifact_path
 BUCKET, KEY = S3_URI.replace("s3://", "").split("/", 1)
 
-# Build entire presentation
-pres = Presentation()
-# ... all presentation content ...
-pres.save('./output.pptx')
-
-# Upload to S3
 s3 = boto3.client('s3')
-with open('./output.pptx', 'rb') as f:
+with open('/tmp/deck.pptx', 'rb') as f:
     s3.upload_fileobj(
         f, BUCKET, KEY,
-        ExtraArgs={'ContentType': 'application/vnd.openxmlformats-officedocument.presentationml.presentation'}
+        ExtraArgs={
+            'ContentType': 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+        }
     )
+
+# Verify
+from pptx import Presentation
+final = Presentation('/tmp/deck.pptx')
+print(f"✅ Uploaded {len(final.slides)} slides to s3://{BUCKET}/{KEY}")
 ```
-4. Report the `artifact_ref` to the user
+
+Then report the `artifact_ref` to the user.
+
+### Important rules for the incremental workflow
+
+- **Always load the deck from `/tmp/deck.pptx` at the start of each call** — do NOT create a new `Presentation()` except in call #1.
+- **Always save back to `/tmp/deck.pptx` at the end of each call** (except the upload call).
+- **Each call MUST `print()` at least once** — the runtime treats empty stdout as failure.
+- **Use the same filename `/tmp/deck.pptx` throughout** — do not rename between calls.
+- **Hardcode the S3 URI string** in the upload call (sandbox cannot access agent variables).
+- **Do not split a single slide across multiple calls** — always complete one slide per call at minimum.
+- **For 2+ slides per call**, group logically related slides (e.g., two comparison slides together). Keep total code under ~5 KB per call.
+- **If a call errors out**, the previous successful saves are still on disk. You can resume from the failed slide.
 
 ---
 

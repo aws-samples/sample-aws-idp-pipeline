@@ -48,17 +48,27 @@ def filter_stream_event(event: dict) -> list[dict]:
     if "data" in event:
         return [{"type": "text", "content": event["data"]}]
 
+    # Tool use streaming — Strands emits ToolUseStreamEvent per Bedrock
+    # contentBlockDelta. For large tool_use payloads (e.g. 35KB code) this
+    # fires 1000s of times. We yield a lightweight event per delta to keep
+    # the HTTP stream alive (prevents intermediate proxy idle timeouts
+    # during long generation) without blasting the growing input string
+    # across the wire on every delta.
+    #
+    # The frontend dedupes tool_use events by tool_use_id, so only one UI
+    # block is rendered. The final tool_use result flows to the client via
+    # the subsequent tool_result message — users don't need the partial
+    # input during generation.
     if "current_tool_use" in event:
         tool_use = event["current_tool_use"]
-        if tool_use.get("name"):
-            result = {
-                "type": "tool_use",
-                "name": tool_use["name"],
-                "tool_use_id": tool_use.get("toolUseId", ""),
-            }
-            if tool_use.get("input"):
-                result["input"] = tool_use["input"]
-            return [result]
+        if isinstance(tool_use, dict) and tool_use.get("name"):
+            return [
+                {
+                    "type": "tool_use",
+                    "name": tool_use["name"],
+                    "tool_use_id": tool_use.get("toolUseId", ""),
+                }
+            ]
 
     if "message" in event and event["message"].get("role") == "user":
         results = []

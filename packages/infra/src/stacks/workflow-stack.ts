@@ -720,7 +720,7 @@ export class WorkflowStack extends Stack {
         functionName: 'idp-v2-page-description-generator',
         handler: 'index.handler',
         timeout: Duration.minutes(5),
-        memorySize: 512,
+        memorySize: 1024,
         code: lambda.Code.fromAsset(
           path.join(
             __dirname,
@@ -741,7 +741,7 @@ export class WorkflowStack extends Stack {
       functionName: 'idp-v2-entity-extractor',
       handler: 'index.handler',
       timeout: Duration.minutes(5),
-      memorySize: 512,
+      memorySize: 1024,
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../functions/step-functions/entity-extractor'),
       ),
@@ -1386,8 +1386,15 @@ export class WorkflowStack extends Stack {
     // Route based on ocr_backend after orchestrator
     const ocrBackendChoice = new sfn.Choice(this, 'OcrBackendChoice', {
       comment:
-        'Route OCR processing based on backend: "lambda" runs parallel chunk Map then merge; "sagemaker" enters async polling loop',
+        'Route OCR processing: SKIPPED short-circuits to done; "lambda" runs parallel chunk Map then merge; "sagemaker" enters async polling loop',
     })
+      .when(
+        sfn.Condition.stringEquals('$.ocr_status', 'SKIPPED'),
+        new sfn.Pass(this, 'OcrSkippedDone', {
+          comment:
+            'OCR skipped for unsupported file type (e.g. pptx/docx handled by format parser)',
+        }),
+      )
       .when(
         sfn.Condition.stringEquals('$.ocr_backend', 'lambda'),
         ocrChunkMap.next(ocrChunkMergerTask),
