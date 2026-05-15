@@ -105,7 +105,7 @@ Resources:
                 nodejs: 22
                 python: 3.13
               commands:
-                - npm install -g pnpm aws-cdk@latest
+                - npm install -g pnpm@10 aws-cdk@latest
 
             pre_build:
               commands:
