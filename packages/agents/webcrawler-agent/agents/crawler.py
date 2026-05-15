@@ -4,9 +4,10 @@ import asyncio
 import json
 import logging
 import os
+import queue as _queue
 import threading
 from datetime import datetime, timezone
-from typing import Callable
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 import boto3
@@ -19,6 +20,11 @@ from agents.d2snap import D2Snap, estimate_tokens
 logger = logging.getLogger(__name__)
 
 config = get_config()
+
+# Per-browser-action timeout (seconds). If a single navigate/get_html/click
+# exceeds this window, the wrapper returns an error instead of blocking so
+# the agent can skip the URL and continue with a different one.
+BROWSER_ACTION_TIMEOUT_SECS = int(os.environ.get("BROWSER_ACTION_TIMEOUT_SECS", "90"))
 
 # Initialize clients
 s3_client = boto3.client("s3", region_name=config.aws_region)
@@ -53,6 +59,27 @@ IMPORTANT:
   - Single article/page with no meaningful sub-links -> just extract that page
 - Maximum ~20 pages to avoid excessive crawling
 - Each saved page should contain substantive content, not just navigation
+
+<error_handling>
+Each browser action has a per-call timeout (default 90 seconds). If an
+action fails or times out, you receive a JSON object with an `error` field
+and possibly `timeout: true`. When that happens:
+
+1. **SKIP the failing URL immediately** — do NOT retry the same URL.
+   Retrying a hung URL will just hang again.
+2. **Continue with a different URL** from the remaining candidates.
+3. **If you run out of candidates**, close the browser and finish with
+   whatever pages you have successfully saved so far.
+4. **Partial results are valuable** — a crawl that saves 5 out of 10
+   planned pages is a success, not a failure. Always save what you have
+   and close cleanly.
+
+Common failure modes to skip-and-continue on:
+- Site is bot-blocked or returns a challenge page (CAPTCHA, Cloudflare)
+- Page never finishes loading (slow server, infinite redirect)
+- URL returns 404/403/5xx
+- Content is empty or tiny after compression (JS-only SPA we cannot render)
+</error_handling>
 </workflow>
 
 <content_format>
@@ -194,6 +221,129 @@ def get_current_time() -> str:
     return "\n".join(result)
 
 
+def _invoke_browser_with_timeout(
+    browser_tool: AgentCoreBrowser,
+    browser_input: dict,
+    timeout_secs: int = BROWSER_ACTION_TIMEOUT_SECS,
+) -> tuple[str, Any]:
+    """Call `browser_tool.browser(browser_input=...)` with a per-action timeout.
+
+    Returns a tuple `(status, value)`:
+      - `("ok", result)` on success
+      - `("timeout", error_message)` if the call exceeds `timeout_secs`
+      - `("error", exception_instance)` if the call raises
+
+    The underlying browser call runs in a daemon thread. On timeout the
+    background thread is NOT killed (Playwright does not support cancellation
+    cleanly); it will eventually complete in the background. The agent,
+    however, is freed to move on to a different URL.
+    """
+    action_type = "unknown"
+    action_target = ""
+    try:
+        if isinstance(browser_input, dict):
+            action = browser_input.get("action", {}) or {}
+            if isinstance(action, dict):
+                action_type = action.get("type", "unknown")
+                action_target = action.get("url") or action.get("selector") or ""
+    except Exception:
+        pass
+
+    result_q: _queue.Queue = _queue.Queue()
+
+    def _invoke() -> None:
+        try:
+            result = browser_tool.browser(browser_input=browser_input)
+            result_q.put(("ok", result))
+        except Exception as exc:
+            result_q.put(("error", exc))
+
+    worker = threading.Thread(target=_invoke, daemon=True)
+    worker.start()
+
+    try:
+        return result_q.get(timeout=timeout_secs)
+    except _queue.Empty:
+        msg = (
+            f"Browser action '{action_type}' exceeded {timeout_secs}s timeout"
+            + (f" for {action_target}" if action_target else "")
+        )
+        logger.warning(f"[BROWSER_TIMEOUT] {msg}")
+        return ("timeout", msg)
+
+
+def create_safe_browser_tool(
+    browser_tool: AgentCoreBrowser,
+    timeout_secs: int = BROWSER_ACTION_TIMEOUT_SECS,
+) -> Callable:
+    """Create a timeout-guarded wrapper around `browser_tool.browser`.
+
+    When a single action (e.g. navigate to an unresponsive URL) hangs for
+    longer than `timeout_secs`, this wrapper returns a structured JSON error
+    to the agent instead of blocking the entire run. The agent is expected
+    to skip the failing URL and continue with a different one (see system
+    prompt).
+    """
+
+    @tool
+    def browser(browser_input: dict) -> str:
+        """Interact with the AgentCore browser. Each action has a per-call
+        timeout so unresponsive URLs don't stall the whole crawl.
+
+        `browser_input` format examples:
+          - Navigate:   {"action": {"type": "navigate", "session_name": "s1", "url": "https://..."}}
+          - Get HTML:   {"action": {"type": "get_html", "session_name": "s1"}}
+          - Screenshot: {"action": {"type": "screenshot", "session_name": "s1"}}
+          - Click:      {"action": {"type": "click", "session_name": "s1", "selector": "..."}}
+          - Type:       {"action": {"type": "type", "session_name": "s1", "selector": "...", "text": "..."}}
+          - Close:      {"action": {"type": "close_browser"}}
+
+        If the action times out or errors, you receive a JSON object
+        containing `error`, `timeout` (bool), and `action_type` fields. When
+        that happens, SKIP the current URL and move on to a different URL.
+        Do NOT retry the same URL — it will just hang again.
+        """
+        action_type = "unknown"
+        action_target = ""
+        try:
+            if isinstance(browser_input, dict):
+                action = browser_input.get("action", {}) or {}
+                if isinstance(action, dict):
+                    action_type = action.get("type", "unknown")
+                    action_target = action.get("url") or action.get("selector") or ""
+        except Exception:
+            pass
+
+        status, value = _invoke_browser_with_timeout(browser_tool, browser_input, timeout_secs)
+
+        if status == "ok":
+            return value
+        if status == "timeout":
+            return json.dumps(
+                {
+                    "error": str(value),
+                    "timeout": True,
+                    "action_type": action_type,
+                    "target": action_target,
+                    "hint": "Skip this URL and continue with a different one. Do not retry.",
+                },
+                ensure_ascii=False,
+            )
+        # status == "error"
+        logger.warning(f"[BROWSER_ERR] action={action_type} target={action_target} error={value}")
+        return json.dumps(
+            {
+                "error": str(value),
+                "action_type": action_type,
+                "target": action_target,
+                "hint": "This action failed. Try a different URL or a different approach.",
+            },
+            ensure_ascii=False,
+        )
+
+    return browser
+
+
 def create_get_compressed_html_tool(browser_tool: AgentCoreBrowser) -> Callable:
     """Create a get_compressed_html tool for efficient HTML analysis."""
 
@@ -216,14 +366,22 @@ def create_get_compressed_html_tool(browser_tool: AgentCoreBrowser) -> Callable:
         import time
 
         def _extract_html() -> str:
-            html_result = browser_tool.browser(
-                browser_input={
+            status, result = _invoke_browser_with_timeout(
+                browser_tool,
+                {
                     "action": {
                         "type": "get_html",
                         "session_name": session_name,
                     }
-                }
+                },
             )
+            if status != "ok":
+                # Return empty string so caller falls through to the
+                # "HTML too small" retry / warning path; never raise here
+                # because that would abort the agent step.
+                logger.warning(f"_extract_html {status}: {result}")
+                return ""
+            html_result = result
             raw = ""
             if isinstance(html_result, dict):
                 content = html_result.get("content", [])
@@ -431,12 +589,18 @@ async def crawl_and_process(
         # Create custom tools with context
         save_page_tool, page_state = create_save_page_tool(file_uri)
         get_compressed_html_tool = create_get_compressed_html_tool(browser_tool)
+        # Wrap the raw browser tool with a per-action timeout so a single
+        # unresponsive URL (e.g. bot-blocked article page) cannot hang the
+        # whole crawl for the full AgentCore idle window.
+        safe_browser_tool = create_safe_browser_tool(
+            browser_tool, timeout_secs=BROWSER_ACTION_TIMEOUT_SECS
+        )
 
         # Create agent with browser tool and custom tools
         logger.info(f"Creating agent with model={config.bedrock_model_id}")
         agent = Agent(
             model=config.bedrock_model_id,
-            tools=[browser_tool.browser, save_page_tool, get_compressed_html_tool, get_current_time],
+            tools=[safe_browser_tool, save_page_tool, get_compressed_html_tool, get_current_time],
             system_prompt=system_prompt,
         )
         logger.info("Agent created successfully")
@@ -467,7 +631,10 @@ IMPORTANT:
         loop = asyncio.get_running_loop()
         future = loop.create_future()
 
-        AGENT_TIMEOUT_SECS = int(os.environ.get("AGENT_TIMEOUT_SECS", "1800"))
+        # Keep agent-level timeout BELOW AgentCore idle session timeout (15 min)
+        # so the agent surfaces a clean TimeoutError via update_preprocess_status
+        # BEFORE AgentCore tears down the container silently.
+        AGENT_TIMEOUT_SECS = int(os.environ.get("AGENT_TIMEOUT_SECS", "780"))
 
         def _run_agent():
             try:
