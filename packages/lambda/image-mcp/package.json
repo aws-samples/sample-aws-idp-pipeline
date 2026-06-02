@@ -20,7 +20,7 @@
     "@types/aws-lambda": "^8.10.145",
     "@types/node": "^22.19.1",
     "typescript": "~5.9.3",
-    "vitest": "^4.0.16"
+    "vitest": "^4.1.0"
   },
   "packageManager": "pnpm@10.12.4"
 }
