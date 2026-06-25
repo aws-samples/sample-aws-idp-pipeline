@@ -1,0 +1,748 @@
+---
+// Streaming chat UI for asking questions about the repository.
+// Talks to an SSE-style endpoint that emits `data: {"delta":"..."}` lines,
+// `[TOOL] <name>` markers for tool execution, and `data: [DONE]` to finish.
+// In dev, requests go through the Vite proxy at `/ask-api` (see astro.config.mjs)
+// to avoid CORS; in production the full endpoint URL is used directly.
+//
+// Endpoint and on/off are configured in ../../ask.config.mjs. The `endpoint`
+// prop still overrides the config value when explicitly passed.
+import { askConfig } from '../../ask.config.mjs';
+
+interface Props {
+  endpoint?: string;
+}
+
+const { endpoint = askConfig.endpoint } = Astro.props;
+const { enabled } = askConfig;
+
+const locale = Astro.locals.starlightRoute?.locale ?? 'en';
+
+const ui = {
+  en: {
+    disabled: 'The Ask AI feature is currently disabled.',
+    title: 'Ask about this repository',
+    sub: 'Answers stream in real time.',
+    placeholder: 'Ask a question...',
+    suggestions: [
+      'How is OCR implemented?',
+      'Explain the document analysis workflow',
+      'What is the DynamoDB schema?',
+    ],
+  },
+  ko: {
+    disabled: 'AI에게 물어보기 기능이 현재 비활성화되어 있습니다.',
+    title: '이 저장소에 대해 물어보세요',
+    sub: '답변은 실시간으로 스트리밍됩니다.',
+    placeholder: '질문을 입력하세요...',
+    suggestions: [
+      'OCR은 어떻게 구현되어 있나요?',
+      '문서 분석 워크플로우를 설명해 주세요',
+      'DynamoDB 스키마는 어떻게 되나요?',
+    ],
+  },
+  ja: {
+    disabled: 'AIに質問する機能は現在無効になっています。',
+    title: 'このリポジトリについて質問する',
+    sub: '回答はリアルタイムでストリーミングされます。',
+    placeholder: '質問を入力してください...',
+    suggestions: [
+      'OCR はどのように実装されていますか？',
+      'ドキュメント分析ワークフローを説明してください',
+      'DynamoDB のスキーマはどうなっていますか？',
+    ],
+  },
+};
+
+const u = ui[locale] ?? ui.en;
+---
+
+{!enabled && <p class="ask-disabled not-content">{u.disabled}</p>}
+
+{enabled && (
+<div class="ask-chat not-content" data-endpoint={endpoint}>
+  <div class="ask-thread" aria-live="polite">
+    <div class="ask-empty">
+      <p class="ask-empty-title">{u.title}</p>
+      <p class="ask-empty-sub">{u.sub}</p>
+      <div class="ask-suggestions">
+        {u.suggestions.map((s) => (
+          <button type="button" class="ask-chip-suggest">{s}</button>
+        ))}
+      </div>
+    </div>
+  </div>
+
+  <form class="ask-form" autocomplete="off">
+    <span class="ask-prompt-mark">&gt;</span>
+    <textarea
+      class="ask-input"
+      name="prompt"
+      placeholder={u.placeholder}
+      aria-label="Question"
+      rows="1"></textarea>
+    <button type="submit" class="ask-send" aria-label="Send">
+      <svg class="ask-send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+        <polyline points="12 5 19 12 12 19"></polyline>
+      </svg>
+      <span class="ask-send-stop"></span>
+    </button>
+  </form>
+</div>
+)}
+
+<script>
+  import { marked } from 'marked';
+  import hljs from 'highlight.js';
+  import 'highlight.js/styles/github-dark.css';
+
+  marked.setOptions({ breaks: true, gfm: true });
+
+  function init(root: HTMLElement) {
+    const form = root.querySelector<HTMLFormElement>('.ask-form')!;
+    const input = root.querySelector<HTMLTextAreaElement>('.ask-input')!;
+    const sendBtn = root.querySelector<HTMLButtonElement>('.ask-send')!;
+    const thread = root.querySelector<HTMLDivElement>('.ask-thread')!;
+    const empty = root.querySelector<HTMLDivElement>('.ask-empty');
+    const endpoint = root.dataset.endpoint!;
+
+    // In dev, route through the Vite proxy to dodge CORS. In prod, hit the
+    // endpoint directly (requires CORS headers on the endpoint).
+    const isDev = import.meta.env.DEV;
+
+    root.querySelectorAll<HTMLButtonElement>('.ask-chip-suggest').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        input.value = chip.textContent ?? '';
+        form.requestSubmit();
+      });
+    });
+
+    // Auto-grow the textarea up to a cap.
+    input.addEventListener('input', autoGrow);
+    function autoGrow() {
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 160) + 'px';
+    }
+
+    // Enter sends; Shift+Enter inserts a newline. Ignore Enter while an IME
+    // composition is active (e.g. confirming a Korean/Japanese character),
+    // otherwise the last composing character gets left in the input.
+    let composing = false;
+    input.addEventListener('compositionstart', () => {
+      composing = true;
+    });
+    input.addEventListener('compositionend', () => {
+      composing = false;
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && !composing && !e.isComposing) {
+        e.preventDefault();
+        form.requestSubmit();
+      }
+    });
+
+    let running = false;
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const prompt = input.value.trim();
+      if (!prompt || running) return;
+      input.value = '';
+      autoGrow();
+      await ask(prompt);
+    });
+
+    async function ask(prompt: string) {
+      running = true;
+      root.classList.add('is-running');
+      sendBtn.disabled = true;
+
+      if (empty && empty.parentElement) empty.remove();
+
+      renderUser(prompt);
+      const turn = renderAssistant();
+      let raw = '';
+
+      try {
+        const url = isDev
+          ? `/ask-api?prompt=${encodeURIComponent(prompt)}`
+          : `${endpoint}?prompt=${encodeURIComponent(prompt)}`;
+
+        const res = await fetch(url, { headers: { Accept: 'text/event-stream' } });
+        if (!res.ok || !res.body) {
+          throw new Error(`Request failed: ${res.status}`);
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let stop = false;
+
+        while (!stop) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          // SSE frames are separated by blank lines.
+          const frames = buffer.split('\n\n');
+          buffer = frames.pop() ?? '';
+
+          for (const frame of frames) {
+            const line = frame.trim();
+            if (!line.startsWith('data:')) continue;
+            const payload = line.slice(5).trim();
+
+            if (payload === '[DONE]') {
+              stop = true;
+              break;
+            }
+
+            let delta = '';
+            try {
+              delta = JSON.parse(payload).delta ?? '';
+            } catch {
+              continue;
+            }
+
+            if (delta.startsWith('[TOOL]')) {
+              showTool(turn, delta.replace('[TOOL]', '').trim());
+              continue;
+            }
+
+            // First answer text: tools are done, collapse the trace and hide dots.
+            finalizeSteps(turn);
+            if (turn.thinking.parentElement) turn.thinking.remove();
+            raw += delta;
+            turn.answer.innerHTML = await marked.parse(raw);
+            highlight(turn.answer);
+            scrollToBottom();
+          }
+        }
+
+        if (turn.thinking.parentElement) turn.thinking.remove();
+        if (!raw.trim()) {
+          turn.answer.innerHTML = '<p class="ask-muted">No response.</p>';
+        }
+      } catch (err) {
+        if (turn.thinking.parentElement) turn.thinking.remove();
+        turn.answer.innerHTML = `<p class="ask-error">Failed to get a response: ${
+          err instanceof Error ? err.message : 'unknown error'
+        }</p>`;
+      } finally {
+        finalizeSteps(turn);
+        running = false;
+        root.classList.remove('is-running');
+        sendBtn.disabled = false;
+        input.focus();
+        scrollToBottom();
+      }
+    }
+
+    function renderUser(prompt: string) {
+      const msg = document.createElement('div');
+      msg.className = 'ask-msg ask-msg-user';
+      msg.innerHTML = `
+        <span class="ask-label ask-label-q">Q</span>
+        <div class="ask-question">${escapeHtml(prompt)}</div>
+      `;
+      thread.appendChild(msg);
+      scrollToBottom();
+    }
+
+    function renderAssistant() {
+      const msg = document.createElement('div');
+      msg.className = 'ask-msg ask-msg-bot';
+      msg.innerHTML = `
+        <span class="ask-label ask-label-a">A</span>
+        <div class="ask-content">
+          <div class="ask-steps" hidden>
+            <button type="button" class="ask-steps-head" aria-expanded="true">
+              <span class="ask-steps-caret">${caretSvg()}</span>
+              <span class="ask-steps-spin"><span class="ask-tool-spinner"></span></span>
+              <span class="ask-steps-title">Searching the codebase</span>
+              <span class="ask-steps-count"></span>
+            </button>
+            <ol class="ask-steps-list"></ol>
+          </div>
+          <div class="ask-thinking"><span></span><span></span><span></span></div>
+          <div class="ask-answer"></div>
+        </div>
+      `;
+      thread.appendChild(msg);
+
+      const stepsEl = msg.querySelector<HTMLDivElement>('.ask-steps')!;
+      const headEl = msg.querySelector<HTMLButtonElement>('.ask-steps-head')!;
+      headEl.addEventListener('click', () => {
+        const open = stepsEl.classList.toggle('collapsed');
+        headEl.setAttribute('aria-expanded', String(!open));
+      });
+
+      scrollToBottom();
+      return {
+        el: msg,
+        steps: stepsEl,
+        stepsHead: headEl,
+        stepsList: msg.querySelector<HTMLOListElement>('.ask-steps-list')!,
+        stepsCount: msg.querySelector<HTMLSpanElement>('.ask-steps-count')!,
+        thinking: msg.querySelector<HTMLDivElement>('.ask-thinking')!,
+        answer: msg.querySelector<HTMLDivElement>('.ask-answer')!,
+        lastTool: '',
+        lastItem: null as HTMLLIElement | null,
+        toolCount: 0,
+      };
+    }
+
+    type Turn = ReturnType<typeof renderAssistant>;
+
+    function showTool(turn: Turn, name: string) {
+      turn.steps.hidden = false;
+      turn.toolCount += 1;
+
+      // Each call is its own row: the previous one flips to a check, the new
+      // one spins. A steady stream of completed checks makes progress obvious.
+      markStepDone(turn.lastItem);
+
+      const item = document.createElement('li');
+      item.className = 'ask-step running';
+      item.innerHTML = `
+        <span class="ask-step-icon ask-step-icon-run"><span class="ask-tool-spinner"></span></span>
+        <span class="ask-step-icon ask-step-icon-done">${checkSvg()}</span>
+        <code class="ask-step-name">${escapeHtml(name)}</code>
+      `;
+      turn.stepsList.appendChild(item);
+      turn.lastTool = name;
+      turn.lastItem = item;
+      bumpCount(turn);
+      scrollSteps(turn);
+      scrollToBottom();
+    }
+
+    function bumpCount(turn: Turn) {
+      turn.stepsCount.textContent = `${turn.toolCount} ${
+        turn.toolCount === 1 ? 'call' : 'calls'
+      }`;
+    }
+
+    function scrollSteps(turn: Turn) {
+      turn.stepsList.scrollTop = turn.stepsList.scrollHeight;
+    }
+
+    function markStepDone(item: HTMLLIElement | null) {
+      if (!item) return;
+      item.classList.remove('running');
+      item.classList.add('done');
+    }
+
+    // Mark steps complete and auto-collapse the panel. Called as soon as the
+    // first answer text arrives, so the trace folds away once tools finish.
+    function finalizeSteps(turn: Turn) {
+      markStepDone(turn.lastItem);
+      if (turn.toolCount > 0) {
+        turn.steps.classList.add('settled');
+        const title = turn.steps.querySelector('.ask-steps-title')!;
+        title.textContent = `Searched the codebase`;
+        if (!turn.steps.classList.contains('collapsed')) {
+          turn.steps.classList.add('collapsed');
+          turn.stepsHead.setAttribute('aria-expanded', 'false');
+        }
+      }
+    }
+
+    function caretSvg() {
+      return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+    }
+
+    function checkSvg() {
+      return `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+    }
+
+    function highlight(container: HTMLElement) {
+      container.querySelectorAll<HTMLElement>('pre code').forEach((block) => {
+        if (block.dataset.highlighted) return;
+        hljs.highlightElement(block);
+      });
+    }
+
+    function scrollToBottom() {
+      thread.scrollTop = thread.scrollHeight;
+    }
+
+    function escapeHtml(s: string) {
+      return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+  }
+
+  document.querySelectorAll<HTMLElement>('.ask-chat').forEach(init);
+</script>
+
+<style is:global>
+  .ask-disabled {
+    color: var(--sl-color-gray-3);
+    font-style: italic;
+  }
+  .ask-chat {
+    display: flex;
+    flex-direction: column;
+    height: min(82vh, 900px);
+    margin: 1.5rem 0;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg);
+    overflow: hidden;
+    font-size: 0.95rem;
+  }
+
+  /* Thread (scrollable message list) */
+  .ask-thread {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+  }
+
+  .ask-thread::-webkit-scrollbar {
+    width: 8px;
+  }
+  .ask-thread::-webkit-scrollbar-thumb {
+    background: var(--sl-color-gray-5);
+    border-radius: 4px;
+  }
+
+  /* Empty state */
+  .ask-empty {
+    margin: auto;
+    text-align: center;
+    max-width: 30rem;
+    padding: 1rem;
+  }
+  .ask-empty-title {
+    margin: 0;
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--sl-color-white);
+  }
+  .ask-empty-sub {
+    margin: 0.35rem 0 1.25rem;
+    font-size: 0.85rem;
+    color: var(--sl-color-gray-3);
+  }
+  .ask-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+  }
+  .ask-chip-suggest {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 0.4rem;
+    border: 1px solid var(--sl-color-gray-5);
+    background: var(--sl-color-gray-7, var(--sl-color-bg));
+    color: var(--sl-color-gray-2);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .ask-chip-suggest:hover {
+    border-color: var(--sl-color-accent);
+    color: var(--sl-color-white);
+  }
+
+  /* Messages: Q / A rows sharing a hanging label column */
+  .ask-msg {
+    display: grid;
+    grid-template-columns: 1.6rem 1fr;
+    gap: 0.75rem;
+    animation: ask-fade 0.2s ease;
+  }
+  @keyframes ask-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .ask-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: start;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 0.3rem;
+    font-family: var(--sl-font-mono, monospace);
+    font-size: 0.72rem;
+    font-weight: 700;
+    user-select: none;
+    box-sizing: border-box;
+  }
+  /* A first text line has a tall line box (1.6 line-height, taller still with an
+     emoji), so its glyph centre sits well below a top-aligned square label.
+     These nudges drop each label to line up with its first line of text. */
+  .ask-label-q {
+    color: var(--sl-color-gray-2);
+    border: 1px solid var(--sl-color-gray-5);
+    margin-top: 0.18rem;
+  }
+  .ask-label-a {
+    /* Fixed white: Starlight's --sl-color-white inverts to a dark color in
+       light theme, which would vanish against the accent background. */
+    color: #fff;
+    background: var(--sl-color-accent);
+    margin-top: 0.3rem;
+  }
+
+  .ask-question {
+    color: var(--sl-color-text-accent, var(--sl-color-accent));
+    font-weight: 700;
+    font-size: 1.2rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .ask-content {
+    min-width: 0;
+  }
+
+  .ask-answer {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--sl-color-gray-1, var(--sl-color-white));
+  }
+  .ask-answer > *:first-child {
+    margin-top: 0;
+  }
+  .ask-answer > *:last-child {
+    margin-bottom: 0;
+  }
+  .ask-answer pre {
+    border-radius: 0.5rem;
+    border: 1px solid var(--sl-color-gray-5);
+    font-size: 0.85em;
+  }
+  .ask-answer :not(pre) > code {
+    font-size: 0.88em;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.3rem;
+    background: var(--sl-color-gray-6);
+  }
+
+  /* Steps panel (collapsible tool-execution trace) */
+  .ask-steps {
+    margin-bottom: 0.85rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-gray-7, var(--sl-color-bg));
+    overflow: hidden;
+  }
+  .ask-steps[hidden] {
+    display: none;
+  }
+  .ask-steps-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: none;
+    background: transparent;
+    color: var(--sl-color-gray-1, var(--sl-color-white));
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+  }
+  .ask-steps-caret {
+    display: inline-flex;
+    color: var(--sl-color-gray-3);
+    transition: transform 0.2s ease;
+  }
+  .ask-steps.collapsed .ask-steps-caret {
+    transform: rotate(-90deg);
+  }
+  /* Header spinner: visible only while tools are still running. */
+  .ask-steps-spin {
+    display: inline-flex;
+    align-items: center;
+  }
+  .ask-steps.settled .ask-steps-spin {
+    display: none;
+  }
+  .ask-steps-title {
+    flex-shrink: 0;
+  }
+  .ask-steps-count {
+    margin-left: auto;
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: var(--sl-color-gray-3);
+    font-family: var(--sl-font-mono, monospace);
+  }
+  .ask-steps-list {
+    list-style: none;
+    margin: 0;
+    padding: 0.15rem 0.75rem 0.6rem;
+    border-top: 1px solid var(--sl-color-gray-5);
+    max-height: 9.5rem;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+  }
+  .ask-steps-list::-webkit-scrollbar {
+    width: 6px;
+  }
+  .ask-steps-list::-webkit-scrollbar-thumb {
+    background: var(--sl-color-gray-5);
+    border-radius: 3px;
+  }
+  .ask-steps.collapsed .ask-steps-list {
+    display: none;
+  }
+  .ask-step {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.3rem 0;
+    font-size: 0.8rem;
+    color: var(--sl-color-gray-2);
+    animation: ask-fade 0.2s ease;
+  }
+  .ask-step.running .ask-step-name {
+    color: var(--sl-color-white);
+  }
+  .ask-step-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+  }
+  .ask-step-icon-done {
+    border-radius: 50%;
+    color: #fff;
+    background: var(--sl-color-accent);
+  }
+  .ask-step .ask-step-icon-done { display: none; }
+  .ask-step.done .ask-step-icon-run { display: none; }
+  .ask-step.done .ask-step-icon-done { display: inline-flex; }
+  .ask-step.done {
+    color: var(--sl-color-gray-3);
+  }
+  .ask-step-name {
+    font-family: var(--sl-font-mono, monospace);
+    font-size: 0.78rem;
+    background: none;
+    padding: 0;
+    color: inherit;
+    word-break: break-all;
+  }
+  .ask-tool-spinner {
+    width: 0.65rem;
+    height: 0.65rem;
+    border: 2px solid var(--sl-color-gray-4);
+    border-top-color: var(--sl-color-accent);
+    border-radius: 50%;
+    animation: ask-spin 0.7s linear infinite;
+  }
+  @keyframes ask-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Thinking dots */
+  .ask-thinking {
+    display: flex;
+    gap: 0.3rem;
+    padding: 0.3rem 0;
+  }
+  .ask-thinking span {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: var(--sl-color-gray-4);
+    animation: ask-bounce 1.2s infinite ease-in-out;
+  }
+  .ask-thinking span:nth-child(2) { animation-delay: 0.15s; }
+  .ask-thinking span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes ask-bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-0.3rem); opacity: 1; }
+  }
+
+  .ask-error { color: var(--sl-color-red, #f87171); }
+  .ask-muted { color: var(--sl-color-gray-3); }
+
+  /* Composer (bottom-fixed input, terminal-prompt feel) */
+  .ask-form {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-end;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--sl-color-gray-5);
+    background: var(--sl-color-gray-7, var(--sl-color-bg));
+  }
+  .ask-prompt-mark {
+    font-family: var(--sl-font-mono, monospace);
+    font-weight: 700;
+    color: var(--sl-color-accent);
+    line-height: 2.2;
+    user-select: none;
+  }
+  .ask-input {
+    flex: 1;
+    resize: none;
+    border: none;
+    background: transparent;
+    color: var(--sl-color-white);
+    font-size: 0.95rem;
+    font-family: inherit;
+    line-height: 1.6;
+    padding: 0.5rem 0;
+    outline: none;
+    max-height: 160px;
+  }
+  .ask-input::placeholder {
+    color: var(--sl-color-gray-4);
+  }
+  .ask-send {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.2rem;
+    height: 2.2rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.4rem;
+    background: transparent;
+    color: var(--sl-color-gray-2);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .ask-send:hover:not(:disabled) {
+    border-color: var(--sl-color-accent);
+    color: var(--sl-color-white);
+  }
+  .ask-send:disabled {
+    cursor: default;
+  }
+  .ask-send-stop {
+    display: none;
+    width: 0.8rem;
+    height: 0.8rem;
+    border: 2px solid var(--sl-color-gray-4);
+    border-top-color: var(--sl-color-accent);
+    border-radius: 50%;
+    animation: ask-spin 0.7s linear infinite;
+  }
+  .ask-chat.is-running .ask-send-icon { display: none; }
+  .ask-chat.is-running .ask-send-stop { display: block; }
+
+  @media (max-width: 640px) {
+    .ask-chat { height: min(80vh, 640px); }
+    .ask-thread { padding: 1rem; }
+  }
+</style>

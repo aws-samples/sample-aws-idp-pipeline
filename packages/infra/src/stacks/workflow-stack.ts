@@ -167,7 +167,7 @@ export class WorkflowStack extends Stack {
       );
 
       return lambda.Code.fromAsset(layerDir, {
-        assetHashType: AssetHashType.OUTPUT,
+        assetHashType: AssetHashType.SOURCE,
         bundling: {
           image: lambda.Runtime.PYTHON_3_14.bundlingImage,
           command: [

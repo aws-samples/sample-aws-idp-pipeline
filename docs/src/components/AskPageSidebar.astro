@@ -1,0 +1,141 @@
+---
+// Right-sidebar override. The "Ask AI" page has only a single-entry table of
+// contents, so we replace it with a short note about what powers the chat and
+// a link to the repo. Styled to match the default TOC (small, muted text).
+// Every other page keeps the default sidebar/TOC.
+import Default from '@astrojs/starlight/components/PageSidebar.astro';
+
+const route = Astro.locals.starlightRoute;
+const id = route.id ?? '';
+const isAsk = id === 'ask' || id.endsWith('/ask');
+const locale = route.locale ?? 'en';
+
+const REPO_URL = 'https://github.com/aws-samples/sample-reusable-assets-toolkit';
+
+const t = {
+  en: {
+    heading: 'Powered by',
+    lead: 'Answers are grounded in this repository, indexed and made searchable by the Reusable Asset Toolkit (rat) — a toolkit for discovering and reusing code assets across an organization.',
+    items: [
+      'Source is parsed into an AST with tree-sitter and split into meaningful units — functions, classes, structs — keeping their doc comments and decorators.',
+      'Each chunk is enriched with LLM-generated descriptions, so code is searchable by intent rather than exact keywords.',
+      'Hybrid search (vector embeddings + keyword ranking) surfaces relevant snippets, even from unfamiliar repositories.',
+      'The same index is exposed over an MCP server, so AI coding assistants (Claude Code, Kiro, …) can pull validated code patterns straight into the conversation.',
+      'Indexing runs on a Git repo and is incremental — only changed files are re-processed, with .ratignore to exclude paths.',
+    ],
+    repoLabel: 'Learn more',
+    repo: 'Reusable Asset Toolkit',
+  },
+  ko: {
+    heading: '기반 기술',
+    lead: '답변은 Reusable Asset Toolkit(rat)이 색인·검색하는 이 저장소의 코드를 근거로 합니다. 조직 전반의 코드 자산을 발견하고 재사용하기 위한 툴킷입니다.',
+    items: [
+      'tree-sitter로 소스를 AST로 파싱해 함수·클래스·구조체 등 의미 단위로 청킹하며, 해당 doc 주석과 데코레이터를 함께 보존합니다.',
+      '각 청크에 LLM이 생성한 설명을 덧붙여, 정확한 키워드가 아닌 의도(intent)로 검색됩니다.',
+      '하이브리드 검색(벡터 임베딩 + 키워드 랭킹)으로 익숙하지 않은 저장소에서도 관련 코드 조각을 찾아냅니다.',
+      '동일한 색인을 MCP 서버로 노출해, AI 코딩 어시스턴트(Claude Code, Kiro 등)가 검증된 코드 패턴을 대화에 바로 가져옵니다.',
+      'Git 저장소 단위로 색인하며 증분 방식으로 동작합니다. 변경된 파일만 재처리하고, .ratignore로 경로를 제외할 수 있습니다.',
+    ],
+    repoLabel: '자세히 보기',
+    repo: 'Reusable Asset Toolkit',
+  },
+  ja: {
+    heading: '基盤',
+    lead: '回答は、Reusable Asset Toolkit (rat) がインデックス化・検索するこのリポジトリのコードに基づきます。組織全体のコード資産を発見・再利用するためのツールキットです。',
+    items: [
+      'tree-sitter でソースを AST に解析し、関数・クラス・構造体などの意味単位にチャンク化します（doc コメントやデコレーターも保持）。',
+      '各チャンクに LLM 生成の説明を付与し、正確なキーワードではなく意図（intent）で検索できます。',
+      'ハイブリッド検索（ベクトル埋め込み + キーワードランキング）で、馴染みのないリポジトリからも関連スニペットを見つけます。',
+      '同じインデックスを MCP サーバーで公開し、AI コーディングアシスタント（Claude Code、Kiro など）が検証済みコードパターンを会話に直接取り込めます。',
+      'Git リポジトリ単位でインデックス化し、増分で動作します。変更ファイルのみ再処理し、.ratignore でパスを除外できます。',
+    ],
+    repoLabel: '詳しく見る',
+    repo: 'Reusable Asset Toolkit',
+  },
+};
+
+const c = t[locale] ?? t.en;
+---
+
+{
+  isAsk ? (
+    <div class="ask-toc">
+      <h2 class="ask-toc-heading">{c.heading}</h2>
+      <p class="ask-toc-lead">{c.lead}</p>
+      <ul class="ask-toc-list">
+        {c.items.map((item) => (
+          <li>{item}</li>
+        ))}
+      </ul>
+      <a class="ask-toc-link" href={REPO_URL} target="_blank" rel="noopener">
+        {c.repoLabel}: {c.repo} &nearr;
+      </a>
+    </div>
+  ) : (
+    <Default {...Astro.props}>
+      <slot />
+    </Default>
+  )
+}
+
+<style is:global>
+  .ask-toc {
+    /* Sits directly in .right-sidebar with no inner container, so without an
+       explicit width the long text expands the sidebar past the viewport edge.
+       Pin it to the TOC column width and let text wrap inside. */
+    box-sizing: border-box;
+    width: var(--sl-sidebar-width, 18rem);
+    max-width: 100%;
+    padding: 1.5rem 1rem 0;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+  .ask-toc-heading {
+    font-size: var(--sl-text-h5);
+    font-weight: 600;
+    color: var(--sl-color-white);
+    margin: 0 0 0.5rem;
+  }
+  .ask-toc-list {
+    list-style: none;
+    margin: 0 0 1rem;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .ask-toc-list li {
+    position: relative;
+    padding-left: 0.85rem;
+    font-size: var(--sl-text-xs);
+    line-height: 1.5;
+    color: var(--sl-color-gray-3);
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+  .ask-toc-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.5em;
+    width: 0.3rem;
+    height: 0.3rem;
+    border-radius: 50%;
+    background: var(--sl-color-gray-4);
+  }
+  .ask-toc-lead {
+    font-size: var(--sl-text-xs);
+    line-height: 1.5;
+    color: var(--sl-color-gray-3);
+    margin: 0 0 0.75rem;
+    overflow-wrap: break-word;
+  }
+  .ask-toc-link {
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-text-accent);
+    text-decoration: none;
+  }
+  .ask-toc-link:hover {
+    text-decoration: underline;
+  }
+</style>

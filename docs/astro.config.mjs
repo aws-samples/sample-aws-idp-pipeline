@@ -3,6 +3,7 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import mermaid from 'astro-mermaid';
 import { stripMdLinksIntegration } from './remark-strip-md-links.mjs';
+import { askConfig } from './ask.config.mjs';
 import { readFileSync } from 'node:fs';
 
 const rootPkg = JSON.parse(
@@ -19,6 +20,7 @@ export default defineConfig({
       title: 'AWS IDP Pipeline',
       components: {
         SiteTitle: './src/components/SiteTitle.astro',
+        PageSidebar: './src/components/AskPageSidebar.astro',
       },
       social: [
         {
@@ -48,6 +50,18 @@ export default defineConfig({
           },
           link: '/',
         },
+        ...(askConfig.enabled
+          ? [
+              {
+                label: 'Ask AI',
+                translations: {
+                  ko: 'AI에게 물어보기',
+                  ja: 'AIに質問',
+                },
+                link: '/ask',
+              },
+            ]
+          : []),
         {
           label: 'Features',
           translations: {
@@ -219,6 +233,17 @@ export default defineConfig({
   vite: {
     ssr: {
       noExternal: ['nanoid'],
+    },
+    // Dev-only proxy so the Ask AI chat can reach the streaming endpoint
+    // without hitting CORS. In production the endpoint is called directly.
+    server: {
+      proxy: {
+        '/ask-api': {
+          target: askConfig.endpoint,
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/ask-api/, ''),
+        },
+      },
     },
   },
 });
