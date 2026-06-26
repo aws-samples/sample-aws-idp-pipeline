@@ -100,7 +100,11 @@
     }
   },
   "release": {
-    "projects": ["@idp-v2/frontend", "@idp-v2/infra", "@idp-v2/common-constructs"],
+    "projects": [
+      "@idp-v2/frontend",
+      "@idp-v2/infra",
+      "@idp-v2/common-constructs"
+    ],
     "projectsRelationship": "fixed",
     "version": {
       "generatorOptions": {
@@ -136,5 +140,6 @@
         "linter": "eslint"
       }
     }
-  }
+  },
+  "analytics": false
 }
