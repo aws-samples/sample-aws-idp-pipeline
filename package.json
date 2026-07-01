@@ -16,6 +16,7 @@
     "@aws-sdk/client-bedrock-agent-runtime": "^3.1075.0",
     "@aws-sdk/client-s3": "^3.1075.0",
     "@aws-sdk/client-ssm": "^3.1075.0",
+    "@aws-sdk/credential-provider-cognito-identity": "^3.972.48",
     "@aws-sdk/credential-providers": "^3.1075.0",
     "@aws-sdk/s3-request-presigner": "^3.1075.0",
     "@aws-sdk/signature-v4": "^3.374.0",
