@@ -8,7 +8,7 @@ import {
   type PropsWithChildren,
 } from 'react';
 import { useAuth } from 'react-oidc-context';
-import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
+import { fromCognitoIdentityPool } from '@aws-sdk/credential-provider-cognito-identity';
 import { useRuntimeConfig } from '../hooks/useRuntimeConfig';
 import { createSignedWebSocketUrl } from '../lib/websocket-signer';
 import type {
