@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TestRouteImport } from './routes/test'
+import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ArtifactsRouteImport } from './routes/artifacts'
 import { Route as IndexRouteImport } from './routes/index'
@@ -18,6 +19,11 @@ import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projec
 const TestRoute = TestRouteImport.update({
   id: '/test',
   path: '/test',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TemplatesRoute = TemplatesRouteImport.update({
+  id: '/templates',
+  path: '/templates',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/artifacts': typeof ArtifactsRoute
   '/settings': typeof SettingsRoute
+  '/templates': typeof TemplatesRoute
   '/test': typeof TestRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/artifacts': typeof ArtifactsRoute
   '/settings': typeof SettingsRoute
+  '/templates': typeof TemplatesRoute
   '/test': typeof TestRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
 }
@@ -60,19 +68,33 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/artifacts': typeof ArtifactsRoute
   '/settings': typeof SettingsRoute
+  '/templates': typeof TemplatesRoute
   '/test': typeof TestRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/artifacts' | '/settings' | '/test' | '/projects/$projectId'
+  fullPaths:
+    | '/'
+    | '/artifacts'
+    | '/settings'
+    | '/templates'
+    | '/test'
+    | '/projects/$projectId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/artifacts' | '/settings' | '/test' | '/projects/$projectId'
+  to:
+    | '/'
+    | '/artifacts'
+    | '/settings'
+    | '/templates'
+    | '/test'
+    | '/projects/$projectId'
   id:
     | '__root__'
     | '/'
     | '/artifacts'
     | '/settings'
+    | '/templates'
     | '/test'
     | '/projects/$projectId'
   fileRoutesById: FileRoutesById
@@ -81,6 +103,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ArtifactsRoute: typeof ArtifactsRoute
   SettingsRoute: typeof SettingsRoute
+  TemplatesRoute: typeof TemplatesRoute
   TestRoute: typeof TestRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
 }
@@ -92,6 +115,13 @@ declare module '@tanstack/react-router' {
       path: '/test'
       fullPath: '/test'
       preLoaderRoute: typeof TestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/templates': {
+      id: '/templates'
+      path: '/templates'
+      fullPath: '/templates'
+      preLoaderRoute: typeof TemplatesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -129,6 +159,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ArtifactsRoute: ArtifactsRoute,
   SettingsRoute: SettingsRoute,
+  TemplatesRoute: TemplatesRoute,
   TestRoute: TestRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRoute,
 }

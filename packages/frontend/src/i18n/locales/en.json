@@ -30,6 +30,7 @@
   "nav": {
     "projects": "Projects",
     "artifacts": "Artifacts",
+    "templates": "Templates",
     "settings": "Settings",
     "logout": "Logout",
     "greeting": "Hi, {{name}}",
@@ -464,6 +465,15 @@
     "deleteAgent": "Delete Agent",
     "deleteConfirmMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
     "notFound": "Agent \"{{name}}\" not found. Using default agent."
+  },
+  "templates": {
+    "heroTag": "Templates",
+    "heroTitle": "Reference documents that shape the look and structure of generated files",
+    "heroDescription": "Upload documents like PPTX to use as templates when generating files through skills.\nThe AI references their theme and structure to create documents with a consistent style.",
+    "searchPlaceholder": "Search templates...",
+    "newTemplate": "New Template",
+    "noTemplates": "No templates yet",
+    "noTemplatesDescription": "Templates you create will appear here."
   },
   "artifacts": {
     "heroTag": "AI Generated Artifacts",

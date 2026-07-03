@@ -30,6 +30,7 @@
   "nav": {
     "projects": "プロジェクト",
     "artifacts": "アーティファクト",
+    "templates": "テンプレート",
     "settings": "設定",
     "logout": "ログアウト",
     "greeting": "こんにちは、{{name}}さん",
@@ -464,6 +465,15 @@
     "deleteAgent": "エージェント削除",
     "deleteConfirmMessage": "「{{name}}」を削除しますか？この操作は取り消せません。",
     "notFound": "「{{name}}」エージェントが見つかりません。デフォルトエージェントを使用します。"
+  },
+  "templates": {
+    "heroTag": "テンプレート",
+    "heroTitle": "生成ドキュメントのテーマと構造を決定する参照ドキュメント",
+    "heroDescription": "PPTXなどのドキュメントをテンプレートとしてアップロードすると、スキルを通じてドキュメントを生成する際に活用されます。\nAIがテンプレートのテーマと構造を参照し、一貫したスタイルのドキュメントを作成します。",
+    "searchPlaceholder": "テンプレートを検索...",
+    "newTemplate": "新規テンプレート",
+    "noTemplates": "テンプレートがまだありません",
+    "noTemplatesDescription": "作成したテンプレートがここに表示されます。"
   },
   "artifacts": {
     "heroTag": "AI Generated Artifacts",
