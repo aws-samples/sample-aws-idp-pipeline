@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { useAuth } from 'react-oidc-context';
-import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
+import { fromCognitoIdentityPool } from '@aws-sdk/credential-provider-cognito-identity';
 import {
   S3Client,
   PutObjectCommand,
