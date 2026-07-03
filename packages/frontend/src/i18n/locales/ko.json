@@ -473,7 +473,13 @@
     "searchPlaceholder": "템플릿 검색...",
     "newTemplate": "새 템플릿",
     "noTemplates": "아직 템플릿이 없습니다",
-    "noTemplatesDescription": "생성한 템플릿이 여기에 표시됩니다."
+    "noTemplatesDescription": "생성한 템플릿이 여기에 표시됩니다.",
+    "uploadTemplate": "템플릿 업로드",
+    "supportedFormats": "PPTX",
+    "templateName": "이름",
+    "templateNamePlaceholder": "예: 사업 제안서 덱",
+    "templateDescription": "설명",
+    "templateDescriptionPlaceholder": "이 템플릿의 테마와 구조를 설명하세요..."
   },
   "artifacts": {
     "heroTag": "AI Generated Artifacts",

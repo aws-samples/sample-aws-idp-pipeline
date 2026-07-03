@@ -473,7 +473,13 @@
     "searchPlaceholder": "テンプレートを検索...",
     "newTemplate": "新規テンプレート",
     "noTemplates": "テンプレートがまだありません",
-    "noTemplatesDescription": "作成したテンプレートがここに表示されます。"
+    "noTemplatesDescription": "作成したテンプレートがここに表示されます。",
+    "uploadTemplate": "テンプレートをアップロード",
+    "supportedFormats": "PPTX",
+    "templateName": "名前",
+    "templateNamePlaceholder": "例：事業提案書デッキ",
+    "templateDescription": "説明",
+    "templateDescriptionPlaceholder": "このテンプレートのテーマと構造を説明してください..."
   },
   "artifacts": {
     "heroTag": "AI Generated Artifacts",

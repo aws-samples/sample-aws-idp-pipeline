@@ -3,6 +3,9 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, FileText, Plus } from 'lucide-react';
 import TemplateCard, { Template } from '../components/TemplateCard';
+import TemplateUploadModal, {
+  TemplateUploadData,
+} from '../components/TemplateUploadModal';
 
 export const Route = createFileRoute('/templates')({
   component: TemplatesPage,
@@ -30,18 +33,18 @@ const MOCK_TEMPLATES: Template[] = [
   },
   {
     template_id: 'tpl-003',
-    name: 'Product One-Pager',
-    description: 'Single-page overview with hero, features, and call to action.',
-    file_type: 'docx',
+    name: 'Product Overview',
+    description: 'Slide layout with hero, features, and call to action.',
+    file_type: 'pptx',
     thumbnail_url:
       'https://images.unsplash.com/photo-1517842645767-c639042777db?w=800&q=80',
     created_at: '2026-06-15T11:15:00Z',
   },
   {
     template_id: 'tpl-004',
-    name: 'Technical Design Doc',
-    description: 'Structured sections for architecture, APIs, and diagrams.',
-    file_type: 'docx',
+    name: 'Technical Design Deck',
+    description: 'Structured slides for architecture, APIs, and diagrams.',
+    file_type: 'pptx',
     thumbnail_url:
       'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800&q=80',
     created_at: '2026-06-10T08:45:00Z',
@@ -57,9 +60,9 @@ const MOCK_TEMPLATES: Template[] = [
   },
   {
     template_id: 'tpl-006',
-    name: 'Meeting Minutes',
-    description: 'Simple structured layout for attendees, agenda, and actions.',
-    file_type: 'docx',
+    name: 'Team Update',
+    description: 'Simple structured slides for agenda, status, and next steps.',
+    file_type: 'pptx',
     thumbnail_url:
       'https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=800&q=80',
     created_at: '2026-06-01T10:00:00Z',
@@ -69,6 +72,17 @@ const MOCK_TEMPLATES: Template[] = [
 function TemplatesPage() {
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async (data: TemplateUploadData) => {
+    setUploading(true);
+    // TODO: Replace with API call.
+    console.log('Upload template:', data);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    setUploading(false);
+    setShowUploadModal(false);
+  };
 
   const filteredTemplates = MOCK_TEMPLATES.filter(
     (template) =>
@@ -114,14 +128,24 @@ function TemplatesPage() {
             <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">
               {t('templates.noTemplates')}
             </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-md">
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-md mb-6">
               {t('templates.noTemplatesDescription')}
             </p>
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 rounded-lg transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              {t('templates.newTemplate')}
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {/* New Template Card */}
-            <button className="template-card-new group flex flex-col items-center justify-center gap-3 aspect-[4/3] rounded-2xl border-2 border-dashed border-black/15 dark:border-white/15 text-slate-400 hover:border-blue-500/50 hover:text-blue-500 transition-colors">
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="template-card-new group flex flex-col items-center justify-center gap-3 aspect-[4/3] rounded-2xl border-2 border-dashed border-black/15 dark:border-white/15 text-slate-400 hover:border-blue-500/50 hover:text-blue-500 transition-colors"
+            >
               <div className="w-12 h-12 rounded-full flex items-center justify-center bg-black/5 dark:bg-white/5 group-hover:bg-blue-500/10 transition-colors">
                 <Plus className="w-6 h-6" />
               </div>
@@ -136,6 +160,14 @@ function TemplatesPage() {
           </div>
         )}
       </div>
+
+      {/* Upload Template Modal */}
+      <TemplateUploadModal
+        isOpen={showUploadModal}
+        uploading={uploading}
+        onClose={() => setShowUploadModal(false)}
+        onUpload={handleUpload}
+      />
     </div>
   );
 }

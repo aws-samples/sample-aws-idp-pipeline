@@ -13,7 +13,6 @@ export interface Template {
 const FILE_TYPE_BADGE: Record<string, string> = {
   pptx: 'bg-orange-500/90',
   docx: 'bg-blue-500/90',
-  xlsx: 'bg-emerald-500/90',
 };
 
 interface TemplateCardProps {

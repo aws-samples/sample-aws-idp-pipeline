@@ -473,7 +473,13 @@
     "searchPlaceholder": "Search templates...",
     "newTemplate": "New Template",
     "noTemplates": "No templates yet",
-    "noTemplatesDescription": "Templates you create will appear here."
+    "noTemplatesDescription": "Templates you create will appear here.",
+    "uploadTemplate": "Upload Template",
+    "supportedFormats": "PPTX",
+    "templateName": "Name",
+    "templateNamePlaceholder": "e.g. Business Proposal Deck",
+    "templateDescription": "Description",
+    "templateDescriptionPlaceholder": "Describe the theme and structure of this template..."
   },
   "artifacts": {
     "heroTag": "AI Generated Artifacts",
