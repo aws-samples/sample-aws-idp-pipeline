@@ -60,6 +60,7 @@ def get_supervisor_agent(
         overview_tools = []
         summarize_tools = []
         image_tools = []
+        websearch_tools = []
 
         if mcp_client:
             stack.enter_context(mcp_client)
@@ -77,6 +78,9 @@ def get_supervisor_agent(
                 filter_tools_by_keyword(mcp_tools, "image"),
                 user_id, project_id
             )
+            # WebSearch is a built-in gateway tool without user_id/project_id,
+            # so it is passed through without auto-injection wrapping.
+            websearch_tools = filter_tools_by_keyword(mcp_tools, "WebSearch")
 
         plan_tool = create_plan_tool(
             session_id, project_id, user_id, mcp_tools=overview_tools
@@ -84,7 +88,7 @@ def get_supervisor_agent(
         research_tool = create_research_tool(
             session_id, project_id, user_id, mcp_tools=summarize_tools
         )
-        websearch_tool = create_websearch_tool()
+        websearch_tool = create_websearch_tool(mcp_tools=websearch_tools)
         write_tool = create_write_tool(session_id, project_id, user_id)
         pptx_tool = create_pptx_tool(
             session_id, project_id, user_id, mcp_tools=image_tools

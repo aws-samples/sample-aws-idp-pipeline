@@ -88,7 +88,11 @@ export default function TemplateUploadModal({
 
   const handleUpload = useCallback(async () => {
     if (!file || !name.trim()) return;
-    await onUpload({ name: name.trim(), description: description.trim(), file });
+    await onUpload({
+      name: name.trim(),
+      description: description.trim(),
+      file,
+    });
     resetForm();
   }, [file, name, description, onUpload, resetForm]);
 
@@ -189,7 +193,10 @@ export default function TemplateUploadModal({
                 >
                   {isDragging
                     ? t('documents.dropHere', 'Drop files here')
-                    : t('documents.dragDrop', 'Drag & drop files or click to browse')}
+                    : t(
+                        'documents.dragDrop',
+                        'Drag & drop files or click to browse',
+                      )}
                 </p>
                 <p className="text-xs text-[#64748b] text-center">
                   {t('templates.supportedFormats')}
