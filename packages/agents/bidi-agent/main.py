@@ -57,13 +57,35 @@ Reference: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime
 import asyncio
 import json
 import logging
+import os
 import sys
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from contextlib import asynccontextmanager, suppress
+from datetime import UTC, datetime
 
 import boto3
-
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from strands.experimental.bidi.models.model import BidiModelTimeoutError
+from strands.experimental.bidi.types.events import (
+    BidiAudioInputEvent,
+    BidiAudioStreamEvent,
+    BidiConnectionStartEvent,
+    BidiErrorEvent,
+    BidiInterruptionEvent,
+    BidiResponseCompleteEvent,
+    BidiResponseStartEvent,
+    BidiTextInputEvent,
+    BidiTranscriptStreamEvent,
+    ToolUseStreamEvent,
+)
+from strands.session import S3SessionManager
+from strands.types._events import ToolResultEvent
+from strands.types.content import ContentBlock, Message
+from strands.types.session import SessionMessage
+from websockets.exceptions import ConnectionClosedError
+
+from agents import get_mcp_client, get_tools
+from agents.bidi_agent import execute_builtin_tool
+from config import create_bidi_model, get_config
 
 # Configure logging to stdout for CloudWatch
 logging.basicConfig(
@@ -76,40 +98,17 @@ logging.basicConfig(
 # Startup verification log
 print("=" * 50, flush=True)
 print("[BIDI-AGENT] Module loaded - logging initialized", flush=True)
-print(f"[BIDI-AGENT] Python buffering: PYTHONUNBUFFERED={__import__('os').environ.get('PYTHONUNBUFFERED', 'NOT SET')}", flush=True)
+print(f"[BIDI-AGENT] Python buffering: PYTHONUNBUFFERED={os.environ.get('PYTHONUNBUFFERED', 'NOT SET')}", flush=True)
 print("=" * 50, flush=True)
-
-from strands.experimental.bidi.models.model import BidiModelTimeoutError
-from websockets.exceptions import ConnectionClosedError
-from strands.experimental.bidi.types.events import (
-    BidiTextInputEvent,
-    BidiAudioInputEvent,
-    BidiAudioStreamEvent,
-    BidiTranscriptStreamEvent,
-    BidiConnectionStartEvent,
-    BidiResponseStartEvent,
-    BidiResponseCompleteEvent,
-    BidiInterruptionEvent,
-    BidiErrorEvent,
-    ToolUseStreamEvent,
-)
-from strands.session import S3SessionManager
-from strands.types.content import ContentBlock, Message
-from strands.types.session import SessionMessage
-from strands.types._events import ToolResultEvent
-
-from config import get_config, create_bidi_model
-from agents import get_mcp_client, get_duckduckgo_mcp_client, get_tools
-from agents.bidi_agent import execute_builtin_tool
 
 logger = logging.getLogger(__name__)
 
 # Global MCP client and tools (initialized at startup)
 mcp_client = None
-duckduckgo_client = None
 mcp_tools = []
-duckduckgo_tools = []
-duckduckgo_tool_names = set()
+# Gateway tool names that accept auto-injected user_id/project_id (e.g. search, qa).
+# Tools without those parameters (e.g. WebSearch) are excluded so injection is skipped.
+mcp_injectable_names = set()
 
 
 def convert_mcp_tool_to_bidi_format(tool) -> dict:
@@ -151,27 +150,11 @@ def convert_mcp_tool_to_bidi_format(tool) -> dict:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load MCP tools and DuckDuckGo tools at startup."""
-    global mcp_client, duckduckgo_client, mcp_tools, duckduckgo_tools, duckduckgo_tool_names
+    """Load MCP tools from the AgentCore Gateway at startup."""
+    global mcp_client, mcp_tools, mcp_injectable_names
 
-    # Initialize DuckDuckGo MCP client
-    try:
-        duckduckgo_client = get_duckduckgo_mcp_client()
-        duckduckgo_client.__enter__()
-        raw_ddg_tools = duckduckgo_client.list_tools_sync()
-        for t in raw_ddg_tools:
-            try:
-                converted = convert_mcp_tool_to_bidi_format(t)
-                duckduckgo_tools.append(converted)
-                duckduckgo_tool_names.add(converted["name"])
-            except Exception as e:
-                logger.error(f"Failed to convert DuckDuckGo tool: {e}")
-        logger.info(f"Loaded {len(duckduckgo_tools)} DuckDuckGo tools: {[t['name'] for t in duckduckgo_tools]}")
-    except Exception as e:
-        logger.error(f"Failed to load DuckDuckGo tools: {e}")
-        duckduckgo_client = None
-
-    # Initialize AgentCore MCP client
+    # Initialize AgentCore MCP client. The gateway exposes document tools
+    # (search, qa) and the built-in WebSearch tool.
     config = get_config()
     if config.mcp_gateway_url:
         logger.info(f"Connecting to MCP Gateway: {config.mcp_gateway_url}")
@@ -182,8 +165,13 @@ async def lifespan(app: FastAPI):
                 raw_tools = mcp_client.list_tools_sync()
                 for t in raw_tools:
                     try:
+                        raw_schema = t.tool_spec.get("inputSchema", {}) if hasattr(t, "tool_spec") else {}
+                        raw_props = raw_schema.get("json", raw_schema).get("properties", {})
                         converted = convert_mcp_tool_to_bidi_format(t)
-                        logger.info(f"MCP tool converted: {converted['name']} -> inputSchema keys: {list(converted.get('inputSchema', {}).get('json', {}).keys())}")
+                        if "user_id" in raw_props or "project_id" in raw_props:
+                            mcp_injectable_names.add(converted["name"])
+                        schema_keys = list(converted.get("inputSchema", {}).get("json", {}).keys())
+                        logger.info(f"MCP tool converted: {converted['name']} -> inputSchema keys: {schema_keys}")
                         mcp_tools.append(converted)
                     except Exception as e:
                         logger.error(f"Failed to convert MCP tool: {e}")
@@ -195,13 +183,6 @@ async def lifespan(app: FastAPI):
         logger.warning("MCP_GATEWAY_URL not set, running without MCP tools")
 
     yield
-
-    if duckduckgo_client:
-        try:
-            duckduckgo_client.__exit__(None, None, None)
-            logger.info("DuckDuckGo client closed")
-        except Exception as e:
-            logger.error(f"Error closing DuckDuckGo client: {e}")
 
     if mcp_client:
         try:
@@ -244,7 +225,7 @@ class TranscriptSaver:
         if not self.enabled or not self.session_manager:
             return
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         try:
             message = Message(
@@ -272,7 +253,7 @@ class TranscriptSaver:
         if not self.enabled or not self.session_manager:
             return
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         try:
             message = Message(
@@ -336,7 +317,9 @@ Korean Language Understanding:
 LANGUAGE_MIRROR_PROMPT = """
 CRITICAL LANGUAGE MIRRORING RULES:
 - Always reply in the language spoken. DO NOT mix with English. However, if the user talks in English, reply in English.
-- Please respond in the language the user is talking to you in, If you have a question or suggestion, ask it in the language the user is talking in. I want to ensure that our communication remains in the same language as the user."""
+- Please respond in the language the user is talking to you in, If you have a question or suggestion, \
+ask it in the language the user is talking in. \
+I want to ensure that our communication remains in the same language as the user."""
 
 MCP_TOOL_PROMPT = """
 ## Tool Parameter Notice
@@ -344,14 +327,13 @@ When using MCP tools, `user_id` and `project_id` parameters are automatically in
 You MUST NOT specify these parameters in tool calls - they will be overwritten by the system for security."""
 
 WEB_SEARCH_PROMPT = """
-## Web Search Guidelines (MANDATORY)
-When performing web searches, you MUST follow these rules strictly:
-1. Search with max_results of 10 to get diverse sources
-2. You MUST call fetch_content on AT LEAST 3 different URLs - this is a hard requirement, not optional
-3. If a website returns an error (403, timeout, etc.), try another URL until you have successfully fetched 3+ pages
-4. Do NOT stop after fetching only 1-2 websites - always continue until you have 3+ successful fetches
-5. Synthesize information from all fetched sources before responding
-6. Always cite the sources you used with their URLs"""
+## Web Search Guidelines
+Use the WebSearch tool to find current information that is not in the user's documents:
+1. Keep queries concise (under 200 characters) for the best results
+2. Synthesize information from multiple results before responding
+3. Always cite the sources you used with their URLs
+4. Note the publication date of a source when available
+5. If the results are insufficient, say so rather than guessing"""
 
 
 def fetch_voice_system_prompt() -> str | None:
@@ -414,44 +396,20 @@ async def execute_tool(tool_use: dict, context: dict) -> dict:
             "content": [{"text": json.dumps(builtin_result)}],
         }
 
-    # Try DuckDuckGo tool
-    if duckduckgo_client and tool_name in duckduckgo_tool_names:
-        try:
-            result = duckduckgo_client.call_tool_sync(name=tool_name, arguments=tool_input, tool_use_id=tool_use_id)
-            logger.info(f"DuckDuckGo result type: {type(result)}")
-
-            content = []
-            if hasattr(result, "content"):
-                for block in result.content:
-                    if hasattr(block, "text"):
-                        content.append({"text": block.text})
-                    else:
-                        content.append({"text": str(block)})
-            else:
-                content.append({"text": str(result)})
-
-            return {
-                "toolUseId": tool_use_id,
-                "status": "success",
-                "content": content,
-            }
-        except Exception as e:
-            logger.exception(f"DuckDuckGo tool execution failed: {tool_name}")
-            return {
-                "toolUseId": tool_use_id,
-                "status": "error",
-                "content": [{"text": f"Tool execution failed: {str(e)}"}],
-            }
-
     # Try MCP tool
     if mcp_client:
-        # Inject user_id and project_id for MCP tools
-        if context.get("user_id"):
-            tool_input["user_id"] = context["user_id"]
-        if context.get("project_id"):
-            tool_input["project_id"] = context["project_id"]
+        # Inject user_id and project_id only for tools that accept them
+        # (e.g. document search/qa). Built-in tools like WebSearch are skipped.
+        if tool_name in mcp_injectable_names:
+            if context.get("user_id"):
+                tool_input["user_id"] = context["user_id"]
+            if context.get("project_id"):
+                tool_input["project_id"] = context["project_id"]
 
-        logger.info(f"Calling MCP tool: {tool_name} with injected params: user_id={context.get('user_id')}, project_id={context.get('project_id')}")
+        logger.info(
+            f"Calling MCP tool: {tool_name} with injected params: "
+            f"user_id={context.get('user_id')}, project_id={context.get('project_id')}"
+        )
         logger.info(f"Full tool_input: {tool_input}")
 
         try:
@@ -532,7 +490,9 @@ async def ws_endpoint(websocket: WebSocket):
         model_type=model_type,
     )
     if transcript_saver.enabled:
-        logger.info(f"Transcript saving enabled for session {config_msg.get('session_id')} ({transcript_saver.agent_id})")
+        logger.info(
+            f"Transcript saving enabled for session {config_msg.get('session_id')} ({transcript_saver.agent_id})"
+        )
     api_key = config_msg.get("api_key")
     voice = config_msg.get("voice", "tiffany")
 
@@ -550,14 +510,16 @@ async def ws_endpoint(websocket: WebSocket):
 
     user_timezone = config_msg.get("browser_time_zone", "UTC")
 
-    # Combine builtin tools with DuckDuckGo and MCP tools
-    all_tools = get_tools() + duckduckgo_tools + mcp_tools
+    # Combine builtin tools with gateway MCP tools (search, qa, WebSearch)
+    all_tools = get_tools() + mcp_tools
     has_mcp = len(mcp_tools) > 0
 
     try:
         custom_prompt = config_msg.get("system_prompt")
-        has_ddg = len(duckduckgo_tools) > 0
-        system_prompt = custom_prompt or build_system_prompt(user_timezone, has_mcp_tools=has_mcp, has_web_search=has_ddg)
+        has_web_search = any(t["name"] == "WebSearch" for t in mcp_tools)
+        system_prompt = custom_prompt or build_system_prompt(
+            user_timezone, has_mcp_tools=has_mcp, has_web_search=has_web_search
+        )
         logger.info(f"Starting model with {len(all_tools)} tools: {[t['name'] for t in all_tools]}")
         await model.start(system_prompt=system_prompt, tools=all_tools)
         logger.info("voice model started successfully")
@@ -668,7 +630,8 @@ async def ws_endpoint(websocket: WebSocket):
                                 "sample_rate": sample_rate,
                             })
                 elif isinstance(event, BidiTranscriptStreamEvent):
-                    logger.info(f"Transcript: role={event.role}, is_final={event.is_final}, text={event.text[:50] if event.text else '(empty)'}...")
+                    transcript_text = event.text[:50] if event.text else "(empty)"
+                    logger.info(f"Transcript: role={event.role}, is_final={event.is_final}, text={transcript_text}...")
                     await websocket.send_json(
                         {
                             "type": "transcript",
@@ -788,34 +751,28 @@ async def ws_endpoint(websocket: WebSocket):
             logger.info(f"WebSocket disconnected after {event_count} events")
         except BidiModelTimeoutError:
             logger.info("Voice chat session timed out due to inactivity")
-            try:
+            with suppress(Exception):
                 await websocket.send_json({
                     "type": "timeout",
                     "reason": "Session timed out due to inactivity",
                 })
-            except Exception:
-                pass
         except ConnectionClosedError as e:
             logger.warning(f"Model WebSocket closed unexpectedly after {event_count} events: {e}")
-            try:
+            with suppress(Exception):
                 await websocket.send_json({
                     "type": "error",
                     "message": f"Model connection closed: {e}",
                 })
-            except Exception:
-                pass
         except Exception as e:
             error_str = str(e)
             # Nova Sonic input timeout (user silent too long)
             if "Timed out waiting for input events" in error_str:
                 logger.info(f"Model input timeout after {event_count} events: {e}")
-                try:
+                with suppress(Exception):
                     await websocket.send_json({
                         "type": "timeout",
                         "reason": "Session timed out due to inactivity",
                     })
-                except Exception:
-                    pass
             # Handle "websocket.send after close" errors gracefully
             elif isinstance(e, RuntimeError) and ("websocket" in error_str.lower() or "closed" in error_str.lower()):
                 logger.info(f"WebSocket closed while sending (after {event_count} events): {e}")

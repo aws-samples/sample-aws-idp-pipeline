@@ -1,6 +1,8 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as cr from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 import {
   SearchMcp,
@@ -74,6 +76,72 @@ export class McpStack extends Stack {
     });
     this.qaMcp.function.grantInvoke(this.gateway.role);
     qaTarget.node.addDependency(this.gateway.role);
+
+    // Web Search built-in connector target. The AgentCore Web Search connector
+    // is not yet supported by the CDK L2/L1 target APIs, so it is created via a
+    // control-plane call. The Gateway IAM role invokes the managed tool.
+    const webSearchToolArn = `arn:aws:bedrock-agentcore:${this.region}:aws:tool/web-search.v1`;
+    this.gateway.role.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        sid: 'InvokeWebSearch',
+        actions: ['bedrock-agentcore:InvokeWebSearch'],
+        resources: [webSearchToolArn],
+      }),
+    );
+
+    const webSearchTarget = new cr.AwsCustomResource(this, 'WebSearchTarget', {
+      onCreate: {
+        service: 'bedrock-agentcore-control',
+        action: 'createGatewayTarget',
+        parameters: {
+          gatewayIdentifier: this.gateway.gatewayId,
+          name: 'web-search',
+          description:
+            'Web search tool: search the public web for current information and return ranked results with source URLs, titles, and publication dates.',
+          targetConfiguration: {
+            mcp: {
+              connector: {
+                source: { connectorId: 'web-search' },
+                configurations: [{ name: 'WebSearch', parameterValues: {} }],
+              },
+            },
+          },
+          credentialProviderConfigurations: [
+            { credentialProviderType: 'GATEWAY_IAM_ROLE' },
+          ],
+        },
+        physicalResourceId: cr.PhysicalResourceId.fromResponse('targetId'),
+      },
+      onDelete: {
+        service: 'bedrock-agentcore-control',
+        action: 'deleteGatewayTarget',
+        parameters: {
+          gatewayIdentifier: this.gateway.gatewayId,
+          targetId: new cr.PhysicalResourceIdReference(),
+        },
+      },
+      // The web-search connector is only known to recent AWS SDK versions.
+      // This project defaults installLatestAwsSdk to false, so force it on for
+      // this resource; otherwise the connector config is dropped and the target
+      // fails validation.
+      installLatestAwsSdk: true,
+      policy: cr.AwsCustomResourcePolicy.fromStatements([
+        new iam.PolicyStatement({
+          actions: [
+            'bedrock-agentcore:CreateGatewayTarget',
+            'bedrock-agentcore:DeleteGatewayTarget',
+            'bedrock-agentcore:GetGatewayTarget',
+            'bedrock-agentcore:ListGatewayTargets',
+            // createGatewayTarget/deleteGatewayTarget internally reconcile the
+            // gateway's target set, which requires SynchronizeGatewayTargets.
+            'bedrock-agentcore:SynchronizeGatewayTargets',
+          ],
+          resources: [this.gateway.gatewayArn, `${this.gateway.gatewayArn}/*`],
+        }),
+      ]),
+    });
+    webSearchTarget.node.addDependency(this.gateway.role);
+    webSearchTarget.node.addDependency(this.gateway);
 
     // ImageMcp is optional - enable with context: enableImageMcp=true in cdk.json
     if (this.node.tryGetContext('enableImageMcp')) {

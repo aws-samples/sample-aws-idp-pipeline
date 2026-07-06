@@ -2,12 +2,10 @@ from contextlib import ExitStack, contextmanager
 
 import boto3
 from botocore.config import Config as BotocoreConfig
-from mcp import StdioServerParameters, stdio_client
 from strands import Agent, AgentSkills
 from strands.hooks.registry import HookProvider
 from strands.models import BedrockModel
 from strands.session import S3SessionManager
-from strands.tools.mcp.mcp_client import MCPClient
 from strands_tools import calculator, current_time, file_read, generate_image, http_request, shell, use_llm
 from strands_tools.code_interpreter import AgentCoreCodeInterpreter
 
@@ -59,18 +57,6 @@ def get_mcp_client():
     )
 
 
-def get_duckduckgo_mcp_client():
-    """Get MCP client for DuckDuckGo search server."""
-
-    return MCPClient(
-        lambda: stdio_client(
-            StdioServerParameters(
-                command="duckduckgo-mcp-server",
-            )
-        )
-    )
-
-
 @contextmanager
 def get_agent(
     session_id: str,
@@ -91,7 +77,6 @@ def get_agent(
     """
     session_manager = get_session_manager(session_id, user_id=user_id, project_id=project_id)
     mcp_client = get_mcp_client()
-    duckduckgo_client = get_duckduckgo_mcp_client()
 
     config = get_config()
 
@@ -153,10 +138,8 @@ def get_agent(
         )
 
     with ExitStack() as stack:
-        if duckduckgo_client:
-            stack.enter_context(duckduckgo_client)
-            tools.extend(duckduckgo_client.list_tools_sync())
-
+        # Web search is provided by the AgentCore Gateway WebSearch target,
+        # discovered together with the other gateway tools below.
         if mcp_client:
             stack.enter_context(mcp_client)
             tools.extend(mcp_client.list_tools_sync())
