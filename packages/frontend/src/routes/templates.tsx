@@ -54,7 +54,7 @@ function TemplatesPage() {
       </header>
 
       {/* Filter Bar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
@@ -65,6 +65,13 @@ function TemplatesPage() {
             className="w-full pl-10 pr-4 py-2.5 text-sm bg-transparent dark:bg-white/[0.06] border border-black/10 dark:border-white/[0.12] rounded-xl outline-none focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 transition-all text-slate-700 dark:text-slate-200"
           />
         </div>
+        <button
+          onClick={() => setShowUploadModal(true)}
+          className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 rounded-xl transition-colors shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          {t('templates.newTemplate')}
+        </button>
       </div>
 
       {/* Content */}
@@ -75,32 +82,12 @@ function TemplatesPage() {
             <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">
               {t('templates.noTemplates')}
             </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-md mb-6">
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-md">
               {t('templates.noTemplatesDescription')}
             </p>
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 rounded-lg transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              {t('templates.newTemplate')}
-            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {/* New Template Card */}
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="template-card-new group flex flex-col items-center justify-center gap-3 aspect-[4/3] rounded-2xl border-2 border-dashed border-black/15 dark:border-white/15 text-slate-400 hover:border-blue-500/50 hover:text-blue-500 transition-colors"
-            >
-              <div className="w-12 h-12 rounded-full flex items-center justify-center bg-black/5 dark:bg-white/5 group-hover:bg-blue-500/10 transition-colors">
-                <Plus className="w-6 h-6" />
-              </div>
-              <span className="text-sm font-medium">
-                {t('templates.newTemplate')}
-              </span>
-            </button>
-
             {filteredTemplates.map((template) => (
               <TemplateCard key={template.template_id} template={template} />
             ))}
