@@ -1,90 +1,37 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, FileText, Plus } from 'lucide-react';
-import TemplateCard, { Template } from '../components/TemplateCard';
+import TemplateCard from '../components/TemplateCard';
 import TemplateUploadModal, {
   TemplateUploadData,
 } from '../components/TemplateUploadModal';
+import { useAwsClient } from '../hooks/useAwsClient';
+import { useTemplates } from '../hooks/useTemplates';
 
 export const Route = createFileRoute('/templates')({
   component: TemplatesPage,
 });
 
-// TODO: Replace with API data.
-const MOCK_TEMPLATES: Template[] = [
-  {
-    template_id: 'tpl-001',
-    name: 'Business Proposal Deck',
-    description: 'Clean 16:9 slides with title, agenda, and section dividers.',
-    file_type: 'pptx',
-    thumbnail_url:
-      'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800&q=80',
-    created_at: '2026-06-20T09:00:00Z',
-  },
-  {
-    template_id: 'tpl-002',
-    name: 'Quarterly Report',
-    description: 'Data-heavy layout with charts, tables, and summary sections.',
-    file_type: 'pptx',
-    thumbnail_url:
-      'https://images.unsplash.com/photo-1543286386-713bdd548da4?w=800&q=80',
-    created_at: '2026-06-18T14:30:00Z',
-  },
-  {
-    template_id: 'tpl-003',
-    name: 'Product Overview',
-    description: 'Slide layout with hero, features, and call to action.',
-    file_type: 'pptx',
-    thumbnail_url:
-      'https://images.unsplash.com/photo-1517842645767-c639042777db?w=800&q=80',
-    created_at: '2026-06-15T11:15:00Z',
-  },
-  {
-    template_id: 'tpl-004',
-    name: 'Technical Design Deck',
-    description: 'Structured slides for architecture, APIs, and diagrams.',
-    file_type: 'pptx',
-    thumbnail_url:
-      'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800&q=80',
-    created_at: '2026-06-10T08:45:00Z',
-  },
-  {
-    template_id: 'tpl-005',
-    name: 'Pitch Deck',
-    description: 'Bold visual slides for storytelling and investor pitches.',
-    file_type: 'pptx',
-    thumbnail_url:
-      'https://images.unsplash.com/photo-1552664730-d307ca884978?w=800&q=80',
-    created_at: '2026-06-05T16:20:00Z',
-  },
-  {
-    template_id: 'tpl-006',
-    name: 'Team Update',
-    description: 'Simple structured slides for agenda, status, and next steps.',
-    file_type: 'pptx',
-    thumbnail_url:
-      'https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=800&q=80',
-    created_at: '2026-06-01T10:00:00Z',
-  },
-];
-
 function TemplatesPage() {
   const { t } = useTranslation();
+  const { fetchApi } = useAwsClient();
+  const { templates, uploading, loadTemplates, uploadTemplate } = useTemplates({
+    fetchApi,
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    loadTemplates();
+  }, [loadTemplates]);
 
   const handleUpload = async (data: TemplateUploadData) => {
-    setUploading(true);
-    // TODO: Replace with API call.
-    console.log('Upload template:', data);
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    setUploading(false);
+    await uploadTemplate(data);
     setShowUploadModal(false);
   };
 
-  const filteredTemplates = MOCK_TEMPLATES.filter(
+  const filteredTemplates = templates.filter(
     (template) =>
       template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       template.description.toLowerCase().includes(searchQuery.toLowerCase()),
