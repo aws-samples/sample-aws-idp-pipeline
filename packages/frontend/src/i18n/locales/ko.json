@@ -503,6 +503,22 @@
     "templateDescription": "설명",
     "templateDescriptionPlaceholder": "이 템플릿의 테마와 구조를 설명하세요..."
   },
+  "templateDetail": {
+    "backToList": "템플릿 목록으로",
+    "notFound": "템플릿을 찾을 수 없습니다",
+    "generatedPrompt": "생성된 프롬프트",
+    "statusAnalyzing": "분석 중",
+    "statusCompleted": "완료",
+    "statusFailed": "실패",
+    "analyzingTitle": "문서를 분석하고 있습니다...",
+    "analyzingDescription": "AI가 문서의 테마, 구조, 스타일을 파악하여 프롬프트를 생성합니다.",
+    "failedTitle": "분석에 실패했습니다",
+    "failedDescription": "문서를 분석하는 중 문제가 발생했습니다. 다시 시도해 주세요.",
+    "reanalyze": "재분석",
+    "retry": "재시도",
+    "deleteConfirmTitle": "템플릿 삭제",
+    "deleteConfirmMessage": "\"{{name}}\"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
+  },
   "artifacts": {
     "heroTag": "AI Generated Artifacts",
     "heroTitle": "AI가 생성한 코드, 문서, 인사이트",
