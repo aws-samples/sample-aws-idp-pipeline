@@ -1,11 +1,25 @@
 from boto3.dynamodb.conditions import Key
 
-from app.ddb.client import get_table
-from app.ddb.models import DdbKey, Template
+from app.ddb.client import get_table, now_iso
+from app.ddb.models import DdbKey, Template, TemplateData
 
 
 def make_template_key(template_id: str) -> DdbKey:
     return {"PK": f"TPL#{template_id}", "SK": "META"}
+
+
+def put_template_item(template_id: str, data: TemplateData) -> None:
+    table = get_table()
+    now = now_iso()
+    item = {
+        **make_template_key(template_id),
+        "GSI1PK": "TEMPLATES",
+        "GSI1SK": now,
+        "data": data.model_dump(),
+        "created_at": now,
+        "updated_at": now,
+    }
+    table.put_item(Item=item)
 
 
 def query_templates() -> list[Template]:

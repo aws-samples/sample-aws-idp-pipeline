@@ -115,7 +115,7 @@ class TemplateData(BaseModel):
     file_type: str
     s3_key: str
     thumbnail_url: str | None = None
-    analysis_status: str
+    status: str
     generated_prompt: str | None = None
     created_by: str | None = None
 
