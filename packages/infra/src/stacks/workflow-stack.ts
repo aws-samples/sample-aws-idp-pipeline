@@ -419,32 +419,39 @@ export class WorkflowStack extends Stack {
     // Dataset Process (structured data branch): validate xlsx/csv, convert each
     // sheet to Parquet, generate a Text2SQL reference doc (Bedrock), record DATASET#.
     // Docker Lambda for pandas/pyarrow/duckdb/openpyxl + strands.
-    const datasetProcess = new lambda.DockerImageFunction(this, 'DatasetProcess', {
-      functionName: 'idp-v2-dataset-process',
-      code: lambda.DockerImageCode.fromImageAsset(
-        path.join(__dirname, '../functions'),
-        {
-          file: 'step-functions/dataset-process/Dockerfile',
-          platform: Platform.LINUX_ARM64,
+    const datasetProcess = new lambda.DockerImageFunction(
+      this,
+      'DatasetProcess',
+      {
+        functionName: 'idp-v2-dataset-process',
+        code: lambda.DockerImageCode.fromImageAsset(
+          path.join(__dirname, '../functions'),
+          {
+            file: 'step-functions/dataset-process/Dockerfile',
+            platform: Platform.LINUX_ARM64,
+          },
+        ),
+        architecture: lambda.Architecture.ARM_64,
+        timeout: Duration.minutes(15),
+        // Higher memory => more CPU, which speeds up the heavy imports (pandas,
+        // pyarrow, duckdb, strands) and Parquet conversion.
+        memorySize: 3008,
+        ephemeralStorageSize: Size.gibibytes(2),
+        environment: {
+          ...commonLambdaProps.environment,
+          DATASET_REFERENCE_MODEL_ID: models.analysis,
+          // Index each dataset into the per-project catalog (search_datasets).
+          LANCEDB_FUNCTION_NAME: lancedbService.functionName,
         },
-      ),
-      architecture: lambda.Architecture.ARM_64,
-      timeout: Duration.minutes(15),
-      // Higher memory => more CPU, which speeds up the heavy imports (pandas,
-      // pyarrow, duckdb, strands) and Parquet conversion.
-      memorySize: 3008,
-      ephemeralStorageSize: Size.gibibytes(2),
-      environment: {
-        ...commonLambdaProps.environment,
-        DATASET_REFERENCE_MODEL_ID: models.analysis,
-        // Index each dataset into the per-project catalog (search_datasets).
-        LANCEDB_FUNCTION_NAME: lancedbService.functionName,
       },
-    });
+    );
     // S3 (doc bucket) + DDB grants come from the allFunctions loop below.
     datasetProcess.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'],
+        actions: [
+          'bedrock:InvokeModel',
+          'bedrock:InvokeModelWithResponseStream',
+        ],
         resources: ['*'],
       }),
     );
