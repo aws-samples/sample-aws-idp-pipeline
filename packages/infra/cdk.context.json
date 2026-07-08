@@ -72,5 +72,11 @@
   },
   "ssm:account=975050239358:parameterName=/idp-v2/external-service/unsplash/access-key:region=us-east-1": "AQICAHjvpRYmQcrvdRTn3mwV3OwFuMU3vaMSfGfyxortkukSkQF2HdMx+zEp1iVs3Ysrm5imAAAAijCBhwYJKoZIhvcNAQcGoHoweAIBADBzBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDDL5T9YFTU3CoZbtIAIBEIBGnIyoE/b8Xq8A3e2831SAObmnuI0qzvT2IDYut/mqUlCD0QjI1jAWMgJTPuEwx0ABlE6pgffmGgdkXUaWS84N+L7gipHycg==",
   "ssm:account=975050239358:parameterName=/idp-v2/neptune/cluster-endpoint:region=us-east-1": "idp-v2-neptune.cluster-cpmamkoygyah.us-east-1.neptune.amazonaws.com",
-  "ssm:account=975050239358:parameterName=/idp-v2/neptune/cluster-port:region=us-east-1": "8182"
+  "ssm:account=975050239358:parameterName=/idp-v2/neptune/cluster-port:region=us-east-1": "8182",
+  "availability-zones:account=975050239358:region=us-west-2": [
+    "us-west-2a",
+    "us-west-2b",
+    "us-west-2c",
+    "us-west-2d"
+  ]
 }

@@ -265,6 +265,8 @@ async def delete_project(project_id: str, user_id: str = Header(alias="x-user-id
     try:
         lancedb_drop_table(DropTableInput(project_id=project_id))
         lancedb_delete_graph_keywords(DeleteGraphKeywordsByProjectIdInput(project_id=project_id))
+        # Per-project dataset catalog table is named "{project_id}_datasets".
+        lancedb_drop_table(DropTableInput(project_id=f"{project_id}_datasets"))
         deleted_info.lancedb_objects_deleted = 1
     except LanceDbError as e:
         deleted_info.lancedb_error = str(e)

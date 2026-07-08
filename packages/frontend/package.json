@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@codemirror/lang-sql": "^6.10.0",
     "@types/d3-cloud": "^1.2.9",
+    "@uiw/react-codemirror": "^4.25.10",
     "d3-cloud": "^1.2.9",
     "d3-force": "^3.0.0",
     "framer-motion": "^12.35.0"

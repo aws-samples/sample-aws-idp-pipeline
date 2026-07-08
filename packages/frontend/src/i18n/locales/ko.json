@@ -98,6 +98,7 @@
     "reanalyzing": "재분석 중",
     "completed": "완료",
     "failed": "실패",
+    "needs_user_fix": "수정 필요",
     "pending": "대기 중",
     "uploaded": "업로드됨",
     "deleteConfirm": "이 문서를 삭제하시겠습니까?",
@@ -111,7 +112,11 @@
     "filterFailed": "실패",
     "noMatchingDocuments": "일치하는 문서가 없습니다",
     "tabFile": "파일",
+    "tabData": "데이터",
     "tabWeb": "웹",
+    "uploadData": "데이터 업로드",
+    "dataFormats": "Excel (.xlsx, .xls), CSV, TSV (최대 500MB)",
+    "dataUploadHint": "정형 테이블은 질의 가능한 데이터셋으로 저장됩니다. 각 시트는 정돈된 표여야 합니다. 병합된 셀, 이미지/차트, 여러 줄 헤더가 있으면 처리되지 않으니 표 형태로 정리 후 다시 업로드하세요.",
     "webUrl": "URL",
     "webUrlPlaceholder": "https://example.com/page",
     "webInstruction": "지시사항",
@@ -130,6 +135,22 @@
     "maxPageHint": "업로드한 문서 중 최대 {{pages}}페이지가 포함되어 있습니다. 공식 지원은 3,000페이지까지이며, PoC에서는 소규모 문서로 먼저 검증하시는 것을 권장합니다.",
     "transcribe": "Transcribe",
     "transcribeDesc": "Amazon Transcribe"
+  },
+  "dataset": {
+    "tab": "데이터",
+    "none": "이 문서에 대한 정형 데이터셋이 없습니다.",
+    "totalRows": "{{count}}행",
+    "queryPlaceholder": "SELECT * FROM data WHERE ... (읽기 전용)",
+    "run": "실행",
+    "clear": "초기화",
+    "queryFailed": "쿼리 실패",
+    "noRows": "행 없음",
+    "queryTruncated": "결과가 잘렸습니다. 전체 결과는 LIMIT이나 집계를 사용하세요.",
+    "sqlEditor": "SQL (읽기 전용, 테이블명: data)",
+    "runHint": "Cmd/Ctrl+Enter로 실행",
+    "reset": "초기화",
+    "columns": "컬럼",
+    "description": "설명"
   },
   "workflow": {
     "title": "워크플로우",
@@ -197,7 +218,8 @@
       "buildingSegments": "세그먼트 구성",
       "segmentAiAnalysis": "AI 분석",
       "graphBuilder": "지식 그래프 구축",
-      "documentSummary": "문서 요약"
+      "documentSummary": "문서 요약",
+      "datasetProcess": "데이터 처리"
     },
     "inProgress": "처리 중...",
     "qaRegenInProgress": "추가 분석 중 (페이지 {{page}})",

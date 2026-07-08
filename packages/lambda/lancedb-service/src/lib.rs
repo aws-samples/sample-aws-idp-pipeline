@@ -11,6 +11,12 @@ pub enum LanceDbAction {
     #[serde(rename = "add_graph_keywords")]
     AddGraphKeywords(add_graph_keywords::AddGraphKeywordsParams),
 
+    #[serde(rename = "add_dataset")]
+    AddDataset(add_dataset::AddDatasetParams),
+
+    #[serde(rename = "search_datasets")]
+    SearchDatasets(search_datasets::SearchDatasetsParams),
+
     #[serde(rename = "add_record")]
     AddRecord(add_record::AddRecordParams),
 

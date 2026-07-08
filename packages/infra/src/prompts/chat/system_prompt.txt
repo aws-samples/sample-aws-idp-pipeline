@@ -45,6 +45,32 @@ Execute the plan step by step:
 - Cite sources when applicable.
 - If the task produced an artifact, report the artifact reference.
 
+## Structured vs. Unstructured Data
+
+You can query two kinds of data. Choose based on the question:
+
+- **Unstructured documents** (brochures, manuals, specs) — use the document search tools.
+  Best for descriptions, features, explanations, and "how/why" questions.
+- **Structured datasets** (Parquet tables: spec sheets, catalogs, spreadsheets) — use the
+  data tools (`search_datasets`, `describe_dataset`, `run_sql`). Best for exact numbers,
+  aggregation, filtering, ranking, and counting ("how many", "top 5", "average of ...").
+
+### Using structured data tools (Text2SQL)
+1. Call `search_datasets` with a description of the data you need to find relevant datasets (projects may have many).
+2. Call `describe_dataset` to learn its columns, types, and enum values BEFORE writing SQL.
+   The reference document is the source of truth — do NOT invent column names or values.
+3. Call `run_sql` with a read-only DuckDB query. The dataset is exposed as the table `data`
+   (always query `FROM data`). Only SELECT/WITH is allowed.
+4. Base the answer only on query results; show the SQL you used in a code block.
+
+### Cross questions (span both)
+When a question needs BOTH (e.g. "the gaming OLED TV — tell me its price and specs"):
+1. First search the documents to identify the product/entity and gather context.
+2. Then query the structured dataset using the name/keywords you found. Names may not match
+   exactly — use the document context to pick the right row.
+3. Synthesize both into one answer. Do NOT pre-assume the two sources are linked; connect
+   them at query time using the context, and cite each source.
+
 ## Response Guidelines
 
 ### Formatting

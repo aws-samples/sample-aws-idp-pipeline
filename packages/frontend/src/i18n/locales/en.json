@@ -98,6 +98,7 @@
     "reanalyzing": "Re-analyzing",
     "completed": "Completed",
     "failed": "Failed",
+    "needs_user_fix": "Needs Fix",
     "pending": "Pending",
     "uploaded": "Uploaded",
     "deleteConfirm": "Are you sure you want to delete this document?",
@@ -111,7 +112,11 @@
     "filterFailed": "Failed",
     "noMatchingDocuments": "No matching documents",
     "tabFile": "File",
+    "tabData": "Data",
     "tabWeb": "Web",
+    "uploadData": "Upload Data",
+    "dataFormats": "Excel (.xlsx, .xls), CSV, TSV (max 500MB)",
+    "dataUploadHint": "Structured tables are stored as queryable datasets. Each sheet must be a clean table: merged cells, images/charts, or multi-row headers are rejected and must be fixed and re-uploaded.",
     "webUrl": "URL",
     "webUrlPlaceholder": "https://example.com/page",
     "webInstruction": "Instructions",
@@ -130,6 +135,22 @@
     "maxPageHint": "An uploaded document contains up to {{pages}} pages. Officially supported up to 3,000 pages. For PoC, we recommend testing with smaller documents first.",
     "transcribe": "Transcribe",
     "transcribeDesc": "Amazon Transcribe"
+  },
+  "dataset": {
+    "tab": "Data",
+    "none": "No structured dataset found for this document.",
+    "totalRows": "{{count}} rows",
+    "queryPlaceholder": "SELECT * FROM data WHERE ... (read-only)",
+    "run": "Run",
+    "clear": "Clear",
+    "queryFailed": "Query failed",
+    "noRows": "No rows",
+    "queryTruncated": "Result truncated. Add LIMIT or aggregation for complete results.",
+    "sqlEditor": "SQL (read-only, table name: data)",
+    "runHint": "Cmd/Ctrl+Enter to run",
+    "reset": "Reset",
+    "columns": "Columns",
+    "description": "Description"
   },
   "workflow": {
     "title": "Workflow",
@@ -197,7 +218,8 @@
       "buildingSegments": "Building Segments",
       "segmentAiAnalysis": "AI Analysis",
       "graphBuilder": "Knowledge Graph",
-      "documentSummary": "Document Summary"
+      "documentSummary": "Document Summary",
+      "datasetProcess": "Dataset Processing"
     },
     "inProgress": "Processing...",
     "qaRegenInProgress": "Additional analysis (page {{page}})",

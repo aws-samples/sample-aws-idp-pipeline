@@ -13,7 +13,15 @@ import type {
 } from '../types/project';
 import type { DocumentProcessingOptions } from '../components/DocumentUploadModal';
 
-const EXT_MIME: Record<string, string> = { dxf: 'application/dxf' };
+const EXT_MIME: Record<string, string> = {
+  dxf: 'application/dxf',
+  // Structured data: browsers often leave file.type empty for these, so map by
+  // extension to the MIME types the backend uses to classify datasets.
+  csv: 'text/csv',
+  tsv: 'text/tab-separated-values',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
 const getMimeTypeByExt = (name: string): string => {
   const ext = name.split('.').pop()?.toLowerCase() || '';
   return EXT_MIME[ext] || 'application/octet-stream';
@@ -108,6 +116,7 @@ export function useDocuments({
       segment_analyzer: t('workflow.steps.segmentAiAnalysis'),
       graph_builder: t('workflow.steps.graphBuilder'),
       document_summarizer: t('workflow.steps.documentSummary'),
+      dataset_process: t('workflow.steps.datasetProcess', 'Dataset Processing'),
     }),
     [t],
   );
@@ -127,6 +136,7 @@ export function useDocuments({
               status: string;
               label: string;
               error?: string;
+              reason?: string;
               qa_regen?: { status: string; segment_index: number };
             }
           >;
@@ -148,6 +158,7 @@ export function useDocuments({
                 status: val.status as StepStatus['status'],
                 label: stepLabels[key] || val.label,
                 ...(val.error && { error: val.error }),
+                ...(val.reason && { reason: val.reason }),
               };
             }
             const segAnalyzer = progress.steps.segment_analyzer;
@@ -215,6 +226,7 @@ export function useDocuments({
               status: string;
               label: string;
               error?: string;
+              reason?: string;
               qa_regen?: { status: string; segment_index: number };
             }
           >;
@@ -235,6 +247,7 @@ export function useDocuments({
               status: val.status as StepStatus['status'],
               label: stepLabels[key] || val.label,
               ...(val.error && { error: val.error }),
+              ...(val.reason && { reason: val.reason }),
             };
           }
           const segAnalyzer = progress.steps.segment_analyzer;
@@ -378,14 +391,21 @@ export function useDocuments({
           setTimeout(() => {
             fetchProgressRef.current();
           }, 2000);
-        } else if (data.status === 'completed' || data.status === 'failed') {
+        } else if (
+          data.status === 'completed' ||
+          data.status === 'failed' ||
+          data.status === 'needs_user_fix'
+        ) {
           setWorkflowProgressMap((prev) => {
             if (!prev[data.documentId]) return prev;
             return {
               ...prev,
               [data.documentId]: {
                 ...prev[data.documentId],
-                status: data.status as 'completed' | 'failed',
+                status: data.status as
+                  | 'completed'
+                  | 'failed'
+                  | 'needs_user_fix',
               },
             };
           });
@@ -477,7 +497,9 @@ export function useDocuments({
     const completedDocIds = Object.entries(workflowProgressMap)
       .filter(
         ([, progress]) =>
-          (progress.status === 'completed' || progress.status === 'failed') &&
+          (progress.status === 'completed' ||
+            progress.status === 'failed' ||
+            progress.status === 'needs_user_fix') &&
           progress.qaRegen?.status !== 'in_progress',
       )
       .map(([docId]) => docId);
@@ -508,7 +530,12 @@ export function useDocuments({
         const doc = documents.find((d) => d.document_id === docId);
         // Keep entry if qa_regen is active
         if (newMap[docId]?.qaRegen?.status === 'in_progress') continue;
-        if (doc && (doc.status === 'completed' || doc.status === 'failed')) {
+        if (
+          doc &&
+          (doc.status === 'completed' ||
+            doc.status === 'failed' ||
+            doc.status === 'needs_user_fix')
+        ) {
           delete newMap[docId];
           changed = true;
         }
