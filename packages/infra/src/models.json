@@ -1,12 +1,12 @@
 {
-  "analysis": "global.anthropic.claude-sonnet-4-6",
-  "docSummarizer": "global.anthropic.claude-sonnet-4-6",
+  "analysis": "global.anthropic.claude-sonnet-5",
+  "docSummarizer": "global.anthropic.claude-sonnet-5",
   "summarizer": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
   "describer": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
   "extractor": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
-  "entityNormalizer": "global.anthropic.claude-sonnet-4-6",
+  "entityNormalizer": "global.anthropic.claude-sonnet-5",
   "embedding": "amazon.nova-2-multimodal-embeddings-v1:0",
   "videoAnalysis": "us.twelvelabs.pegasus-1-2-v1:0",
   "scriptExtractor": "global.amazon.nova-2-lite-v1:0",
-  "webcrawler": "global.anthropic.claude-sonnet-4-6"
+  "webcrawler": "global.anthropic.claude-sonnet-5"
 }
