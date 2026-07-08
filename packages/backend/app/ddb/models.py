@@ -108,6 +108,24 @@ class SegmentAnalysis(BaseModel):
     ai_analysis: list[AIAnalysis] = []
 
 
+class TemplateData(BaseModel):
+    template_id: str
+    name: str
+    description: str
+    file_type: str
+    s3_key: str
+    thumbnail_url: str | None = None
+    analysis_status: str
+    generated_prompt: str | None = None
+    created_by: str | None = None
+
+
+class Template(BaseModel):
+    data: TemplateData
+    created_at: str
+    updated_at: str
+
+
 class ArtifactData(BaseModel):
     user_id: str
     project_id: str
