@@ -8,6 +8,7 @@ import {
   SearchMcp,
   ImageMcp,
   QaMcp,
+  DataMcp,
   SSM_KEYS,
 } from ':idp-v2/common-constructs';
 import * as agentcore from '@aws-cdk/aws-bedrock-agentcore-alpha';
@@ -16,6 +17,7 @@ import * as path from 'path';
 export class McpStack extends Stack {
   public readonly searchMcp: SearchMcp;
   public readonly qaMcp: QaMcp;
+  public readonly dataMcp: DataMcp;
   public readonly imageMcp?: ImageMcp;
   public readonly gateway: agentcore.Gateway;
 
@@ -76,6 +78,23 @@ export class McpStack extends Stack {
     });
     this.qaMcp.function.grantInvoke(this.gateway.role);
     qaTarget.node.addDependency(this.gateway.role);
+
+    this.dataMcp = new DataMcp(this, 'DataMcp');
+
+    const dataTarget = this.gateway.addLambdaTarget('DataMcpTarget', {
+      gatewayTargetName: 'data',
+      description:
+        'Structured data (Text2SQL): list datasets, read a dataset reference doc, and run read-only SQL over a project Parquet dataset. Use for exact aggregation, filtering, ranking, and counting over tables.',
+      lambdaFunction: this.dataMcp.function,
+      toolSchema: agentcore.ToolSchema.fromLocalAsset(
+        path.resolve(
+          process.cwd(),
+          '../../packages/lambda/data-mcp/schema.json',
+        ),
+      ),
+    });
+    this.dataMcp.function.grantInvoke(this.gateway.role);
+    dataTarget.node.addDependency(this.gateway.role);
 
     // Web Search built-in connector target. The AgentCore Web Search connector
     // is not yet supported by the CDK L2/L1 target APIs, so it is created via a

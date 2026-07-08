@@ -41,6 +41,7 @@ export const isSpreadsheetFileType = (
   if (!fileType) return false;
   return [
     'text/csv',
+    'text/tab-separated-values',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/vnd.ms-excel',
   ].includes(fileType);

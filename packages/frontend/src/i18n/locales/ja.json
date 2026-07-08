@@ -98,6 +98,7 @@
     "reanalyzing": "再分析中",
     "completed": "完了",
     "failed": "失敗",
+    "needs_user_fix": "修正が必要",
     "pending": "保留中",
     "uploaded": "アップロード済み",
     "deleteConfirm": "このドキュメントを削除しますか？",
@@ -111,7 +112,11 @@
     "filterFailed": "失敗",
     "noMatchingDocuments": "一致するドキュメントがありません",
     "tabFile": "ファイル",
+    "tabData": "データ",
     "tabWeb": "ウェブ",
+    "uploadData": "データをアップロード",
+    "dataFormats": "Excel (.xlsx, .xls), CSV, TSV (最大500MB)",
+    "dataUploadHint": "構造化テーブルはクエリ可能なデータセットとして保存されます。各シートは整ったテーブルである必要があります。結合セル、画像/グラフ、複数行ヘッダーがある場合は処理されないため、テーブル形式に整えて再アップロードしてください。",
     "webUrl": "URL",
     "webUrlPlaceholder": "https://example.com/page",
     "webInstruction": "指示",
@@ -130,6 +135,22 @@
     "maxPageHint": "アップロードしたドキュメントに最大{{pages}}ページが含まれています。公式サポートは3,000ページまでです。PoCでは小さなドキュメントで先に検証することをお勧めします。",
     "transcribe": "Transcribe",
     "transcribeDesc": "Amazon Transcribe"
+  },
+  "dataset": {
+    "tab": "データ",
+    "none": "このドキュメントの構造化データセットがありません。",
+    "totalRows": "{{count}}行",
+    "queryPlaceholder": "SELECT * FROM data WHERE ... (読み取り専用)",
+    "run": "実行",
+    "clear": "クリア",
+    "queryFailed": "クエリ失敗",
+    "noRows": "行なし",
+    "queryTruncated": "結果が切り詰められました。完全な結果にはLIMITや集計を使用してください。",
+    "sqlEditor": "SQL (読み取り専用, テーブル名: data)",
+    "runHint": "Cmd/Ctrl+Enterで実行",
+    "reset": "リセット",
+    "columns": "カラム",
+    "description": "説明"
   },
   "workflow": {
     "title": "ワークフロー",
@@ -197,7 +218,8 @@
       "buildingSegments": "セグメント構築",
       "segmentAiAnalysis": "AI分析",
       "graphBuilder": "ナレッジグラフ構築",
-      "documentSummary": "ドキュメント要約"
+      "documentSummary": "ドキュメント要約",
+      "datasetProcess": "データ処理"
     },
     "inProgress": "処理中...",
     "qaRegenInProgress": "追加分析中 (ページ {{page}})",

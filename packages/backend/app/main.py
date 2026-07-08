@@ -5,6 +5,7 @@ from app.routers import (
     agents,
     artifacts,
     chat,
+    datasets,
     documents,
     graph,
     health,
@@ -27,6 +28,7 @@ app = FastAPI(
         {"name": "prompts", "description": "프롬프트 관리"},
         {"name": "sagemaker", "description": "SageMaker 엔드포인트 관리"},
         {"name": "graph", "description": "지식 그래프 관리"},
+        {"name": "datasets", "description": "정형 데이터셋 조회"},
         {"name": "templates", "description": "템플릿 관리"},
     ]
 )
@@ -42,6 +44,7 @@ app.add_middleware(
 app.include_router(agents.router)
 app.include_router(artifacts.router)
 app.include_router(chat.router)
+app.include_router(datasets.router)
 app.include_router(documents.router)
 app.include_router(graph.router)
 app.include_router(health.router)
