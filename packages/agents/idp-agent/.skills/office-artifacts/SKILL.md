@@ -42,10 +42,12 @@ officecli create /tmp/officecli/<session>/<id>/report.docx
 
 ### 2b. OR edit an existing artifact
 
-Stage it locally first with `artifact_download`, passing the workspace directory:
+Stage it locally first with `artifact_download`. Pass the `artifact_id` and
+`filename` from the artifact reference `[artifact:art_xxx](report.docx)`, plus
+the workspace directory:
 
 ```
-artifact_download(s3_uri="s3://.../report.docx", workspace_dir="/tmp/officecli/<session>/<id>")
+artifact_download(artifact_id="art_xxx", filename="report.docx", workspace_dir="/tmp/officecli/<session>/<id>")
   ->  { "local_path": "/tmp/officecli/<session>/<id>/report.docx" }
 ```
 
@@ -55,6 +57,13 @@ Use the `officecli` tool against the local path. **Before creating/editing, run
 `load_skill <pptx|word|excel>`** (via the officecli tool) to load the format
 build guide, and use `help <format> <element>` to check schema instead of
 guessing. See the `officecli` skill for full command reference.
+
+**Keep each command's output small — work incrementally.** Do NOT emit one huge
+`batch` covering the whole document; a single oversized response can hit the
+model's output token limit, get truncated, and force a costly retry loop. Build
+in small units — roughly one slide / section / sheet-region per `batch` call
+(or a handful of related elements) — and issue several calls in sequence. This
+keeps each turn fast and failures isolated to one unit.
 
 ### 4. Delivery gate (before reporting done)
 

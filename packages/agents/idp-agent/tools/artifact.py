@@ -1,5 +1,4 @@
 import os
-from urllib.parse import urlparse
 
 import boto3
 from nanoid import generate as nanoid_generate
@@ -81,35 +80,52 @@ def create_artifact_workspace_tool(session_id: str):
     return artifact_workspace
 
 
-def create_artifact_download_tool():
-    """Create an artifact_download tool for staging S3 artifacts locally."""
+def create_artifact_download_tool(
+    user_id: str | None = None,
+    project_id: str | None = None,
+):
+    """Create an artifact_download tool bound to user/project context."""
 
     @tool
-    def artifact_download(s3_uri: str, workspace_dir: str) -> dict:
+    def artifact_download(artifact_id: str, workspace_dir: str, filename: str | None = None) -> dict:
         """Download an artifact from S3 into a workspace directory for editing.
 
         officecli operates on local files only. Call this to stage an existing
         artifact locally before editing it with officecli, then upload the
         result with artifact_upload. Get workspace_dir from artifact_workspace.
 
+        The artifact_id and filename come from the artifact reference
+        `[artifact:art_xxx](filename)` — the artifact path is derived from them,
+        so you only need the id (and optionally the filename). If filename is
+        omitted, the single file under the artifact is resolved automatically.
+
         Args:
-            s3_uri: The S3 URI of the artifact (e.g., "s3://bucket/key/file.pptx").
+            artifact_id: The artifact id (e.g., "art_xxxxx") from the artifact reference.
             workspace_dir: The workspace directory from artifact_workspace.
+            filename: The artifact filename, if known (e.g., "report.docx").
 
         Returns:
             Dictionary with local_path pointing to the downloaded file.
         """
-        parsed = urlparse(s3_uri)
-        bucket = parsed.netloc
-        key = parsed.path.lstrip("/")
-        filename = os.path.basename(key)
-
-        local_path = os.path.join(workspace_dir, filename)
+        config = get_config()
+        bucket = config.agent_storage_bucket_name
+        prefix = f"{user_id}/{project_id}/artifacts/{artifact_id}/"
 
         s3 = boto3.client("s3")
+        if not filename:
+            listing = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
+            contents = listing.get("Contents", [])
+            if not contents:
+                raise FileNotFoundError(f"No artifact found under {prefix}")
+            key = contents[0]["Key"]
+            filename = os.path.basename(key)
+        else:
+            key = f"{prefix}{filename}"
+
+        local_path = os.path.join(workspace_dir, filename)
         s3.download_file(bucket, key, local_path)
 
-        return {"local_path": local_path, "s3_uri": s3_uri}
+        return {"local_path": local_path, "s3_uri": f"s3://{bucket}/{key}"}
 
     return artifact_download
 

@@ -102,7 +102,7 @@ def get_agent(
         interpreter.code_interpreter,
         create_artifact_path_tool(user_id, project_id),
         create_artifact_workspace_tool(session_id),
-        create_artifact_download_tool(),
+        create_artifact_download_tool(user_id, project_id),
         create_artifact_upload_tool(user_id, project_id),
     ]
 
@@ -123,6 +123,7 @@ def get_agent(
     bedrock_model = BedrockModel(
         model_id=config.bedrock_model_id,
         region_name=config.aws_region,
+        max_tokens=config.bedrock_max_tokens,
         boto_client_config=BotocoreConfig(read_timeout=600),
     )
 

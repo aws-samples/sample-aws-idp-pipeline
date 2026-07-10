@@ -14,6 +14,7 @@ class Config(BaseSettings):
     backend_table_name: str = ""
     websocket_message_queue_url: str = ""
     bedrock_model_id: str = "global.anthropic.claude-opus-4-8"
+    bedrock_max_tokens: int = 16384
     code_interpreter_identifier: str = ""
 
     @property
