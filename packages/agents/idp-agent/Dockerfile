@@ -2,6 +2,16 @@ FROM public.ecr.aws/docker/library/python:3.12-slim
 
 WORKDIR /app
 
+# Install officecli (Office document CLI used by the officecli skill)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates libicu76 \
+    && curl -fsSL https://d.officecli.ai/install.sh | bash \
+    && mv "$HOME/.local/bin/officecli" /usr/local/bin/officecli \
+    && apt-get purge -y curl \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+RUN officecli --version
+
 # Copy project files
 COPY pyproject.toml README.md ./
 COPY *.py ./

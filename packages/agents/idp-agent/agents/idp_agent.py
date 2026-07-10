@@ -9,11 +9,16 @@ from strands.session import S3SessionManager
 from strands_tools import calculator, current_time, file_read, generate_image, http_request, shell, use_llm
 from strands_tools.code_interpreter import AgentCoreCodeInterpreter
 
-from agentcore_mcp_client import AgentCoreGatewayMCPClient
+from agentcore_mcp_client import AgentCoreGatewayMCPClient, create_officecli_mcp_client
 from config import get_config
 from helpers import get_project_language
 from prompts import build_system_prompt
-from tools.artifact import create_artifact_path_tool
+from tools.artifact import (
+    create_artifact_download_tool,
+    create_artifact_path_tool,
+    create_artifact_upload_tool,
+    create_artifact_workspace_tool,
+)
 
 from .image_artifact_saver_hook import ImageArtifactSaverHook
 from .syntax_check_hook import SyntaxCheckHook
@@ -96,6 +101,9 @@ def get_agent(
         use_llm,
         interpreter.code_interpreter,
         create_artifact_path_tool(user_id, project_id),
+        create_artifact_workspace_tool(session_id),
+        create_artifact_download_tool(),
+        create_artifact_upload_tool(user_id, project_id),
     ]
 
     config = get_config()
@@ -137,11 +145,17 @@ def get_agent(
             agent_id=agent_id or "default",
         )
 
+    officecli_mcp_client = create_officecli_mcp_client()
+
     with ExitStack() as stack:
         # Web search is provided by the AgentCore Gateway WebSearch target,
         # discovered together with the other gateway tools below.
         if mcp_client:
             stack.enter_context(mcp_client)
             tools.extend(mcp_client.list_tools_sync())
+
+        # officecli Office-document tool served over a local stdio MCP server.
+        stack.enter_context(officecli_mcp_client)
+        tools.extend(officecli_mcp_client.list_tools_sync())
 
         yield create_agent()

@@ -408,11 +408,13 @@ fig.tight_layout()
 
 Charts created with this skill produce PNG images that can be embedded in:
 
-- **PPTX** — use the pptx skill's `add_picture()` with the chart image
-- **DOCX** — use the docx skill's `doc.add_picture()` with the chart image
+- **PPTX / DOCX / XLSX** — follow the `office-artifacts` skill, then add the chart
+  image with officecli: `add <file> <parent> --type picture --prop src=<chart.png>`
 - **Markdown** — use `![Chart description](image_url)` syntax
 
-When creating charts for embedding, save the image locally first, then reference it in the parent document's code_interpreter script.
+When embedding into an Office document, save the chart image into the officecli
+workspace directory (from `artifact_workspace()`) so officecli can read it as a
+local file.
 
 ---
 

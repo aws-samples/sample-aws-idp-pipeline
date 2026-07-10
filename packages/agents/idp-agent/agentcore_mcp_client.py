@@ -5,6 +5,8 @@ from typing import Any
 import httpx
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
+from mcp import StdioServerParameters
+from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamablehttp_client
 from strands.tools.mcp.mcp_client import MCPClient
 
@@ -37,6 +39,15 @@ class SigV4HTTPXAuth(httpx.Auth):
         request.headers.update(dict(aws_request.headers))
 
         yield request
+
+
+def create_officecli_mcp_client() -> MCPClient:
+    """Create an MCP client for the local officecli stdio server."""
+    return MCPClient(
+        lambda: stdio_client(
+            StdioServerParameters(command="officecli", args=["mcp"]),
+        )
+    )
 
 
 class AgentCoreGatewayMCPClient:
