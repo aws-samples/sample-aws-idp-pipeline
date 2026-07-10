@@ -16,6 +16,7 @@ from prompts import build_system_prompt
 from tools.artifact import (
     create_artifact_download_tool,
     create_artifact_path_tool,
+    create_artifact_render_pages_tool,
     create_artifact_upload_tool,
     create_artifact_workspace_tool,
 )
@@ -104,6 +105,7 @@ def get_agent(
         create_artifact_workspace_tool(session_id),
         create_artifact_download_tool(user_id, project_id),
         create_artifact_upload_tool(user_id, project_id),
+        create_artifact_render_pages_tool(user_id, project_id),
     ]
 
     config = get_config()

@@ -2,9 +2,10 @@ FROM public.ecr.aws/docker/library/python:3.12-slim
 
 WORKDIR /app
 
-# Install officecli (Office document CLI used by the officecli skill)
+# Install officecli (Office document CLI used by the officecli skill) plus
+# chromium, which officecli uses as its headless renderer for `view screenshot`.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates libicu76 \
+    && apt-get install -y --no-install-recommends curl ca-certificates libicu76 chromium fonts-noto-cjk \
     && curl -fsSL https://d.officecli.ai/install.sh | bash \
     && mv "$HOME/.local/bin/officecli" /usr/local/bin/officecli \
     && apt-get purge -y curl \

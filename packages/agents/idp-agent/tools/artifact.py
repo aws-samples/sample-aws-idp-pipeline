@@ -1,4 +1,6 @@
+import json
 import os
+import subprocess
 
 import boto3
 from nanoid import generate as nanoid_generate
@@ -166,3 +168,89 @@ def create_artifact_upload_tool(
         }
 
     return artifact_upload
+
+
+# Presigned URLs for rendered page previews. One hour is enough for the chat
+# turn; the permanent reference is the artifact_ref returned alongside.
+PRESIGN_EXPIRY_SECONDS = 3600
+
+
+def _count_pages(officecli_path: str, local_path: str) -> int:
+    """Return the page/slide count of an Office document via officecli stats."""
+    result = subprocess.run(
+        [officecli_path, "view", local_path, "stats", "--json"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    data = json.loads(result.stdout).get("data", {})
+    # pptx -> slides, docx -> pages, xlsx -> sheets
+    return data.get("slides") or data.get("pages") or data.get("sheets") or 1
+
+
+def create_artifact_render_pages_tool(
+    user_id: str | None = None,
+    project_id: str | None = None,
+    officecli_path: str = "officecli",
+):
+    """Create an artifact_render_pages tool bound to user/project context."""
+
+    @tool
+    def artifact_render_pages(local_path: str) -> dict:
+        """Render each page of a local Office document to an image and publish them.
+
+        Renders one image per page/slide with officecli, uploads each to a single
+        artifact folder in S3, and returns a presigned URL per page plus one
+        artifact_ref for the whole set. Present the pages to the user as inline
+        images using the presigned URLs: `![page N](presigned_url)`.
+
+        Use this after creating or editing a document so the user can preview the
+        result page by page. Presigned URLs expire in one hour; the artifact_ref
+        is the permanent reference.
+
+        Args:
+            local_path: Path to the local document (e.g., "/tmp/officecli/deck.pptx").
+
+        Returns:
+            Dictionary with `pages` (list of {page, presigned_url}) and `artifact_ref`.
+        """
+        config = get_config()
+        bucket = config.agent_storage_bucket_name
+        base_name = os.path.splitext(os.path.basename(local_path))[0]
+        artifact_id = f"art_{nanoid_generate(NANOID_ALPHABET, 12)}"
+        prefix = f"{user_id}/{project_id}/artifacts/{artifact_id}"
+
+        page_count = _count_pages(officecli_path, local_path)
+        s3 = boto3.client("s3")
+        pages = []
+
+        for page in range(1, page_count + 1):
+            image_name = f"{base_name}_page{page}.png"
+            image_path = os.path.join(os.path.dirname(local_path), image_name)
+            subprocess.run(
+                [officecli_path, "view", local_path, "screenshot", "--page", str(page), "-o", image_path],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            # officecli exits 0 even when no headless renderer is available, so
+            # verify the image was actually produced before uploading.
+            if not os.path.exists(image_path):
+                raise RuntimeError(f"officecli did not render page {page} of {local_path}")
+
+            key = f"{prefix}/{image_name}"
+            s3.upload_file(image_path, bucket, key, ExtraArgs={"ContentType": "image/png"})
+            presigned_url = s3.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": bucket, "Key": key},
+                ExpiresIn=PRESIGN_EXPIRY_SECONDS,
+            )
+            pages.append({"page": page, "presigned_url": presigned_url})
+
+        return {
+            "pages": pages,
+            "artifact_ref": f"[artifact:{artifact_id}]({base_name})",
+        }
+
+    return artifact_render_pages

@@ -67,25 +67,42 @@ keeps each turn fast and failures isolated to one unit.
 
 ### 4. Delivery gate (before reporting done)
 
-Any failure = fix and re-check; do NOT deliver until all pass:
+Check, fix, re-check — but **cap the fix-and-recheck loop at 2 rounds**. Fast
+delivery matters more than perfection; after 2 rounds, deliver the current
+result and report any remaining issues to the user instead of retrying.
 
 1. **Schema**: `validate <file>` → clean, no errors.
 2. **Content**: `view <file> issues` → no overflow/format/structure issues; scan
    `view <file> text` for leftover placeholders (xxxx, lorem/ipsum, <TODO>, {{...}}).
-3. **Visual audit** (slide decks most of all): `view <file> screenshot --page N`
-   returns a rendered image — judge it adversarially for overlap, overflow,
-   off-slide shapes, low contrast; fix and re-screenshot until right.
+3. **Visual audit** (only when layout truly matters, e.g. slide decks):
+   `view <file> screenshot --page N` returns a rendered image — judge it for
+   overlap, overflow, off-slide shapes, low contrast; fix and re-check within
+   the 2-round cap. Do NOT re-screenshot "until right".
 4. **Flush**: end officecli edits with `save <file>` so the file is written to
    disk before upload.
 
-### 5. Upload and report
+### 5. Upload, render previews, and report
+
+Upload the finished document:
 
 ```
 artifact_upload(local_path="/tmp/officecli/<session>/<id>/report.docx")
   ->  { "s3_uri": "...", "artifact_ref": "[artifact:art_xxx](report.docx)" }
 ```
 
-Report the `artifact_ref` to the user.
+Then render page-by-page previews and show them inline. `artifact_render_pages`
+renders one image per page, uploads them, and returns a presigned URL per page:
+
+```
+artifact_render_pages(local_path="/tmp/officecli/<session>/<id>/report.docx")
+  ->  { "pages": [{"page": 1, "presigned_url": "https://..."}, ...],
+        "artifact_ref": "[artifact:art_yyy](report)" }
+```
+
+In your reply, embed each page as an inline image using its presigned URL:
+`![page 1](<presigned_url>)`. Also report the document `artifact_ref` from
+artifact_upload so the user has the permanent, downloadable reference (presigned
+preview URLs expire in one hour).
 
 ## Reading / analyzing an existing document
 

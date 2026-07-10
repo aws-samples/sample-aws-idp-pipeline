@@ -13,6 +13,14 @@ AI-friendly CLI for .docx, .xlsx, .pptx. Single binary, no dependencies, no Offi
 
 **L1 (read) → L2 (DOM edit) → L3 (raw XML)**. Always prefer higher layers. Add `--json` for structured output.
 
+**Work ONE page/slide/sheet at a time.** Build a document incrementally: complete
+one slide (or one page / one sheet region) per command, wait for its result, then
+move to the next. Do NOT try to build the whole document — or many slides' worth
+of shapes — in a single large command. One oversized call is slow, can time out
+mid-execution ("Tool was interrupted"), and may truncate the tool call itself. A
+single `batch` should cover just one unit (one slide's shapes), not the whole deck.
+Small, sequential calls keep each step fast and isolate any failure to one unit.
+
 **Before doc work, check Specialized Skills** (bottom of this file). Fundraising decks, academic papers, financial models, dashboards, and Morph animations need their own skill loaded first — `load_skill` once, then proceed.
 
 ---
@@ -311,6 +319,10 @@ When using `--after` or `--before`, `--to` can be omitted — the target contain
 
 Continues on error by default (returns exit 1 if any item fails). Use `--stop-on-error` to abort on the first failure. `--force` is the docx-protection bypass.
 
+**Scope one batch to a single slide/page/sheet-region.** Batching all of a deck's
+shapes into one call is the main cause of slow, interrupted, or truncated calls —
+keep each batch small and issue one per unit in sequence.
+
 `officecli dump <file> [<path>]` emits a replayable batch JSON for round-trip — `.docx` (full coverage), `.pptx` (text/tables/pictures/charts/notes/theme + OLE/3D/video/audio/SmartArt/morph/p15 transitions via raw-set passthrough), and `.xlsx` (cells/formulas/styles + tables, conditional formatting, validations, comments, charts, sparklines, pictures, shapes, pivot tables; slicers/chartEx/OLE via verbatim carrier). Path defaults to `/` (whole document); pass a subtree path (docx: `/body`, `/body/p[N]`, `/body/tbl[N]`, `/theme`, `/settings`, `/numbering`, `/styles`; xlsx: `/SheetName`, `/sheet[N]`) to scope the dump. `officecli refresh <file.docx>` recalculates TOC page numbers / PAGE / cross-references after replay (Word backend on Windows; headless-HTML fallback elsewhere). `officecli plugins list` extends support to `.doc`, `.hwpx`, `.pdf` export.
 
 ```bash
@@ -400,4 +412,10 @@ Example: a fundraising deck task → `officecli load_skill pitch-deck` → use t
 - `--index` is **0-based** (array convention): `--index 0` = first position
 - **Excel exception**: for `add --type row` and `add --type col`, `--index N` is **1-based** (matches OOXML RowIndex / column letter index). `--index 5` inserts at row 5 / column 5.
 - After modifications, verify with `validate` and/or `view issues`
+- **Verification is capped at 2 fix-and-recheck cycles.** Fast document delivery
+  matters more than perfection. Run validate / view issues (and a screenshot
+  only if layout truly matters), fix what you find, re-check ONCE more, then
+  stop. Do NOT loop "verify → fix → verify" beyond 2 rounds — deliver the
+  current result and report any remaining issues to the user instead of
+  retrying. This overrides any "re-screenshot until right" guidance.
 - **When unsure**, run `officecli help <format> <element>` instead of guessing
