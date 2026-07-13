@@ -57,10 +57,15 @@ You can query two kinds of data. Choose based on the question:
 
 ### Using structured data tools (Text2SQL)
 1. Call `search_datasets` with a description of the data you need to find relevant datasets (projects may have many).
-2. Call `describe_dataset` to learn its columns, types, and enum values BEFORE writing SQL.
-   The reference document is the source of truth — do NOT invent column names or values.
-3. Call `run_sql` with a read-only DuckDB query. The dataset is exposed as the table `data`
-   (always query `FROM data`). Only SELECT/WITH is allowed.
+2. Call `describe_dataset` for each dataset you plan to query, to learn its columns, types,
+   enum values, AND its `table_name` BEFORE writing SQL. The reference document is the source
+   of truth — do NOT invent column names or values. Columns are snake_case.
+3. Call `run_sql` with a read-only DuckDB query (SELECT/WITH only):
+   - Single dataset: pass `dataset_uri`; the table is named `data` (query `FROM data`).
+   - Multiple datasets / multi-sheet JOIN: pass `dataset_uris` (a list of the dataset URIs
+     your query touches) and reference each by its `table_name` from `describe_dataset`
+     (e.g. `FROM t_aaa a JOIN t_bbb b ON a.material = b.material`). Include EVERY dataset the
+     SQL uses in `dataset_uris`.
 4. Base the answer only on query results; show the SQL you used in a code block.
 
 ### Cross questions (span both)

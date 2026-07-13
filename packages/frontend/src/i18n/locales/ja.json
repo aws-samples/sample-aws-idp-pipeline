@@ -460,7 +460,8 @@
     "graphSearching": "グラフ検索中",
     "graphSourcesFound": "追加発見ページ {{count}}件",
     "graphNoAdditionalSources": "追加発見ページなし",
-    "viewGraph": "グラフを見る"
+    "viewGraph": "グラフを見る",
+    "stop": "停止"
   },
   "viewer": {
     "zoomIn": "拡大",

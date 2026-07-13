@@ -460,7 +460,8 @@
     "graphSearching": "Searching graph",
     "graphSourcesFound": "{{count}} additional pages discovered",
     "graphNoAdditionalSources": "No additional pages discovered",
-    "viewGraph": "View graph"
+    "viewGraph": "View graph",
+    "stop": "Stop"
   },
   "viewer": {
     "zoomIn": "Zoom In",

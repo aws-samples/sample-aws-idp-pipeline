@@ -296,6 +296,18 @@ export default function WorkflowDetailModal({
   const [tagCloudMaxTags, setTagCloudMaxTags] = useState(100);
   const [tagCloudRotation, setTagCloudRotation] = useState(true);
   const [graphRebuilding, setGraphRebuilding] = useState(false);
+  // Deferred post-rebuild refresh timer, tracked so it can be cancelled if the
+  // modal closes during the 5s wait (avoids late fetchGraph/setState).
+  const rebuildTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // False after unmount; guards late async callbacks (segment load, rebuild
+  // timer) from calling setState on an unmounted modal.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const [graphPanelSections, setGraphPanelSections] = useState({
     filters: true,
     display: false,
@@ -448,13 +460,24 @@ export default function WorkflowDetailModal({
         { method: 'POST' },
       )
       .then(() => {
-        setTimeout(() => {
+        rebuildTimerRef.current = setTimeout(() => {
+          rebuildTimerRef.current = null;
+          if (!mountedRef.current) return;
           fetchGraph();
           setGraphRebuilding(false);
         }, 5000);
       })
-      .catch(() => setGraphRebuilding(false));
+      .catch(() => {
+        if (mountedRef.current) setGraphRebuilding(false);
+      });
   }, [graphRebuilding, projectId, workflow.document_id, fetchGraph]);
+
+  // Cancel the pending post-rebuild refresh if the modal unmounts mid-wait.
+  useEffect(() => {
+    return () => {
+      if (rebuildTimerRef.current) clearTimeout(rebuildTimerRef.current);
+    };
+  }, []);
 
   const graphLinkTypes = useMemo(() => {
     if (!graphData) return [];
@@ -565,6 +588,26 @@ export default function WorkflowDetailModal({
   const segmentCacheRef = useRef(segmentCache);
   segmentCacheRef.current = segmentCache;
 
+  // Bound the cache so paging through a large document doesn't grow memory
+  // without limit. Map preserves insertion order, so evict oldest entries first,
+  // but never evict the segment currently being viewed.
+  const MAX_SEGMENT_CACHE = 50;
+  const addToCache = useCallback(
+    (prev: Map<number, SegmentData>, index: number, data: SegmentData) => {
+      const next = new Map(prev);
+      next.set(index, data);
+      if (next.size > MAX_SEGMENT_CACHE) {
+        for (const key of next.keys()) {
+          if (next.size <= MAX_SEGMENT_CACHE) break;
+          if (key === index) continue; // keep the just-added one
+          next.delete(key);
+        }
+      }
+      return next;
+    },
+    [],
+  );
+
   const currentSegment = segmentCache.get(currentSegmentIndex) ?? null;
 
   const fetchSegment = useCallback(
@@ -575,18 +618,15 @@ export default function WorkflowDetailModal({
       prefetchingRef.current.add(index);
       try {
         const data = await onLoadSegment(index);
-        setSegmentCache((prev) => {
-          const next = new Map(prev);
-          next.set(index, data);
-          return next;
-        });
+        if (!mountedRef.current) return;
+        setSegmentCache((prev) => addToCache(prev, index, data));
       } catch (e) {
         console.error(`Failed to load segment ${index}:`, e);
       } finally {
         prefetchingRef.current.delete(index);
       }
     },
-    [onLoadSegment],
+    [onLoadSegment, addToCache],
   );
 
   // Reset image zoom and base size on segment change
@@ -633,31 +673,38 @@ export default function WorkflowDetailModal({
     if (prefetchingRef.current.has(currentSegmentIndex)) return;
     prefetchingRef.current.add(currentSegmentIndex);
 
+    // Guard against the response landing after the index changed (effect re-run)
+    // or the modal unmounted: a stale load must not update state. `cancelled` is
+    // flipped by this effect's cleanup when currentSegmentIndex changes.
+    const loadingIndex = currentSegmentIndex;
+    let cancelled = false;
     setSegmentLoading(true);
-    onLoadSegment(currentSegmentIndex)
+    onLoadSegment(loadingIndex)
       .then((data) => {
-        setSegmentCache((prev) => {
-          const next = new Map(prev);
-          next.set(currentSegmentIndex, data);
-          return next;
-        });
+        if (cancelled || !mountedRef.current) return;
+        setSegmentCache((prev) => addToCache(prev, loadingIndex, data));
         setSegmentLoading(false);
         // Prefetch adjacent
-        if (currentSegmentIndex > 0) fetchSegment(currentSegmentIndex - 1);
-        if (currentSegmentIndex < workflow.total_segments - 1)
-          fetchSegment(currentSegmentIndex + 1);
+        if (loadingIndex > 0) fetchSegment(loadingIndex - 1);
+        if (loadingIndex < workflow.total_segments - 1)
+          fetchSegment(loadingIndex + 1);
       })
       .catch((e) => {
-        console.error(`Failed to load segment ${currentSegmentIndex}:`, e);
-        setSegmentLoading(false);
+        console.error(`Failed to load segment ${loadingIndex}:`, e);
+        if (!cancelled && mountedRef.current) setSegmentLoading(false);
       })
       .finally(() => {
-        prefetchingRef.current.delete(currentSegmentIndex);
+        prefetchingRef.current.delete(loadingIndex);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     currentSegmentIndex,
     onLoadSegment,
     fetchSegment,
+    addToCache,
     workflow.total_segments,
   ]);
 

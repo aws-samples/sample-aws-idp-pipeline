@@ -91,6 +91,10 @@ export function useVoiceChat(options: UseVoiceChatOptions): UseVoiceChatReturn {
     new Set(),
   );
   const pendingDisconnectReasonRef = useRef<DisconnectReason>(null);
+  // Monotonic connect id: bumped on each connect/disconnect/unmount so an
+  // in-flight connect (awaiting credentials/signing) can detect it is stale and
+  // abort before creating a socket / calling setState / starting capture.
+  const connectSeqRef = useRef(0);
 
   const playback = useAudioPlayback();
 
@@ -112,6 +116,8 @@ export function useVoiceChat(options: UseVoiceChatOptions): UseVoiceChatReturn {
 
   const disconnect = useCallback(
     (reason: DisconnectReason = 'user') => {
+      // Invalidate any in-flight connect so its post-await code aborts.
+      connectSeqRef.current += 1;
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
@@ -154,6 +160,7 @@ export function useVoiceChat(options: UseVoiceChatOptions): UseVoiceChatReturn {
         return;
       }
 
+      const seq = ++connectSeqRef.current;
       setState((s) => ({ ...s, status: 'connecting', disconnectReason: null }));
       console.log('[VoiceChat] status set to connecting');
 
@@ -174,11 +181,24 @@ export function useVoiceChat(options: UseVoiceChatOptions): UseVoiceChatReturn {
           service: 'bedrock-agentcore',
         });
 
+        // Aborted while awaiting credentials/signing (unmount, disconnect, or a
+        // newer connect) — don't create a socket or touch state.
+        if (seq !== connectSeqRef.current) {
+          console.log('[VoiceChat] connect superseded, aborting');
+          return;
+        }
+
         console.log('[VoiceChat] Creating WebSocket...');
         const ws = new WebSocket(signedUrl);
         wsRef.current = ws;
 
         ws.onopen = () => {
+          // Ignore events from a socket that has been superseded (disconnect /
+          // model change / newer connect) before it opened.
+          if (seq !== connectSeqRef.current || wsRef.current !== ws) {
+            ws.close();
+            return;
+          }
           console.log('[VoiceChat] WebSocket opened');
           // Send config as first message
           const config = {
@@ -208,6 +228,12 @@ export function useVoiceChat(options: UseVoiceChatOptions): UseVoiceChatReturn {
           capture
             .startCapture()
             .then(() => {
+              // Disconnected / superseded while getUserMedia was pending — undo
+              // the capture we just started instead of flipping isListening on.
+              if (seq !== connectSeqRef.current) {
+                capture.stopCapture();
+                return;
+              }
               console.log('[VoiceChat] Mic capture started successfully');
               setState((s) => ({ ...s, isListening: true }));
             })
@@ -230,6 +256,9 @@ export function useVoiceChat(options: UseVoiceChatOptions): UseVoiceChatReturn {
         };
 
         ws.onmessage = (event) => {
+          // Drop messages from a stale/superseded socket so late audio/state
+          // from an old session isn't applied.
+          if (seq !== connectSeqRef.current || wsRef.current !== ws) return;
           messageCountRef.current += 1;
           try {
             const data = JSON.parse(event.data);
@@ -329,6 +358,9 @@ export function useVoiceChat(options: UseVoiceChatOptions): UseVoiceChatReturn {
         };
 
         ws.onerror = (err) => {
+          // A superseded socket's error must not flip the current session to
+          // 'error'.
+          if (seq !== connectSeqRef.current || wsRef.current !== ws) return;
           console.log('[VoiceChat] WebSocket error:', err);
           setState((s) => ({ ...s, status: 'error' }));
         };
@@ -363,6 +395,8 @@ export function useVoiceChat(options: UseVoiceChatOptions): UseVoiceChatReturn {
         };
       } catch (err) {
         console.log('[VoiceChat] Connect error:', err);
+        // Don't surface an error for a connect that was already superseded.
+        if (seq !== connectSeqRef.current) return;
         setState({
           status: 'error',
           isListening: false,
@@ -434,9 +468,19 @@ export function useVoiceChat(options: UseVoiceChatOptions): UseVoiceChatReturn {
     };
   }, []);
 
-  // Cleanup on unmount
+  // Keep latest capture/playback stop fns in refs so the unmount cleanup can
+  // call them without depending on the (per-render) hook objects.
+  const stopCaptureRef = useRef(capture.stopCapture);
+  const stopPlaybackRef = useRef(playback.stop);
+  stopCaptureRef.current = capture.stopCapture;
+  stopPlaybackRef.current = playback.stop;
+
+  // Cleanup on unmount: close the socket/timers AND stop audio capture/playback
+  // so mic MediaStream + AudioContext are released when the voice UI closes.
   useEffect(() => {
     return () => {
+      // Invalidate any in-flight connect awaiting credentials/signing.
+      connectSeqRef.current += 1;
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -447,6 +491,8 @@ export function useVoiceChat(options: UseVoiceChatOptions): UseVoiceChatReturn {
       if (pingIntervalRef.current) {
         clearInterval(pingIntervalRef.current);
       }
+      stopCaptureRef.current();
+      stopPlaybackRef.current();
     };
   }, []);
 
