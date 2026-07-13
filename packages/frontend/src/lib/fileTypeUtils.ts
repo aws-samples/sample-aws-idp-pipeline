@@ -18,6 +18,7 @@ export const TEXT_MIME_TYPES = [
   'text/plain',
   'text/markdown',
   'text/csv',
+  'text/tab-separated-values',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -96,6 +97,7 @@ export const FILE_TYPE_LABELS: Record<string, string> = {
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'XLSX',
   'application/vnd.ms-excel': 'XLS',
   'text/csv': 'CSV',
+  'text/tab-separated-values': 'TSV',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
     'DOCX',
   'application/msword': 'DOC',
@@ -131,7 +133,8 @@ export const getFileTypeCategory = (fileType: string): string => {
   if (
     fileType.includes('spreadsheetml') ||
     fileType.includes('ms-excel') ||
-    fileType === 'text/csv'
+    fileType === 'text/csv' ||
+    fileType === 'text/tab-separated-values'
   )
     return 'spreadsheet';
   if (fileType.includes('presentationml') || fileType.includes('ms-powerpoint'))
@@ -200,7 +203,8 @@ export function getFileIconComponent(fileType: string): {
   if (
     fileType.includes('spreadsheetml') ||
     fileType.includes('ms-excel') ||
-    fileType === 'text/csv'
+    fileType === 'text/csv' ||
+    fileType === 'text/tab-separated-values'
   )
     return { icon: FileSpreadsheet, className: 'h-5 w-5 text-green-400' };
   if (fileType === 'text/markdown')
@@ -235,6 +239,7 @@ export const getFileTypeInfo = (
     case 'xls':
     case 'xlsx':
     case 'csv':
+    case 'tsv':
       return {
         icon: FileSpreadsheet,
         color: 'text-green-500',
@@ -281,6 +286,7 @@ const MIME_TO_EXTENSION: Record<string, string> = {
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
   'application/vnd.ms-excel': 'xls',
   'text/csv': 'csv',
+  'text/tab-separated-values': 'tsv',
   'text/plain': 'txt',
   'text/markdown': 'md',
   'image/png': 'png',

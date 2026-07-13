@@ -79,6 +79,7 @@ export interface ChatPanelProps {
   documents?: Document[];
   onInputChange: (value: string) => void;
   onSendMessage: (files: AttachedFile[], message?: string) => void;
+  onStop?: () => void;
   onAgentSelect?: (agentName: string | null) => void;
   onAgentClick: () => void;
   onNewChat: () => void;

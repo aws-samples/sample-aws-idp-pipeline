@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import sys
 
@@ -107,9 +108,21 @@ async def invoke(request: dict):
     ) as agent:
         content = [block.to_strands() for block in req.prompt]
         stream = agent.stream_async(content)
-        async for event in stream:
-            for filtered in filter_stream_event(event):
-                yield filtered
+        try:
+            async for event in stream:
+                for filtered in filter_stream_event(event):
+                    yield filtered
+        except (GeneratorExit, asyncio.CancelledError):
+            # The client disconnected (user pressed Stop) — AgentCore tears down
+            # this generator. Cancel the running agent so it stops gracefully at
+            # the next checkpoint (model streaming / before tool execution).
+            # Strands then emits cancel tool_results, keeping the session
+            # consistent so the next turn resumes cleanly.
+            agent.cancel()
+            raise
+        finally:
+            # Ensure the underlying stream is closed even on cancellation.
+            await stream.aclose()
 
 
 if __name__ == "__main__":

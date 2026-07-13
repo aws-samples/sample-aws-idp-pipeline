@@ -267,10 +267,22 @@ def handler(event: dict, context) -> dict:
         )
         created.append({"dataset_id": dataset_id, "dataset_s3_uri": parquet_uri, "rows": int(len(df))})
 
+    # Surface partially-skipped sheets to the user. Even though the workflow is
+    # completed (at least one sheet succeeded), the UI should show which sheets
+    # were excluded and why, rather than silently dropping them.
+    skipped_reason = ""
+    if failures:
+        skipped_reason = (
+            f"{len(created)}개 시트만 처리되었습니다. "
+            f"{len(failures)}개 시트는 정형 데이터로 변환할 수 없어 제외되었습니다: "
+            + _format_failures(failures)
+        )
     record_step_complete(
         workflow_id, StepName.DATASET_PROCESS,
         dataset_count=len(created),
         skipped_sheets=len(failures),
+        reason=skipped_reason,
+        skipped_detail=failures,
     )
     update_workflow_status(
         document_id, workflow_id, WorkflowStatus.COMPLETED, entity_type,

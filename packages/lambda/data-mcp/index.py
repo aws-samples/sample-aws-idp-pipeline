@@ -164,47 +164,81 @@ def _query_datasets(project_id: str) -> list[dict]:
     return result.get("Items", [])
 
 
+def _dataset_entry(dataset_uri: str, name, description) -> dict:
+    return {
+        "dataset_uri": dataset_uri,
+        "table_name": table_name_for(dataset_uri) if dataset_uri else None,
+        "name": name,
+        "description": description or "",
+    }
+
+
+def _all_datasets_from_ddb(project_id: str) -> list[dict]:
+    """Fallback dataset list from DDB DATASET# items (source of truth).
+
+    Used when the LanceDB catalog is empty or unavailable (e.g. catalog indexing
+    failed): the dataset still exists in DDB/Parquet, so it must remain
+    discoverable even without hybrid search.
+    """
+    datasets = []
+    for item in _query_datasets(project_id):
+        data = item.get("data", {})
+        datasets.append(
+            _dataset_entry(
+                data.get("dataset_s3_uri"),
+                data.get("name"),
+                data.get("description", ""),
+            )
+        )
+    return datasets
+
+
 def search_datasets(event: dict) -> dict:
     """Find datasets relevant to a query via hybrid search over the per-project
     catalog (LanceDB). Returns the top matches with their table_name for run_sql.
 
     Replaces listing all datasets: with many datasets, returning the full list
     wastes tokens and hurts selection. The catalog is populated by dataset-process
-    at conversion time.
+    at conversion time. If the catalog is empty or the search fails, falls back to
+    listing all datasets from DDB so datasets stay discoverable.
     """
     project_id = event["project_id"]
     query = event.get("query", "")
 
-    resp = _lambda.invoke(
-        FunctionName=LANCEDB_FUNCTION_ARN,
-        InvocationType="RequestResponse",
-        Payload=json.dumps(
-            {
-                "action": "search_datasets",
-                "params": {
-                    "project_id": project_id,
-                    "query": query,
-                    "limit": SEARCH_DATASETS_LIMIT,
-                },
-            }
-        ),
-    )
-    payload = resp["Payload"].read().decode("utf-8")
-    if "FunctionError" in resp:
-        return {"error": f"Dataset search failed: {payload}"}
-
-    result = json.loads(payload)
-    datasets = []
-    for r in result.get("results", []):
-        dataset_uri = r.get("dataset_s3_uri")
-        datasets.append(
-            {
-                "dataset_uri": dataset_uri,
-                "table_name": table_name_for(dataset_uri) if dataset_uri else None,
-                "name": r.get("name"),
-                "description": r.get("description", ""),
-            }
+    try:
+        resp = _lambda.invoke(
+            FunctionName=LANCEDB_FUNCTION_ARN,
+            InvocationType="RequestResponse",
+            Payload=json.dumps(
+                {
+                    "action": "search_datasets",
+                    "params": {
+                        "project_id": project_id,
+                        "query": query,
+                        "limit": SEARCH_DATASETS_LIMIT,
+                    },
+                }
+            ),
         )
+        payload = resp["Payload"].read().decode("utf-8")
+        if "FunctionError" in resp:
+            raise RuntimeError(payload)
+        result = json.loads(payload)
+        hits = result.get("results", [])
+    except Exception as e:  # noqa: BLE001 - fall back to DDB on any search failure
+        print(f"search_datasets: catalog search failed, falling back to DDB: {e}")
+        return {"datasets": _all_datasets_from_ddb(project_id), "fallback": True}
+
+    datasets = [
+        _dataset_entry(r.get("dataset_s3_uri"), r.get("name"), r.get("description", ""))
+        for r in hits
+    ]
+    # Catalog returned nothing (e.g. indexing not yet run / failed) but datasets
+    # may still exist in DDB -> fall back so they remain discoverable.
+    if not datasets:
+        ddb_datasets = _all_datasets_from_ddb(project_id)
+        if ddb_datasets:
+            return {"datasets": ddb_datasets, "fallback": True}
     return {"datasets": datasets}
 
 
@@ -354,13 +388,26 @@ _FORBIDDEN_RE = re.compile(
     r"pragma|set|export|import|call)\b",
     re.IGNORECASE,
 )
+# Block DuckDB table/scan functions that read arbitrary files or external data
+# (e.g. read_csv('/etc/passwd'), read_parquet('s3://other/...'), glob('/**')).
+# Even without httpfs, these expose the Lambda's local filesystem. The registered
+# views (data / t_*) are the only intended data sources, so any function call of
+# the form name(...) matching these is rejected.
+_FORBIDDEN_FUNC_RE = re.compile(
+    r"\b(read_csv|read_csv_auto|read_parquet|parquet_scan|read_json|read_json_auto|"
+    r"read_ndjson|read_ndjson_auto|read_text|read_blob|glob|sniff_csv|"
+    r"delta_scan|iceberg_scan|postgres_scan|sqlite_scan|mysql_scan|"
+    r"read_xlsx|scan_arrow|arrow_scan|query_table|query)\s*\(",
+    re.IGNORECASE,
+)
 # Match single- or double-quoted string literals so forbidden keywords inside
 # them (e.g. WHERE name = 'update me') are not treated as statements.
 _STRING_LITERAL_RE = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"")
 
 
 def _is_read_only(query: str) -> bool:
-    """Allow only single SELECT/WITH statements; reject DDL/DML and multi-statements."""
+    """Allow only single SELECT/WITH statements; reject DDL/DML, multi-statements,
+    and file/external table functions."""
     stripped = query.strip().rstrip(";")
     if not _READ_ONLY_RE.match(stripped):
         return False
@@ -370,6 +417,8 @@ def _is_read_only(query: str) -> bool:
     if ";" in without_strings:
         return False
     if _FORBIDDEN_RE.search(without_strings):
+        return False
+    if _FORBIDDEN_FUNC_RE.search(without_strings):
         return False
     return True
 

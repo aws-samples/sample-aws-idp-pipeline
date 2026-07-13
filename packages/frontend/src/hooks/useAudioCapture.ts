@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { calculateAudioLevel } from '../lib/audioUtils';
 
 const SAMPLE_RATE = 16000;
@@ -72,6 +72,30 @@ export function useAudioCapture({
   const onAudioLevelRef = useRef(onAudioLevel);
   onAudioChunkRef.current = onAudioChunk;
   onAudioLevelRef.current = onAudioLevel;
+  // False after unmount; startCapture checks it after its awaits so a mic
+  // stream/context acquired late (after cleanup ran) is released, not leaked.
+  const mountedRef = useRef(true);
+
+  // Release audio resources (RAF/worklet/AudioContext/MediaStream). Extracted so
+  // startCapture (on failure), stopCapture, and the unmount cleanup can run it;
+  // does NOT touch state.
+  const releaseResources = useCallback(() => {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = 0;
+    }
+
+    workletNodeRef.current?.disconnect();
+    workletNodeRef.current = null;
+
+    audioContextRef.current?.close();
+    audioContextRef.current = null;
+
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+
+    analyserRef.current = null;
+  }, []);
 
   const startCapture = useCallback(async () => {
     if (audioContextRef.current) return;
@@ -84,16 +108,38 @@ export function useAudioCapture({
         noiseSuppression: true,
       },
     });
+    // Unmounted while getUserMedia was pending — stop the stream and bail.
+    if (!mountedRef.current) {
+      stream.getTracks().forEach((t) => t.stop());
+      return;
+    }
     streamRef.current = stream;
 
     const audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
     audioContextRef.current = audioContext;
 
-    // Register the worklet processor
+    // Register the worklet processor. Revoke the object URL even if addModule
+    // throws, and on failure release the already-acquired mic stream + audio
+    // context (they'd otherwise leak since the exception propagates).
     const blob = new Blob([workletCode], { type: 'application/javascript' });
     const workletUrl = URL.createObjectURL(blob);
-    await audioContext.audioWorklet.addModule(workletUrl);
-    URL.revokeObjectURL(workletUrl);
+    try {
+      await audioContext.audioWorklet.addModule(workletUrl);
+    } catch (err) {
+      releaseResources();
+      throw err;
+    } finally {
+      URL.revokeObjectURL(workletUrl);
+    }
+
+    // Unmounted while the worklet module was loading — release and bail.
+    if (!mountedRef.current) {
+      audioContext.close();
+      audioContextRef.current = null;
+      stream.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      return;
+    }
 
     const source = audioContext.createMediaStreamSource(stream);
 
@@ -130,27 +176,23 @@ export function useAudioCapture({
     updateLevel();
 
     setIsCapturing(true);
-  }, []);
+  }, [releaseResources]);
 
   const stopCapture = useCallback(() => {
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = 0;
-    }
-
-    workletNodeRef.current?.disconnect();
-    workletNodeRef.current = null;
-
-    audioContextRef.current?.close();
-    audioContextRef.current = null;
-
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-
-    analyserRef.current = null;
+    releaseResources();
     setIsCapturing(false);
     setAudioLevel(0);
-  }, []);
+  }, [releaseResources]);
+
+  // Always release audio resources on unmount, even if the consumer forgets to
+  // call stopCapture (prevents leaked MediaStream/AudioContext/RAF).
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      releaseResources();
+    };
+  }, [releaseResources]);
 
   return { isCapturing, startCapture, stopCapture, audioLevel };
 }
