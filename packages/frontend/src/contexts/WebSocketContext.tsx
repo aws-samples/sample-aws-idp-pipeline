@@ -53,6 +53,9 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
   const reconnectAttemptsRef = useRef(0);
   const isManualDisconnectRef = useRef(false);
   const isConnectingRef = useRef(false);
+  // False after the provider unmounts; guards async connect() from creating a
+  // socket or calling setState after teardown (e.g. fast project switches).
+  const mountedRef = useRef(true);
   const subscribersRef = useRef<Map<string, Set<MessageCallback>>>(new Map());
 
   /** Cognito Identity Pool에서 AWS 자격 증명 획득 */
@@ -134,18 +137,29 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
     isManualDisconnectRef.current = false;
     setStatus('connecting');
 
-    const credentials = await getCredentials();
-    console.log('WebSocket credentials:', {
-      accessKeyId: credentials.accessKeyId,
-      hasSessionToken: !!credentials.sessionToken,
-    });
+    let signedUrl: string;
+    try {
+      const credentials = await getCredentials();
+      signedUrl = await createSignedWebSocketUrl({
+        websocketUrl,
+        credentials,
+        region: cognitoProps.region,
+      });
+    } catch (err) {
+      // Signing/credentials failed — reset the flag so future connects aren't
+      // permanently blocked, and don't leave status stuck on 'connecting'.
+      console.error('WebSocket connect failed during signing:', err);
+      isConnectingRef.current = false;
+      if (mountedRef.current) setStatus('error');
+      return;
+    }
 
-    const signedUrl = await createSignedWebSocketUrl({
-      websocketUrl,
-      credentials,
-      region: cognitoProps.region,
-    });
-    console.log('WebSocket signed URL:', signedUrl);
+    // The provider may have unmounted (or a manual disconnect happened) while we
+    // were awaiting signing — abort before creating the socket / touching state.
+    if (!mountedRef.current || isManualDisconnectRef.current) {
+      isConnectingRef.current = false;
+      return;
+    }
 
     const ws = new WebSocket(signedUrl);
     wsRef.current = ws;
@@ -226,6 +240,15 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
   }, []);
 
   /** 자동 연결 */
+  // Track true mount/unmount separately from the (dependency-driven) connect
+  // effect below, so the async connect guard reflects real teardown only.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (user?.id_token && websocketUrl) {
       connect();

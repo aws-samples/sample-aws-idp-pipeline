@@ -114,10 +114,12 @@ function getOrCreateLabelTexture(
 
 function createSpriteLabel(text: string, color: string): THREE.Sprite {
   const { texture, scaleX, scaleY } = getOrCreateLabelTexture(text, color);
-  const spriteMaterial = new THREE.SpriteMaterial({
-    map: texture,
-    depthWrite: false,
-  });
+  const spriteMaterial = markPerNode(
+    new THREE.SpriteMaterial({
+      map: texture,
+      depthWrite: false,
+    }),
+  );
   const sprite = new THREE.Sprite(spriteMaterial);
   sprite.scale.set(scaleX, scaleY, 1);
   return sprite;
@@ -137,6 +139,49 @@ function getOrCreatePageTexture(
     pageTextureCache.set(key, texture);
   }
   return texture;
+}
+
+// Mark a material as per-node (created fresh for one node, not from a shared
+// cache) so cleanup can dispose only these and leave shared cached materials
+// intact. Its `.map` (if any) is always a shared cached texture — never dispose.
+function markPerNode<T extends THREE.Material>(mat: T): T {
+  mat.userData.perNode = true;
+  return mat;
+}
+
+// Dispose ONLY per-node materials on a group's objects (never `.map`/geometry,
+// which are shared). Used both when refreshing the node cache and on unmount.
+function disposePerNodeMaterials(group: THREE.Object3D): void {
+  group.traverse((child) => {
+    if (!(child instanceof THREE.Mesh) && !(child instanceof THREE.Sprite)) {
+      return;
+    }
+    const mat = child.material as
+      | THREE.Material
+      | THREE.Material[]
+      | null
+      | undefined;
+    if (!mat) return;
+    if (Array.isArray(mat)) {
+      mat.forEach((m) => m.userData.perNode && m.dispose());
+    } else if (mat.userData.perNode) {
+      mat.dispose();
+    }
+  });
+}
+
+// Dispose every shared module-level GPU cache (textures, materials, geometry).
+// Called once on unmount; the geometry cache is recreated for a fresh remount.
+function disposeSharedCaches(): void {
+  for (const t of labelTextureCache.values()) t.dispose();
+  labelTextureCache.clear();
+  labelScaleCache.clear();
+  for (const t of pageTextureCache.values()) t.dispose();
+  pageTextureCache.clear();
+  for (const m of materialCache.values()) m.dispose();
+  materialCache.clear();
+  Object.values(geometryCache).forEach((g) => g.dispose());
+  geometryCache = createGeometryCache();
 }
 
 const materialCache = new Map<string, THREE.MeshLambertMaterial>();
@@ -305,57 +350,30 @@ export default function ForceGraphView({
 
   // Cleanup Three.js renderer and cached objects on unmount
   useEffect(() => {
-    const fg = fgRef.current;
-    const cache = nodeObjectCache.current;
     return () => {
+      // Read refs inside cleanup, not at mount: fgRef.current is null at mount
+      // (ForceGraph3D fills it after first render), and nodeObjectCache.current
+      // is swapped for a fresh Map on each graph change — capturing either above
+      // would skip disposal / free a stale cache. Reading the latest here is
+      // intended, so the exhaustive-deps ref warning is suppressed.
+      const cache = nodeObjectCache.current;
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      const fg = fgRef.current;
+      // Each shared texture/material/geometry is disposed exactly once, by
+      // disposeSharedCaches() below. The scene and node-cache passes here only
+      // detach objects (scene.clear) and free PER-NODE materials — they must not
+      // touch shared resources (geometry, `.map`, cached materials), or those
+      // would be double-disposed.
       if (fg) {
         const renderer = fg.renderer?.();
-        if (renderer) {
-          renderer.dispose();
-        }
-        const scene = fg.scene?.();
-        if (scene) {
-          scene.traverse((obj) => {
-            if (obj instanceof THREE.Mesh) {
-              obj.geometry?.dispose();
-              if (Array.isArray(obj.material)) {
-                obj.material.forEach((m) => m.dispose());
-              } else if (obj.material) {
-                obj.material.dispose();
-              }
-            } else if (obj instanceof THREE.Sprite) {
-              obj.material?.map?.dispose();
-              obj.material?.dispose();
-            }
-          });
-          scene.clear();
-        }
+        renderer?.dispose();
+        fg.scene?.()?.clear();
       }
-      // Dispose cached node objects
       for (const group of cache.values()) {
-        group.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            child.geometry?.dispose();
-            if (child.material instanceof THREE.Material) {
-              child.material.dispose();
-            }
-          } else if (child instanceof THREE.Sprite) {
-            child.material?.map?.dispose();
-            child.material?.dispose();
-          }
-        });
+        disposePerNodeMaterials(group);
       }
       cache.clear();
-      // Dispose module-level caches
-      for (const t of labelTextureCache.values()) t.dispose();
-      labelTextureCache.clear();
-      labelScaleCache.clear();
-      for (const t of pageTextureCache.values()) t.dispose();
-      pageTextureCache.clear();
-      for (const m of materialCache.values()) m.dispose();
-      materialCache.clear();
-      Object.values(geometryCache).forEach((g) => g.dispose());
-      geometryCache = createGeometryCache();
+      disposeSharedCaches();
     };
   }, []);
 
@@ -589,6 +607,19 @@ export default function ForceGraphView({
     incoming,
   ]);
 
+  // Bump a version whenever graphData changes and fold it into the node cache
+  // key. Computed during render (not in an effect), so a rebuilt graph yields
+  // fresh keys BEFORE force-graph calls nodeThreeObject — a node that kept its
+  // id but changed color/type/radius/label can never reuse a stale cached object
+  // for a frame. Deferred disposal of the old objects still happens in the
+  // cache-refresh effect below.
+  const graphVersionRef = useRef(0);
+  const graphVersion = useMemo(() => {
+    graphVersionRef.current += 1;
+    return graphVersionRef.current;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graphData]);
+
   // Zoom to fit after data changes
   useEffect(() => {
     const fg = fgRef.current;
@@ -599,6 +630,12 @@ export default function ForceGraphView({
         : graphData.nodes.length > 100
           ? 1500
           : 500;
+    // Track the nested timer + RAF so unmount / graph change cancels the whole
+    // chain. `cancelled` also stops the orbit animation loop.
+    let cancelled = false;
+    let orbitTimer: ReturnType<typeof setTimeout> | null = null;
+    let rafId = 0;
+
     const timer = setTimeout(() => {
       const nodeCount = graphData.nodes.length;
       let padding = 0;
@@ -609,7 +646,7 @@ export default function ForceGraphView({
       fg.zoomToFit(400, padding);
 
       // Cinematic orbit after zoom settles
-      const orbitTimer = setTimeout(() => {
+      orbitTimer = setTimeout(() => {
         const cam = fg.camera?.();
         if (!cam) return;
         const dist = cam.position.length() || 300;
@@ -619,6 +656,7 @@ export default function ForceGraphView({
         const totalAngle = Math.PI * 0.6;
         const t0 = performance.now();
         const animate = () => {
+          if (cancelled) return;
           const elapsed = performance.now() - t0;
           const progress = Math.min(elapsed / duration, 1);
           const ease = 1 - Math.pow(1 - progress, 3);
@@ -631,14 +669,18 @@ export default function ForceGraphView({
             },
             { x: 0, y: 0, z: 0 },
           );
-          if (progress < 1) requestAnimationFrame(animate);
+          if (progress < 1) rafId = requestAnimationFrame(animate);
         };
-        requestAnimationFrame(animate);
+        rafId = requestAnimationFrame(animate);
       }, 500);
-
-      return () => clearTimeout(orbitTimer);
     }, delay);
-    return () => clearTimeout(timer);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      if (orbitTimer) clearTimeout(orbitTimer);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
   }, [graphData]);
 
   const handleNodeClick = useCallback(
@@ -711,27 +753,38 @@ export default function ForceGraphView({
     });
   }, []);
 
-  // Dispose and clear node cache when graphData or isDark changes
+  // Refresh the per-node object cache when graphData or isDark changes.
+  //
+  // Node meshes/sprites mix SHARED module-level cached materials/textures
+  // (materialCache, pageTextureCache, labelTextureCache) with per-node materials
+  // created fresh here (segment/cluster/ring/glow/outer meshes, sprite labels).
+  // Dispose ONLY the per-node materials (tagged via markPerNode) so their GPU
+  // memory is freed, while leaving shared cached objects intact for reuse. Never
+  // dispose `.map` — textures are always shared. Shared caches + geometries are
+  // disposed once on unmount below.
+  //
+  // Disposal is DEFERRED to the next frame: force-graph may still be rendering
+  // the previous node objects when this effect runs, so disposing their
+  // materials synchronously could blank a frame. We swap in a fresh cache
+  // immediately (so nodeThreeObject rebuilds) and dispose the old objects once
+  // the new graph has been drawn.
   useEffect(() => {
-    for (const group of nodeObjectCache.current.values()) {
-      group.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          if (child.material instanceof THREE.Material) {
-            child.material.dispose();
-          }
-        } else if (child instanceof THREE.Sprite) {
-          child.material?.map?.dispose();
-          child.material?.dispose();
-        }
-      });
-    }
-    nodeObjectCache.current.clear();
+    const stale = nodeObjectCache.current;
+    nodeObjectCache.current = new Map<string, THREE.Group>();
+
+    const rafId = requestAnimationFrame(() => {
+      for (const group of stale.values()) {
+        disposePerNodeMaterials(group);
+      }
+      stale.clear();
+    });
+    return () => cancelAnimationFrame(rafId);
   }, [graphData, isDark]);
 
   // Create 3D node objects (cached per node id)
   const nodeThreeObject = useCallback(
     (node: ForceNode) => {
-      const cacheKey = `${node.id}:${node.matched}:${isDark}`;
+      const cacheKey = `${graphVersion}:${node.id}:${node.matched}:${isDark}`;
       const cached = nodeObjectCache.current.get(cacheKey);
       if (cached) return cached;
 
@@ -747,11 +800,13 @@ export default function ForceGraphView({
           !!node.matched,
           isDark,
         );
-        const mat = new THREE.MeshBasicMaterial({
-          map: texture,
-          transparent: true,
-          side: THREE.DoubleSide,
-        });
+        const mat = markPerNode(
+          new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            side: THREE.DoubleSide,
+          }),
+        );
         mesh = new THREE.Mesh(geo, mat);
         mesh.scale.set(r * 3.5, r * 4.5, 1);
       } else if (node.nodeType === 'analysis') {
@@ -768,22 +823,26 @@ export default function ForceGraphView({
         mesh.scale.set(r * 1.8, r * 3, r * 1.8);
       } else if (node.nodeType === 'cluster') {
         // Large translucent sphere for cluster
-        const clusterMat = new THREE.MeshLambertMaterial({
-          color: new THREE.Color(node.color),
-          transparent: true,
-          opacity: 0.5,
-          emissive: new THREE.Color(node.color),
-          emissiveIntensity: 0.3,
-        });
+        const clusterMat = markPerNode(
+          new THREE.MeshLambertMaterial({
+            color: new THREE.Color(node.color),
+            transparent: true,
+            opacity: 0.5,
+            emissive: new THREE.Color(node.color),
+            emissiveIntensity: 0.3,
+          }),
+        );
         mesh = new THREE.Mesh(geometryCache.sphere, clusterMat);
         mesh.scale.set(r, r, r);
         // Outer glow ring
-        const ringMat = new THREE.MeshBasicMaterial({
-          color: new THREE.Color(node.color),
-          transparent: true,
-          opacity: 0.15,
-          depthWrite: false,
-        });
+        const ringMat = markPerNode(
+          new THREE.MeshBasicMaterial({
+            color: new THREE.Color(node.color),
+            transparent: true,
+            opacity: 0.15,
+            depthWrite: false,
+          }),
+        );
         const ring = new THREE.Mesh(geometryCache.sphere, ringMat);
         ring.scale.set(r * 1.5, r * 1.5, r * 1.5);
         group.add(ring);
@@ -800,12 +859,14 @@ export default function ForceGraphView({
       // Glow effect for matched (searched) nodes — pulsing
       if (node.matched) {
         // Inner glow
-        const glowMat = new THREE.MeshBasicMaterial({
-          color: new THREE.Color(node.color),
-          transparent: true,
-          opacity: 0.4,
-          depthWrite: false,
-        });
+        const glowMat = markPerNode(
+          new THREE.MeshBasicMaterial({
+            color: new THREE.Color(node.color),
+            transparent: true,
+            opacity: 0.4,
+            depthWrite: false,
+          }),
+        );
         const glow = new THREE.Mesh(geometryCache.sphere, glowMat);
         const glowScale = r * 3;
         glow.scale.set(glowScale, glowScale, glowScale);
@@ -814,12 +875,14 @@ export default function ForceGraphView({
         group.add(glow);
 
         // Outer glow (softer, larger)
-        const outerMat = new THREE.MeshBasicMaterial({
-          color: new THREE.Color(node.color),
-          transparent: true,
-          opacity: 0.15,
-          depthWrite: false,
-        });
+        const outerMat = markPerNode(
+          new THREE.MeshBasicMaterial({
+            color: new THREE.Color(node.color),
+            transparent: true,
+            opacity: 0.15,
+            depthWrite: false,
+          }),
+        );
         const outer = new THREE.Mesh(geometryCache.sphere, outerMat);
         const outerScale = r * 5;
         outer.scale.set(outerScale, outerScale, outerScale);
@@ -839,7 +902,7 @@ export default function ForceGraphView({
       nodeObjectCache.current.set(cacheKey, group);
       return group;
     },
-    [isDark],
+    [isDark, graphVersion],
   );
 
   const handleEngineTick = useCallback(() => {

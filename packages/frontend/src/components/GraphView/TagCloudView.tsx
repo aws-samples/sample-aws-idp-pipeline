@@ -205,6 +205,7 @@ export default function TagCloudView({
     const minFont = 14;
     const maxFont = Math.min(72, dimensions.width / 8);
 
+    let cancelled = false;
     const layout = cloud()
       .size([dimensions.width, dimensions.height])
       .words(
@@ -221,10 +222,19 @@ export default function TagCloudView({
       .font('sans-serif')
       .fontSize((d) => (d as { size: number }).size)
       .on('end', (output: PlacedWord[]) => {
+        // Ignore a stale layout that finished after unmount / re-run.
+        if (cancelled) return;
         setWords(output);
       });
 
     layout.start();
+
+    // Stop the async layout and drop its late 'end' callback when inputs change
+    // or the component unmounts, so an old layout can't burn CPU or setState.
+    return () => {
+      cancelled = true;
+      layout.stop();
+    };
   }, [tags, dimensions, rotation]);
 
   const handleClick = useCallback(

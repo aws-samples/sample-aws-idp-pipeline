@@ -86,6 +86,8 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
   const forceNewTextBlockRef = useRef(false);
   const chatScrollPositionRef = useRef(0);
   const streamingBlocksRef = useRef<StreamingBlock[]>([]);
+  // Controls the in-flight agent request so the user can stop generation.
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -935,12 +937,17 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
           contentBlocks.push({ text: userMessage.content });
         }
 
+        const abortController = new AbortController();
+        abortControllerRef.current = abortController;
+
         await invokeAgent(
           contentBlocks,
           currentSessionId,
           projectId,
           handleStreamEvent,
           selectedAgent?.agent_id,
+          undefined,
+          abortController.signal,
         );
 
         // pending has all messages in order (text + tool_result + stage)
@@ -954,21 +961,31 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
 
         setMessages((prev) => [...prev, ...pending]);
       } catch (error) {
-        console.error('Failed to send message:', error);
-        // Preserve any content accumulated before the error
+        // Preserve any content accumulated before the error/stop
         let partial = pendingMessagesRef.current;
         pendingMessagesRef.current = [];
         if (partial.length === 0 && streamingBlocksRef.current.length > 0) {
           partial = blocksToMessages(streamingBlocksRef.current);
         }
-        const errorMessage: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: `Failed to get response: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, ...partial, errorMessage]);
+
+        // User pressed Stop: keep the partial response, no error bubble.
+        const isAbort =
+          abortControllerRef.current?.signal.aborted ||
+          (error instanceof DOMException && error.name === 'AbortError');
+        if (isAbort) {
+          setMessages((prev) => [...prev, ...partial]);
+        } else {
+          console.error('Failed to send message:', error);
+          const errorMessage: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: `Failed to get response: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, ...partial, errorMessage]);
+        }
       }
+      abortControllerRef.current = null;
       setSending(false);
       setStreamingBlocks([]);
       streamingBlocksRef.current = [];
@@ -984,6 +1001,13 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
       loadSessions,
     ],
   );
+
+  // Stop the in-flight response. Aborting closes the HTTP stream, which the
+  // agent runtime turns into a graceful cancellation; the partial response is
+  // kept (handled in handleSendMessage's catch).
+  const stopStreaming = useCallback(() => {
+    abortControllerRef.current?.abort();
+  }, []);
 
   return {
     currentSessionId,
@@ -1011,5 +1035,6 @@ export function useChatSession({ projectId }: UseChatSessionOptions) {
     handleSessionDelete,
     handleStreamEvent,
     handleSendMessage,
+    stopStreaming,
   };
 }

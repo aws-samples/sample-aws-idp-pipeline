@@ -42,6 +42,7 @@ export default function ChatPanel({
   documents = [],
   onInputChange,
   onSendMessage,
+  onStop,
   onAgentSelect,
   onAgentClick,
   onNewChat,
@@ -336,6 +337,7 @@ export default function ChatPanel({
       selectedAgent={selectedAgent}
       onInputChange={onInputChange}
       onSendMessage={onSendMessage}
+      onStop={onStop}
       onAgentSelect={onAgentSelect}
       onAgentClick={onAgentClick}
       voiceChat={{

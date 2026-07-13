@@ -72,6 +72,18 @@ export function useDocuments({
   const [showUploadModal, setShowUploadModal] = useState(false);
   const progressFetchedRef = useRef(false);
   const loadDocumentsTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
+  // Track deferred timers from WebSocket status events so they can all be
+  // cancelled on unmount / project switch (otherwise late fetches fire stale).
+  const deferredTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(
+    new Set(),
+  );
+  const deferTimer = useCallback((fn: () => void, delayMs: number) => {
+    const id = setTimeout(() => {
+      deferredTimersRef.current.delete(id);
+      fn();
+    }, delayMs);
+    deferredTimersRef.current.add(id);
+  }, []);
 
   const loadDocuments = useCallback(async () => {
     try {
@@ -359,7 +371,7 @@ export function useDocuments({
           debouncedLoadDocuments();
 
           // Fetch step progress after a short delay so the API has data
-          setTimeout(() => {
+          deferTimer(() => {
             fetchProgressRef.current();
           }, 2000);
         } else if (data.status === 'reanalyzing') {
@@ -388,7 +400,7 @@ export function useDocuments({
             ),
           );
 
-          setTimeout(() => {
+          deferTimer(() => {
             fetchProgressRef.current();
           }, 2000);
         } else if (
@@ -410,14 +422,21 @@ export function useDocuments({
             };
           });
 
-          setTimeout(() => {
+          deferTimer(() => {
             loadDocuments();
             loadWorkflows();
           }, 1500);
         }
       }
     },
-    [projectId, loadDocuments, loadWorkflows, debouncedLoadDocuments, t],
+    [
+      projectId,
+      loadDocuments,
+      loadWorkflows,
+      debouncedLoadDocuments,
+      deferTimer,
+      t,
+    ],
   );
 
   useWebSocketMessage('workflow', handleWorkflowMessage);
@@ -492,22 +511,40 @@ export function useDocuments({
     [workflows],
   );
 
-  // Handle workflow completion/failure - clear completed/failed after delay
+  // Handle workflow completion/failure - clear completed/failed after delay.
+  // Refresh once per completed workflow: without this, any change to
+  // workflowProgressMap (e.g. another workflow's progress) would re-trigger a
+  // full loadDocuments/loadWorkflows while completed entries linger in the map.
+  const refreshedCompletionsRef = useRef<Set<string>>(new Set());
+  // Reset the completion dedupe set when the project changes so it can't grow
+  // unbounded across a long-lived session spanning many projects/documents.
   useEffect(() => {
-    const completedDocIds = Object.entries(workflowProgressMap)
-      .filter(
-        ([, progress]) =>
-          (progress.status === 'completed' ||
-            progress.status === 'failed' ||
-            progress.status === 'needs_user_fix') &&
-          progress.qaRegen?.status !== 'in_progress',
-      )
-      .map(([docId]) => docId);
+    refreshedCompletionsRef.current = new Set();
+  }, [projectId]);
+  useEffect(() => {
+    const completed = Object.entries(workflowProgressMap).filter(
+      ([, progress]) =>
+        (progress.status === 'completed' ||
+          progress.status === 'failed' ||
+          progress.status === 'needs_user_fix') &&
+        progress.qaRegen?.status !== 'in_progress',
+    );
 
-    if (completedDocIds.length === 0) return;
+    // Only act on completions not already refreshed (keyed by doc+workflow so a
+    // re-analysis with a new workflow_id refreshes again).
+    const fresh = completed.filter(
+      ([docId, p]) =>
+        !refreshedCompletionsRef.current.has(`${docId}:${p.workflowId}`),
+    );
+    if (fresh.length === 0) return;
+
+    for (const [docId, p] of fresh) {
+      refreshedCompletionsRef.current.add(`${docId}:${p.workflowId}`);
+    }
 
     loadDocumentsRef.current();
     loadWorkflowsRef.current();
+    const completedDocIds = fresh.map(([docId]) => docId);
     const timeout = setTimeout(() => {
       setWorkflowProgressMap((prev) => {
         const newMap = { ...prev };
@@ -544,12 +581,15 @@ export function useDocuments({
     });
   }, [documents]);
 
-  // Clean up debounce timer on unmount
+  // Clean up debounce timer and any deferred WebSocket-event timers on unmount
   useEffect(() => {
+    const deferred = deferredTimersRef.current;
     return () => {
       if (loadDocumentsTimerRef.current) {
         clearTimeout(loadDocumentsTimerRef.current);
       }
+      for (const id of deferred) clearTimeout(id);
+      deferred.clear();
     };
   }, []);
 

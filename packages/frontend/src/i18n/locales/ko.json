@@ -460,7 +460,8 @@
     "graphSearching": "그래프 검색 중",
     "graphSourcesFound": "추가 발견된 페이지 {{count}}건",
     "graphNoAdditionalSources": "추가 발견된 페이지 없음",
-    "viewGraph": "그래프 보기"
+    "viewGraph": "그래프 보기",
+    "stop": "중지"
   },
   "viewer": {
     "zoomIn": "확대",

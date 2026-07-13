@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, ChevronLeft, ChevronRight, Play } from 'lucide-react';
 import CodeMirror from '@uiw/react-codemirror';
@@ -62,11 +62,27 @@ export default function DatasetView({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Monotonic request id: only the newest run may update state. Guards against
+  // out-of-order responses (fast sheet/page/query switches) overwriting the
+  // latest result, and against setState after unmount.
+  const requestSeqRef = useRef(0);
+  useEffect(() => {
+    return () => {
+      // Bump on unmount so any in-flight response is discarded.
+      requestSeqRef.current += 1;
+    };
+  }, []);
+
+  // Stable extensions array so CodeMirror doesn't reconfigure every render.
+  const sqlExtensions = useMemo(() => [sql()], []);
+
   const selected = datasets.find((d) => d.dataset_id === selectedId) ?? null;
 
   // Run a query (a specific page of it) against the selected dataset.
   const runPage = useCallback(
     (datasetId: string, query: string, pageOffset: number) => {
+      const seq = ++requestSeqRef.current;
+      const isStale = () => seq !== requestSeqRef.current;
       setLoading(true);
       setError(null);
       fetchApiRef
@@ -83,11 +99,13 @@ export default function DatasetView({
           },
         )
         .then((res) => {
+          if (isStale()) return;
           setResult(res);
           setOffset(pageOffset);
           setRanQuery(query);
         })
         .catch((e: unknown) => {
+          if (isStale()) return;
           setResult(null);
           setError(
             e instanceof Error
@@ -95,7 +113,10 @@ export default function DatasetView({
               : t('dataset.queryFailed', 'Query failed'),
           );
         })
-        .finally(() => setLoading(false));
+        .finally(() => {
+          if (isStale()) return;
+          setLoading(false);
+        });
     },
     [projectId, t],
   );
@@ -172,7 +193,7 @@ export default function DatasetView({
             value={queryText}
             height="200px"
             theme={isDark ? 'dark' : 'light'}
-            extensions={[sql()]}
+            extensions={sqlExtensions}
             onChange={setQueryText}
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {

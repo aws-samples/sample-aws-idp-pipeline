@@ -352,6 +352,7 @@ function ProjectDetailPage() {
                 documents={documentsHook.documents}
                 onInputChange={chatSession.setInputMessage}
                 onSendMessage={handleSendMessage}
+                onStop={chatSession.stopStreaming}
                 onAgentSelect={agentsHook.handleAgentSelect}
                 onAgentClick={() => agentsHook.setShowAgentModal(true)}
                 onNewChat={handleNewSession}

@@ -400,6 +400,22 @@ function StepProgressBar({
               </div>
             );
           })()}
+
+          {/* Completed-with-warning (e.g. some spreadsheet sheets were skipped
+              but the workflow still completed with the valid ones). */}
+          {(() => {
+            const partial = visibleSteps.filter(
+              ([, s]) => s.status === 'completed' && s.reason,
+            );
+            if (partial.length === 0) return null;
+            return (
+              <div className="mt-1.5 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded text-[10px] text-amber-700 dark:text-amber-400 space-y-0.5">
+                {partial.map(([key, s]) => (
+                  <p key={key}>{s.reason}</p>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
@@ -430,6 +446,9 @@ function useVerticalResize(
   });
 
   const dragging = useRef(false);
+  // Track the active drag listeners so they can be removed on unmount even if
+  // the mouseup never fires (e.g. route change / panel unmount mid-drag).
+  const cleanupDragRef = useRef<(() => void) | null>(null);
 
   const onMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -447,10 +466,15 @@ function useVerticalResize(
         setTopRatio(ratio);
       };
 
-      const onMouseUp = () => {
-        dragging.current = false;
+      const removeListeners = () => {
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
+        cleanupDragRef.current = null;
+      };
+
+      const onMouseUp = () => {
+        dragging.current = false;
+        removeListeners();
         // Save to localStorage on release
         setTopRatio((r) => {
           try {
@@ -464,9 +488,17 @@ function useVerticalResize(
 
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
+      cleanupDragRef.current = removeListeners;
     },
     [containerRef, minRatio, maxRatio, storageKey],
   );
+
+  // Remove any dangling drag listeners if the component unmounts mid-drag.
+  useEffect(() => {
+    return () => {
+      cleanupDragRef.current?.();
+    };
+  }, []);
 
   return { topRatio, onMouseDown };
 }
