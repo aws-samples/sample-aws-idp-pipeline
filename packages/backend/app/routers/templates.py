@@ -13,7 +13,11 @@ from app.s3 import get_s3_client
 
 router = APIRouter(prefix="/templates", tags=["templates"])
 
-ALLOWED_EXTENSIONS = {"pptx", "ppt"}
+ALLOWED_EXTENSIONS = {"pptx", "ppt", "docx", "doc", "pdf"}
+
+# Extensions whose template type is self-evident from the file itself.
+# PDF is excluded: its template type is determined later by AI analysis.
+TYPED_EXTENSIONS = ALLOWED_EXTENSIONS - {"pdf"}
 
 
 class TemplateUploadRequest(BaseModel):
@@ -34,7 +38,7 @@ class TemplateResponse(BaseModel):
     template_id: str
     name: str
     description: str
-    file_type: str
+    template_type: str | None = None
     thumbnail_url: str | None = None
     status: str
     created_at: str
@@ -45,7 +49,7 @@ class TemplateResponse(BaseModel):
             template_id=template.data.template_id,
             name=template.data.name,
             description=template.data.description,
-            file_type=template.data.file_type,
+            template_type=template.data.template_type,
             thumbnail_url=template.data.thumbnail_url,
             status=template.data.status,
             created_at=template.created_at,
@@ -67,16 +71,22 @@ def create_template_upload(request: TemplateUploadRequest) -> TemplateUploadResp
 
     ext = request.file_name.rsplit(".", 1)[-1].lower() if "." in request.file_name else ""
     if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="Only PPTX/PPT files are allowed")
+        raise HTTPException(
+            status_code=400,
+            detail="Only PPT/PPTX, DOC/DOCX, PDF files are allowed",
+        )
 
     template_id = generate_template_id()
     s3_key = f"templates/{template_id}/{template_id}.{ext}"
+
+    # PDF template type is resolved later by AI analysis; leave it unset for now.
+    template_type = ext if ext in TYPED_EXTENSIONS else None
 
     data = TemplateData(
         template_id=template_id,
         name=request.name,
         description=request.description,
-        file_type=ext,
+        template_type=template_type,
         s3_key=s3_key,
         status="uploading",
     )

@@ -148,11 +148,13 @@ function TemplateDetailPage() {
 
           {/* Info row */}
           <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mb-6">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="font-medium uppercase px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400">
-                {template.file_type}
+            {template.template_type && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="font-medium uppercase px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400">
+                  {template.template_type}
+                </span>
               </span>
-            </span>
+            )}
             <span>{formatDate(template.created_at)}</span>
           </div>
 

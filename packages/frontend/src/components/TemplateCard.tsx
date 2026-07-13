@@ -5,15 +5,17 @@ export interface Template {
   template_id: string;
   name: string;
   description: string;
-  file_type: string;
+  template_type?: string | null;
   thumbnail_url?: string | null;
   status?: string;
   created_at: string;
 }
 
-const FILE_TYPE_BADGE: Record<string, string> = {
+const TEMPLATE_TYPE_BADGE: Record<string, string> = {
   pptx: 'bg-orange-500/90',
+  ppt: 'bg-orange-500/90',
   docx: 'bg-blue-500/90',
+  doc: 'bg-blue-500/90',
 };
 
 interface TemplateCardProps {
@@ -52,13 +54,15 @@ function TemplateCard({ template, onClick }: TemplateCardProps) {
             <FileText className="w-12 h-12 text-slate-300 dark:text-slate-600" />
           </div>
         )}
-        <span
-          className={`absolute top-3 left-3 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white rounded-md ${
-            FILE_TYPE_BADGE[template.file_type] ?? 'bg-slate-500/90'
-          }`}
-        >
-          {template.file_type}
-        </span>
+        {template.template_type && (
+          <span
+            className={`absolute top-3 left-3 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white rounded-md ${
+              TEMPLATE_TYPE_BADGE[template.template_type] ?? 'bg-slate-500/90'
+            }`}
+          >
+            {template.template_type}
+          </span>
+        )}
       </div>
 
       {/* Info */}

@@ -6,6 +6,9 @@ import type { TemplateUploadData } from '../components/TemplateUploadModal';
 const EXT_MIME: Record<string, string> = {
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   ppt: 'application/vnd.ms-powerpoint',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  doc: 'application/msword',
+  pdf: 'application/pdf',
 };
 
 const getMimeType = (file: File): string => {

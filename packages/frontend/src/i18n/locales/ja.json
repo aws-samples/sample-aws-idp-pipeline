@@ -497,7 +497,7 @@
     "noTemplates": "テンプレートがまだありません",
     "noTemplatesDescription": "作成したテンプレートがここに表示されます。",
     "uploadTemplate": "テンプレートをアップロード",
-    "supportedFormats": "PPTX",
+    "supportedFormats": "PPT, PPTX, DOC, DOCX, PDF",
     "templateName": "名前",
     "templateNamePlaceholder": "例：事業提案書デッキ",
     "templateDescription": "説明",

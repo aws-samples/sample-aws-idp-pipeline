@@ -132,7 +132,7 @@ class TemplateData(BaseModel):
     template_id: str
     name: str
     description: str
-    file_type: str
+    template_type: str | None = None
     s3_key: str
     thumbnail_url: str | None = None
     status: str

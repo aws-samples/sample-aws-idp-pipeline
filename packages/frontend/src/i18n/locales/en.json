@@ -497,7 +497,7 @@
     "noTemplates": "No templates yet",
     "noTemplatesDescription": "Templates you create will appear here.",
     "uploadTemplate": "Upload Template",
-    "supportedFormats": "PPTX",
+    "supportedFormats": "PPT, PPTX, DOC, DOCX, PDF",
     "templateName": "Name",
     "templateNamePlaceholder": "e.g. Business Proposal Deck",
     "templateDescription": "Description",

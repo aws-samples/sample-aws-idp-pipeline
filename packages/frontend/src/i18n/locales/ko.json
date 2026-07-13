@@ -497,7 +497,7 @@
     "noTemplates": "아직 템플릿이 없습니다",
     "noTemplatesDescription": "생성한 템플릿이 여기에 표시됩니다.",
     "uploadTemplate": "템플릿 업로드",
-    "supportedFormats": "PPTX",
+    "supportedFormats": "PPT, PPTX, DOC, DOCX, PDF",
     "templateName": "이름",
     "templateNamePlaceholder": "예: 사업 제안서 덱",
     "templateDescription": "설명",
