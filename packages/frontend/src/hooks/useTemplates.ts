@@ -23,7 +23,7 @@ interface UseTemplatesOptions {
 
 export function useTemplates({ fetchApi }: UseTemplatesOptions) {
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
   const loadTemplates = useCallback(async () => {

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
@@ -11,43 +11,43 @@ import {
   Trash2,
   Download,
 } from 'lucide-react';
-import { MOCK_TEMPLATES, type TemplateAnalysisStatus } from '../../types/template';
+import type { TemplateDetail, TemplateStatus } from '../../types/template';
+import { useAwsClient } from '../../hooks/useAwsClient';
+import CubeLoader from '../../components/CubeLoader';
 import ConfirmModal from '../../components/ConfirmModal';
 
 export const Route = createFileRoute('/templates/$templateId')({
   component: TemplateDetailPage,
 });
 
-function StatusBadge({ status }: { status: TemplateAnalysisStatus }) {
+// 'uploading' has no dedicated visual; it is shown as the analyzing state.
+const isAnalyzing = (status: TemplateStatus) =>
+  status === 'uploading' || status === 'analyzing';
+
+function StatusBadge({ status }: { status: TemplateStatus }) {
   const { t } = useTranslation();
 
-  const config = {
-    analyzing: {
-      label: t('templateDetail.statusAnalyzing'),
-      className:
-        'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
-      icon: <Loader2 className="w-3 h-3 animate-spin" />,
-    },
-    completed: {
-      label: t('templateDetail.statusCompleted'),
-      className:
-        'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
-      icon: <Check className="w-3 h-3" />,
-    },
-    failed: {
-      label: t('templateDetail.statusFailed'),
-      className:
-        'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400',
-      icon: null,
-    },
-  }[status];
+  if (isAnalyzing(status)) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
+        <Loader2 className="w-3 h-3 animate-spin" />
+        {t('templateDetail.statusAnalyzing')}
+      </span>
+    );
+  }
+
+  if (status === 'completed') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
+        <Check className="w-3 h-3" />
+        {t('templateDetail.statusCompleted')}
+      </span>
+    );
+  }
 
   return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${config.className}`}
-    >
-      {config.icon}
-      {config.label}
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400">
+      {t('templateDetail.statusFailed')}
     </span>
   );
 }
@@ -55,12 +55,36 @@ function StatusBadge({ status }: { status: TemplateAnalysisStatus }) {
 function TemplateDetailPage() {
   const { t, i18n } = useTranslation();
   const { templateId } = Route.useParams();
+  const { fetchApi } = useAwsClient();
+  const [template, setTemplate] = useState<TemplateDetail | null>(null);
+  const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  // TODO: Replace with API call
-  const template = MOCK_TEMPLATES.find((tpl) => tpl.template_id === templateId);
+  const loadTemplate = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await fetchApi<TemplateDetail>(`templates/${templateId}`);
+      setTemplate(data);
+    } catch (error) {
+      console.error('Failed to load template:', error);
+      setTemplate(null);
+    }
+    setLoading(false);
+  }, [fetchApi, templateId]);
+
+  useEffect(() => {
+    loadTemplate();
+  }, [loadTemplate]);
+
+  if (loading) {
+    return (
+      <div className="bento-loading">
+        <CubeLoader />
+      </div>
+    );
+  }
 
   if (!template) {
     return (
@@ -126,11 +150,17 @@ function TemplateDetailPage() {
         {/* Thumbnail */}
         <div className="w-full lg:w-80 flex-shrink-0">
           <div className="aspect-[4/3] rounded-2xl overflow-hidden border border-black/10 dark:border-white/[0.12] bg-slate-100 dark:bg-slate-800">
-            <img
-              src={template.thumbnail_url}
-              alt={template.name}
-              className="w-full h-full object-cover"
-            />
+            {template.thumbnail_url ? (
+              <img
+                src={template.thumbnail_url}
+                alt={template.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900">
+                <FileText className="w-12 h-12 text-slate-300 dark:text-slate-600" />
+              </div>
+            )}
           </div>
         </div>
 
@@ -140,7 +170,7 @@ function TemplateDetailPage() {
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white truncate">
               {template.name}
             </h1>
-            <StatusBadge status={template.analysis_status} />
+            <StatusBadge status={template.status} />
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 max-w-2xl">
             {template.description}
@@ -213,7 +243,7 @@ function TemplateDetailPage() {
           )}
         </div>
 
-        {template.analysis_status === 'analyzing' && (
+        {isAnalyzing(template.status) && (
           <div className="flex items-center gap-3 p-6 rounded-xl border border-black/10 dark:border-white/[0.12] bg-white/40 dark:bg-white/[0.04]">
             <Loader2 className="w-5 h-5 text-amber-500 animate-spin" />
             <div>
@@ -227,7 +257,7 @@ function TemplateDetailPage() {
           </div>
         )}
 
-        {template.analysis_status === 'failed' && (
+        {template.status === 'failed' && (
           <div className="flex items-center justify-between p-6 rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50/50 dark:bg-red-500/5">
             <div>
               <p className="text-sm font-medium text-red-700 dark:text-red-400">
@@ -252,7 +282,7 @@ function TemplateDetailPage() {
           </div>
         )}
 
-        {template.analysis_status === 'completed' && template.generated_prompt && (
+        {template.status === 'completed' && template.generated_prompt && (
           <div className="rounded-xl border border-black/10 dark:border-white/[0.12] bg-white/40 dark:bg-white/[0.04] overflow-hidden">
             <pre className="p-5 text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap font-mono overflow-x-auto">
               {template.generated_prompt}

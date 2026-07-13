@@ -6,6 +6,7 @@ import TemplateCard from '../../components/TemplateCard';
 import TemplateUploadModal, {
   TemplateUploadData,
 } from '../../components/TemplateUploadModal';
+import CubeLoader from '../../components/CubeLoader';
 import { useAwsClient } from '../../hooks/useAwsClient';
 import { useTemplates } from '../../hooks/useTemplates';
 
@@ -17,9 +18,10 @@ function TemplatesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { fetchApi } = useAwsClient();
-  const { templates, uploading, loadTemplates, uploadTemplate } = useTemplates({
-    fetchApi,
-  });
+  const { templates, loading, uploading, loadTemplates, uploadTemplate } =
+    useTemplates({
+      fetchApi,
+    });
   const [searchQuery, setSearchQuery] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
 
@@ -77,7 +79,11 @@ function TemplatesPage() {
 
       {/* Content */}
       <div className="pb-8">
-        {filteredTemplates.length === 0 ? (
+        {loading ? (
+          <div className="bento-loading">
+            <CubeLoader />
+          </div>
+        ) : filteredTemplates.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <FileText className="w-16 h-16 mb-4 text-slate-300 dark:text-slate-600" />
             <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">

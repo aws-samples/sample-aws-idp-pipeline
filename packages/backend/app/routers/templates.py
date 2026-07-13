@@ -6,6 +6,7 @@ from app.ddb import (
     Template,
     TemplateData,
     generate_template_id,
+    get_template_item,
     put_template_item,
     query_templates,
 )
@@ -41,6 +42,7 @@ class TemplateResponse(BaseModel):
     template_type: str | None = None
     thumbnail_url: str | None = None
     status: str
+    generated_prompt: str | None = None
     created_at: str
 
     @staticmethod
@@ -52,6 +54,7 @@ class TemplateResponse(BaseModel):
             template_type=template.data.template_type,
             thumbnail_url=template.data.thumbnail_url,
             status=template.data.status,
+            generated_prompt=template.data.generated_prompt,
             created_at=template.created_at,
         )
 
@@ -61,6 +64,15 @@ def list_templates() -> list[TemplateResponse]:
     """List all templates (global, newest first)."""
     templates = query_templates()
     return [TemplateResponse.from_template(template) for template in templates]
+
+
+@router.get("/{template_id}")
+def get_template(template_id: str) -> TemplateResponse:
+    """Get a single template by id."""
+    template = get_template_item(template_id)
+    if template is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return TemplateResponse.from_template(template)
 
 
 @router.post("")
