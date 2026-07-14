@@ -29,6 +29,7 @@ from app.ddb.projects import (
     update_project_data,
 )
 from app.ddb.templates import (
+    delete_template_item,
     get_template_item,
     put_template_item,
     query_templates,
@@ -71,6 +72,7 @@ __all__ = [
     "query_templates",
     "get_template_item",
     "put_template_item",
+    "delete_template_item",
     # workflows
     "get_workflow_item",
     "query_workflows",

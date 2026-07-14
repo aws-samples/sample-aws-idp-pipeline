@@ -132,9 +132,11 @@ class TemplateData(BaseModel):
     template_id: str
     name: str
     description: str
-    file_type: str
+    template_type: str | None = None
     s3_key: str
-    thumbnail_url: str | None = None
+    # S3 key of the generated thumbnail (bucket is the document storage bucket),
+    # set by the analysis pipeline. Served to clients via the thumbnail proxy.
+    thumbnail_s3_key: str | None = None
     status: str
     generated_prompt: str | None = None
     created_by: str | None = None

@@ -38,3 +38,8 @@ def get_template_item(template_id: str) -> Template | None:
     response = table.get_item(Key=make_template_key(template_id))
     item = response.get("Item")
     return Template(**item) if item else None
+
+
+def delete_template_item(template_id: str) -> None:
+    table = get_table()
+    table.delete_item(Key=make_template_key(template_id))

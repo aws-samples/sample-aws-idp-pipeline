@@ -6,6 +6,9 @@ import type { TemplateUploadData } from '../components/TemplateUploadModal';
 const EXT_MIME: Record<string, string> = {
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   ppt: 'application/vnd.ms-powerpoint',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  doc: 'application/msword',
+  pdf: 'application/pdf',
 };
 
 const getMimeType = (file: File): string => {
@@ -20,7 +23,7 @@ interface UseTemplatesOptions {
 
 export function useTemplates({ fetchApi }: UseTemplatesOptions) {
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
   const loadTemplates = useCallback(async () => {

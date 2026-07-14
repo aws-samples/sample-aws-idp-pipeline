@@ -205,7 +205,7 @@ export default function TemplateUploadModal({
                   id="template-upload-input"
                   ref={fileInputRef}
                   type="file"
-                  accept=".pptx,.ppt"
+                  accept=".pptx,.ppt,.docx,.doc,.pdf"
                   className="hidden"
                   onChange={handleFileSelect}
                   disabled={uploading}
