@@ -39,7 +39,7 @@ export function useTemplates({ fetchApi }: UseTemplatesOptions) {
   }, [fetchApi]);
 
   const uploadTemplate = useCallback(
-    async (data: TemplateUploadData) => {
+    async (data: TemplateUploadData): Promise<string> => {
       setUploading(true);
       try {
         const contentType = getMimeType(data.file);
@@ -69,7 +69,7 @@ export function useTemplates({ fetchApi }: UseTemplatesOptions) {
           throw new Error(`Failed to upload ${data.file.name} to S3`);
         }
 
-        await loadTemplates();
+        return uploadInfo.template_id;
       } catch (error) {
         console.error('Failed to upload template:', error);
         throw error;
@@ -77,7 +77,7 @@ export function useTemplates({ fetchApi }: UseTemplatesOptions) {
         setUploading(false);
       }
     },
-    [fetchApi, loadTemplates],
+    [fetchApi],
   );
 
   return {

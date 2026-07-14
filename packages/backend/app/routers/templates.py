@@ -171,7 +171,7 @@ def create_template_upload(request: TemplateUploadRequest) -> TemplateUploadResp
         description=request.description,
         template_type=template_type,
         s3_key=s3_key,
-        status="uploading",
+        status="uploaded",
     )
     put_template_item(template_id, data)
 
@@ -202,11 +202,11 @@ def delete_template(template_id: str) -> None:
     if template is None:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    # TODO: If the template is still being analyzed ("uploading" / "analyzing"),
-    # stop the in-flight analysis before deleting its data (e.g. abort the
-    # Step Functions execution / cancel the analysis job) so it does not keep
-    # running and re-write the record we are about to remove.
-    if template.data.status in ("uploading", "analyzing"):
+    # TODO: If the template is still being analyzed ("analyzing"), stop the
+    # in-flight analysis before deleting its data (e.g. abort the Step Functions
+    # execution / cancel the analysis job) so it does not keep running and
+    # re-write the record we are about to remove.
+    if template.data.status == "analyzing":
         pass
 
     # Delete every object under templates/{template_id}/ (original file,

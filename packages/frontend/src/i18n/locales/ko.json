@@ -508,6 +508,7 @@
     "backToList": "템플릿 목록으로",
     "notFound": "템플릿을 찾을 수 없습니다",
     "generatedPrompt": "생성된 프롬프트",
+    "statusUploaded": "업로드 됨",
     "statusAnalyzing": "분석 중",
     "statusCompleted": "완료",
     "statusFailed": "실패",

@@ -1,4 +1,8 @@
-export type TemplateStatus = 'uploading' | 'analyzing' | 'completed' | 'failed';
+export type TemplateStatus =
+  | 'uploaded'
+  | 'analyzing'
+  | 'completed'
+  | 'failed';
 
 // Matches the backend TemplateResponse (GET /templates/{id}).
 export interface TemplateDetail {

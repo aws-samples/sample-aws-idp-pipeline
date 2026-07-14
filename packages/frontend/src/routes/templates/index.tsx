@@ -30,8 +30,12 @@ function TemplatesPage() {
   }, [loadTemplates]);
 
   const handleUpload = async (data: TemplateUploadData) => {
-    await uploadTemplate(data);
+    const templateId = await uploadTemplate(data);
     setShowUploadModal(false);
+    navigate({
+      to: '/templates/$templateId',
+      params: { templateId },
+    });
   };
 
   const filteredTemplates = templates.filter(

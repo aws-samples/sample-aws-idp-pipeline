@@ -508,6 +508,7 @@
     "backToList": "Back to Templates",
     "notFound": "Template not found",
     "generatedPrompt": "Generated Prompt",
+    "statusUploaded": "Uploaded",
     "statusAnalyzing": "Analyzing",
     "statusCompleted": "Completed",
     "statusFailed": "Failed",

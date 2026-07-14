@@ -508,6 +508,7 @@
     "backToList": "テンプレート一覧へ",
     "notFound": "テンプレートが見つかりません",
     "generatedPrompt": "生成されたプロンプト",
+    "statusUploaded": "アップロード済み",
     "statusAnalyzing": "分析中",
     "statusCompleted": "完了",
     "statusFailed": "失敗",
