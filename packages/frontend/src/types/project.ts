@@ -220,9 +220,3 @@ export interface ArtifactsResponse {
   items: Artifact[];
   next_cursor: string | null;
 }
-
-export interface TemplateUploadResponse {
-  template_id: string;
-  upload_url: string;
-  file_name: string;
-}

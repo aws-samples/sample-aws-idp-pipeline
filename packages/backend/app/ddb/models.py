@@ -128,26 +128,6 @@ class SegmentAnalysis(BaseModel):
     ai_analysis: list[AIAnalysis] = []
 
 
-class TemplateData(BaseModel):
-    template_id: str
-    name: str
-    description: str
-    template_type: str | None = None
-    s3_key: str
-    # S3 key of the generated thumbnail (bucket is the document storage bucket),
-    # set by the analysis pipeline. Served to clients via the thumbnail proxy.
-    thumbnail_s3_key: str | None = None
-    status: str
-    generated_prompt: str | None = None
-    created_by: str | None = None
-
-
-class Template(BaseModel):
-    data: TemplateData
-    created_at: str
-    updated_at: str
-
-
 class ArtifactData(BaseModel):
     user_id: str
     project_id: str

@@ -1,7 +1,6 @@
 from app.ddb.client import (
     batch_delete_items,
     generate_project_id,
-    generate_template_id,
     get_table,
     now_iso,
 )
@@ -17,8 +16,6 @@ from app.ddb.models import (
     DocumentData,
     Project,
     ProjectData,
-    Template,
-    TemplateData,
 )
 from app.ddb.projects import (
     get_project_item,
@@ -27,12 +24,6 @@ from app.ddb.projects import (
     query_all_project_items,
     query_projects,
     update_project_data,
-)
-from app.ddb.templates import (
-    delete_template_item,
-    get_template_item,
-    put_template_item,
-    query_templates,
 )
 from app.ddb.workflows import (
     delete_workflow_item,
@@ -47,14 +38,11 @@ __all__ = [
     "now_iso",
     "batch_delete_items",
     "generate_project_id",
-    "generate_template_id",
     # models
     "Project",
     "ProjectData",
     "Document",
     "DocumentData",
-    "Template",
-    "TemplateData",
     # projects
     "query_projects",
     "get_project_item",
@@ -68,11 +56,6 @@ __all__ = [
     "update_document_data",
     "query_documents",
     "delete_document_item",
-    # templates
-    "query_templates",
-    "get_template_item",
-    "put_template_item",
-    "delete_template_item",
     # workflows
     "get_workflow_item",
     "query_workflows",

@@ -30,7 +30,6 @@
   "nav": {
     "projects": "Projects",
     "artifacts": "Artifacts",
-    "templates": "Templates",
     "settings": "Settings",
     "logout": "Logout",
     "greeting": "Hi, {{name}}",
@@ -488,37 +487,6 @@
     "deleteAgent": "Delete Agent",
     "deleteConfirmMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
     "notFound": "Agent \"{{name}}\" not found. Using default agent."
-  },
-  "templates": {
-    "heroTag": "Templates",
-    "heroTitle": "Reference documents that shape the look and structure of generated files",
-    "heroDescription": "Upload documents like PPTX to use as templates when generating files through skills.\nThe AI references their theme and structure to create documents with a consistent style.",
-    "searchPlaceholder": "Search templates...",
-    "newTemplate": "New Template",
-    "noTemplates": "No templates yet",
-    "noTemplatesDescription": "Templates you create will appear here.",
-    "uploadTemplate": "Upload Template",
-    "supportedFormats": "PPT, PPTX, DOC, DOCX, PDF",
-    "templateName": "Name",
-    "templateNamePlaceholder": "e.g. Business Proposal Deck",
-    "templateDescription": "Description",
-    "templateDescriptionPlaceholder": "Describe the theme and structure of this template..."
-  },
-  "templateDetail": {
-    "backToList": "Back to Templates",
-    "notFound": "Template not found",
-    "generatedPrompt": "Generated Prompt",
-    "statusAnalyzing": "Analyzing",
-    "statusCompleted": "Completed",
-    "statusFailed": "Failed",
-    "analyzingTitle": "Analyzing document...",
-    "analyzingDescription": "AI is reading the document to extract theme, structure, and style for the prompt.",
-    "failedTitle": "Analysis failed",
-    "failedDescription": "Something went wrong while analyzing this document. Please try again.",
-    "reanalyze": "Re-analyze",
-    "retry": "Retry",
-    "deleteConfirmTitle": "Delete Template",
-    "deleteConfirmMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
   },
   "artifacts": {
     "heroTag": "AI Generated Artifacts",

@@ -30,7 +30,6 @@
   "nav": {
     "projects": "프로젝트",
     "artifacts": "아티팩트",
-    "templates": "템플릿",
     "settings": "설정",
     "logout": "로그아웃",
     "greeting": "안녕하세요, {{name}}님",
@@ -488,37 +487,6 @@
     "deleteAgent": "에이전트 삭제",
     "deleteConfirmMessage": "\"{{name}}\"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
     "notFound": "\"{{name}}\" 에이전트를 찾을 수 없습니다. 기본 에이전트를 사용합니다."
-  },
-  "templates": {
-    "heroTag": "템플릿",
-    "heroTitle": "생성 문서의 테마와 구조를 결정하는 참조 문서",
-    "heroDescription": "PPTX 등의 문서를 템플릿으로 업로드하면 스킬을 통해 문서를 생성할 때 활용됩니다.\nAI가 템플릿의 테마와 구조를 참조하여 일관된 스타일의 문서를 만들어 줍니다.",
-    "searchPlaceholder": "템플릿 검색...",
-    "newTemplate": "새 템플릿",
-    "noTemplates": "아직 템플릿이 없습니다",
-    "noTemplatesDescription": "생성한 템플릿이 여기에 표시됩니다.",
-    "uploadTemplate": "템플릿 업로드",
-    "supportedFormats": "PPT, PPTX, DOC, DOCX, PDF",
-    "templateName": "이름",
-    "templateNamePlaceholder": "예: 사업 제안서 덱",
-    "templateDescription": "설명",
-    "templateDescriptionPlaceholder": "이 템플릿의 테마와 구조를 설명하세요..."
-  },
-  "templateDetail": {
-    "backToList": "템플릿 목록으로",
-    "notFound": "템플릿을 찾을 수 없습니다",
-    "generatedPrompt": "생성된 프롬프트",
-    "statusAnalyzing": "분석 중",
-    "statusCompleted": "완료",
-    "statusFailed": "실패",
-    "analyzingTitle": "문서를 분석하고 있습니다...",
-    "analyzingDescription": "AI가 문서의 테마, 구조, 스타일을 파악하여 프롬프트를 생성합니다.",
-    "failedTitle": "분석에 실패했습니다",
-    "failedDescription": "문서를 분석하는 중 문제가 발생했습니다. 다시 시도해 주세요.",
-    "reanalyze": "재분석",
-    "retry": "재시도",
-    "deleteConfirmTitle": "템플릿 삭제",
-    "deleteConfirmMessage": "\"{{name}}\"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
   },
   "artifacts": {
     "heroTag": "AI Generated Artifacts",

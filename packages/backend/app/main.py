@@ -12,7 +12,6 @@ from app.routers import (
     projects,
     prompts,
     sagemaker,
-    templates,
     workflows,
 )
 
@@ -29,7 +28,6 @@ app = FastAPI(
         {"name": "sagemaker", "description": "SageMaker 엔드포인트 관리"},
         {"name": "graph", "description": "지식 그래프 관리"},
         {"name": "datasets", "description": "정형 데이터셋 조회"},
-        {"name": "templates", "description": "템플릿 관리"},
     ]
 )
 
@@ -51,5 +49,4 @@ app.include_router(health.router)
 app.include_router(projects.router)
 app.include_router(prompts.router)
 app.include_router(sagemaker.router)
-app.include_router(templates.router)
 app.include_router(workflows.router)

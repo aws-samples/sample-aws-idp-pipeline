@@ -30,7 +30,6 @@
   "nav": {
     "projects": "プロジェクト",
     "artifacts": "アーティファクト",
-    "templates": "テンプレート",
     "settings": "設定",
     "logout": "ログアウト",
     "greeting": "こんにちは、{{name}}さん",
@@ -488,37 +487,6 @@
     "deleteAgent": "エージェント削除",
     "deleteConfirmMessage": "「{{name}}」を削除しますか？この操作は取り消せません。",
     "notFound": "「{{name}}」エージェントが見つかりません。デフォルトエージェントを使用します。"
-  },
-  "templates": {
-    "heroTag": "テンプレート",
-    "heroTitle": "生成ドキュメントのテーマと構造を決定する参照ドキュメント",
-    "heroDescription": "PPTXなどのドキュメントをテンプレートとしてアップロードすると、スキルを通じてドキュメントを生成する際に活用されます。\nAIがテンプレートのテーマと構造を参照し、一貫したスタイルのドキュメントを作成します。",
-    "searchPlaceholder": "テンプレートを検索...",
-    "newTemplate": "新規テンプレート",
-    "noTemplates": "テンプレートがまだありません",
-    "noTemplatesDescription": "作成したテンプレートがここに表示されます。",
-    "uploadTemplate": "テンプレートをアップロード",
-    "supportedFormats": "PPT, PPTX, DOC, DOCX, PDF",
-    "templateName": "名前",
-    "templateNamePlaceholder": "例：事業提案書デッキ",
-    "templateDescription": "説明",
-    "templateDescriptionPlaceholder": "このテンプレートのテーマと構造を説明してください..."
-  },
-  "templateDetail": {
-    "backToList": "テンプレート一覧へ",
-    "notFound": "テンプレートが見つかりません",
-    "generatedPrompt": "生成されたプロンプト",
-    "statusAnalyzing": "分析中",
-    "statusCompleted": "完了",
-    "statusFailed": "失敗",
-    "analyzingTitle": "ドキュメントを分析中...",
-    "analyzingDescription": "AIがドキュメントのテーマ、構造、スタイルを把握してプロンプトを生成しています。",
-    "failedTitle": "分析に失敗しました",
-    "failedDescription": "ドキュメントの分析中に問題が発生しました。再試行してください。",
-    "reanalyze": "再分析",
-    "retry": "リトライ",
-    "deleteConfirmTitle": "テンプレート削除",
-    "deleteConfirmMessage": "「{{name}}」を削除しますか？この操作は取り消せません。"
   },
   "artifacts": {
     "heroTag": "AI Generated Artifacts",

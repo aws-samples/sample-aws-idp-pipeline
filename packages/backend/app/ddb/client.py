@@ -36,10 +36,6 @@ def generate_project_id() -> str:
     return f"proj_{generate_nanoid()}"
 
 
-def generate_template_id() -> str:
-    return f"tpl_{generate_nanoid()}"
-
-
 def batch_delete_items(items: list[DdbKey]) -> None:
     """Batch delete items from DynamoDB."""
     table = get_table()
