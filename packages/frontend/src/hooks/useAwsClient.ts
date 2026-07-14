@@ -278,7 +278,34 @@ export function useAwsClient() {
         throw new Error(`API error: ${response.status}`);
       }
 
-      return response.json();
+      // 본문 없는 응답(예: 204 DELETE, 202 reanalyze)은 파싱하지 않고 undefined
+      // 반환. Content-Length 헤더는 신뢰할 수 없어 실제 본문을 읽어 판단한다.
+      const text = await response.text();
+      return text ? (JSON.parse(text) as T) : (undefined as T);
+    },
+    [apis, createAwsClient, user],
+  );
+
+  /** Backend API 호출 (Blob 응답 - 이미지 등 바이너리) */
+  const fetchApiBlob = useCallback(
+    async (path: string, options?: RequestInit): Promise<Blob> => {
+      if (!apis?.Backend) throw new Error('Backend API URL not available');
+      if (!user?.id_token) throw new Error('User token not available');
+
+      const client = await createAwsClient('execute-api');
+      const headers = new Headers(options?.headers);
+      headers.set('X-User-Id', user.profile?.['cognito:username'] as string);
+
+      const response = await client.fetch(`${apis.Backend}${path}`, {
+        ...options,
+        headers,
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      return response.blob();
     },
     [apis, createAwsClient, user],
   );
@@ -400,6 +427,7 @@ export function useAwsClient() {
 
   return {
     fetchApi,
+    fetchApiBlob,
     uploadToS3,
     invokeAgent,
     getPresignedDownloadUrl,

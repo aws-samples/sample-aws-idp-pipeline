@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { FileText } from 'lucide-react';
+import TemplateThumbnail from './TemplateThumbnail';
 
 export interface Template {
   template_id: string;
@@ -42,18 +43,11 @@ function TemplateCard({ template, onClick }: TemplateCardProps) {
     >
       {/* Thumbnail */}
       <div className="relative aspect-[4/3] overflow-hidden bg-slate-100 dark:bg-slate-800">
-        {template.thumbnail_url ? (
-          <img
-            src={template.thumbnail_url}
-            alt={template.name}
-            loading="lazy"
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900">
-            <FileText className="w-12 h-12 text-slate-300 dark:text-slate-600" />
-          </div>
-        )}
+        <TemplateThumbnail
+          thumbnailUrl={template.thumbnail_url}
+          alt={template.name}
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
         {template.template_type && (
           <span
             className={`absolute top-3 left-3 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white rounded-md ${

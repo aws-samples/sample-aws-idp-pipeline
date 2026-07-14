@@ -24,3 +24,49 @@ run = "pnpm nx release --dry-run"
 [tasks.docker-prune]
 description = "Prune docker images older than 5 hours"
 run = "docker image prune -a --filter 'until=5h' -f"
+
+[tasks.ws-template]
+description = "Send a test `template` WebSocket message via the SQS broker (status|prompt)"
+# Usage:
+#   mise run ws-template <templateId> status <completed|analyzing|failed|uploading>
+#   mise run ws-template <templateId> prompt "<generated prompt text>"
+# QUEUE_URL env overrides the default queue. Region is derived from the URL host
+# so a shell-level AWS_REGION does not cause a NonExistentQueue mismatch.
+usage = '''
+arg "templateId" help="Template id, e.g. tpl_GgxYMHNGQp4lTbIjRyaku"
+arg "kind" help="status | prompt"
+arg "value" help="status value, or generated prompt text"
+'''
+run = """
+set -euo pipefail
+
+QUEUE_URL="${QUEUE_URL:-https://sqs.us-east-1.amazonaws.com/975050239358/idp-v2-websocket-message-queue}"
+REGION="$(echo "$QUEUE_URL" | sed -n 's#^https://sqs\\.\\([^.]*\\)\\..*#\\1#p')"
+REGION="${REGION:-us-east-1}"
+
+TEMPLATE_ID="$usage_template_id"
+KIND="$usage_kind"
+VALUE="$usage_value"
+
+TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+case "$KIND" in
+  status)
+    DATA="$(jq -nc --arg tid "$TEMPLATE_ID" --arg status "$VALUE" --arg ts "$TS" \
+      '{event:"status_changed", templateId:$tid, status:$status, timestamp:$ts}')"
+    ;;
+  prompt)
+    DATA="$(jq -nc --arg tid "$TEMPLATE_ID" --arg prompt "$VALUE" --arg ts "$TS" \
+      '{event:"updated", templateId:$tid, status:"completed", generated_prompt:$prompt, timestamp:$ts}')"
+    ;;
+  *)
+    echo "Unknown kind: $KIND (expected 'status' or 'prompt')" >&2
+    exit 1
+    ;;
+esac
+
+BODY="$(jq -nc --argjson data "$DATA" '{username:null, message:{action:"template", data:$data}}')"
+
+echo "Sending: $BODY"
+aws sqs send-message --region "$REGION" --queue-url "$QUEUE_URL" --message-body "$BODY"
+"""

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -11,10 +11,17 @@ import {
   Trash2,
   Download,
 } from 'lucide-react';
-import type { TemplateDetail, TemplateStatus } from '../../types/template';
+import type {
+  TemplateDetail,
+  TemplateStatus,
+  TemplateMessageData,
+  TemplateDownload,
+} from '../../types/template';
 import { useAwsClient } from '../../hooks/useAwsClient';
+import { useWebSocketMessage } from '../../contexts/WebSocketContext';
 import CubeLoader from '../../components/CubeLoader';
 import ConfirmModal from '../../components/ConfirmModal';
+import TemplateThumbnail from '../../components/TemplateThumbnail';
 
 export const Route = createFileRoute('/templates/$templateId')({
   component: TemplateDetailPage,
@@ -56,11 +63,14 @@ function TemplateDetailPage() {
   const { t, i18n } = useTranslation();
   const { templateId } = Route.useParams();
   const { fetchApi } = useAwsClient();
+  const navigate = useNavigate();
   const [template, setTemplate] = useState<TemplateDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const loadTemplate = useCallback(async () => {
     setLoading(true);
@@ -77,6 +87,36 @@ function TemplateDetailPage() {
   useEffect(() => {
     loadTemplate();
   }, [loadTemplate]);
+
+  // WebSocket `template` action handler — merges partial patches into state so
+  // status/prompt/thumbnail update live as backend analysis progresses.
+  const handleTemplateMessage = useCallback(
+    (data: TemplateMessageData) => {
+      if (data.templateId !== templateId) return;
+
+      console.log('[template] ws message', data);
+
+      setTemplate((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          ...(data.status !== undefined ? { status: data.status } : {}),
+          ...(data.template_type !== undefined
+            ? { template_type: data.template_type }
+            : {}),
+          ...(data.thumbnail_url !== undefined
+            ? { thumbnail_url: data.thumbnail_url }
+            : {}),
+          ...(data.generated_prompt !== undefined
+            ? { generated_prompt: data.generated_prompt }
+            : {}),
+        };
+      });
+    },
+    [templateId],
+  );
+
+  useWebSocketMessage('template', handleTemplateMessage);
 
   if (loading) {
     return (
@@ -119,17 +159,42 @@ function TemplateDetailPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const { download_url } = await fetchApi<TemplateDownload>(
+        `templates/${templateId}/download`,
+      );
+      // ResponseContentDisposition on the presigned URL forces the download
+      // with the original filename, so navigating to it is enough.
+      window.location.href = download_url;
+    } catch (error) {
+      console.error('Failed to download template:', error);
+    }
+    setDownloading(false);
+  };
+
   const handleReanalyze = async () => {
     setReanalyzing(true);
-    // TODO: Replace with API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      await fetchApi(`templates/${templateId}/reanalyze`, { method: 'POST' });
+      await loadTemplate();
+    } catch (error) {
+      console.error('Failed to reanalyze template:', error);
+    }
     setReanalyzing(false);
   };
 
   const handleDelete = async () => {
-    // TODO: Replace with API call
-    console.log('Delete template:', templateId);
-    setShowDeleteModal(false);
+    setDeleting(true);
+    try {
+      await fetchApi(`templates/${templateId}`, { method: 'DELETE' });
+      setShowDeleteModal(false);
+      navigate({ to: '/templates' });
+    } catch (error) {
+      console.error('Failed to delete template:', error);
+      setDeleting(false);
+    }
   };
 
   return (
@@ -150,28 +215,21 @@ function TemplateDetailPage() {
         {/* Thumbnail */}
         <div className="w-full lg:w-80 flex-shrink-0">
           <div className="aspect-[4/3] rounded-2xl overflow-hidden border border-black/10 dark:border-white/[0.12] bg-slate-100 dark:bg-slate-800">
-            {template.thumbnail_url ? (
-              <img
-                src={template.thumbnail_url}
-                alt={template.name}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900">
-                <FileText className="w-12 h-12 text-slate-300 dark:text-slate-600" />
-              </div>
-            )}
+            <TemplateThumbnail
+              thumbnailUrl={template.thumbnail_url}
+              alt={template.name}
+            />
           </div>
         </div>
 
         {/* Meta */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-3 mb-3">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white truncate">
-              {template.name}
-            </h1>
+          <div className="mb-2">
             <StatusBadge status={template.status} />
           </div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-3 break-words">
+            {template.name}
+          </h1>
           <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 max-w-2xl">
             {template.description}
           </p>
@@ -190,14 +248,22 @@ function TemplateDetailPage() {
 
           {/* Actions */}
           <div className="flex flex-wrap gap-2">
-            <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 border border-black/10 dark:border-white/[0.12] rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-colors">
-              <Download className="w-3.5 h-3.5" />
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 border border-black/10 dark:border-white/[0.12] rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {downloading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
               {t('common.download')}
             </button>
             <button
               onClick={handleReanalyze}
-              disabled={reanalyzing}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 border border-black/10 dark:border-white/[0.12] rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-colors disabled:opacity-50"
+              disabled={reanalyzing || isAnalyzing(template.status)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 border border-black/10 dark:border-white/[0.12] rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {reanalyzing ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -302,6 +368,7 @@ function TemplateDetailPage() {
         })}
         confirmText={t('common.delete')}
         variant="danger"
+        loading={deleting}
       />
     </div>
   );
