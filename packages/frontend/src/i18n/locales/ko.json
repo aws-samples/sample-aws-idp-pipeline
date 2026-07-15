@@ -460,7 +460,39 @@
     "graphSourcesFound": "추가 발견된 페이지 {{count}}건",
     "graphNoAdditionalSources": "추가 발견된 페이지 없음",
     "viewGraph": "그래프 보기",
-    "stop": "중지"
+    "stop": "중지",
+    "model": {
+      "select": "모델 선택",
+      "searchPlaceholder": "모델 검색...",
+      "notFound": "모델을 찾을 수 없습니다",
+      "reasoning": "추론",
+      "low": "낮음",
+      "medium": "보통",
+      "high": "높음",
+      "intelligence": "지능",
+      "speed": "속도",
+      "context": "컨텍스트",
+      "cost": "비용",
+      "contextWindow": "컨텍스트 {{value}}",
+      "priceInfo": "입력 {{input}} · 출력 {{output}}",
+      "changeTitle": "모델 변경",
+      "changeConfirm": "모델을 변경하면 새 대화가 시작됩니다. 계속할까요?"
+    },
+    "chart": {
+      "scheduled": "예정",
+      "dayGap": "{{count}}일 간격"
+    },
+    "question": {
+      "header": "선택해 주세요",
+      "confirm": "확인",
+      "next": "다음",
+      "skip": "건너뛰기",
+      "skipped": "건너뜀",
+      "answered": "응답함",
+      "answeredHint": "이 질문은 응답했습니다.",
+      "customPlaceholder": "기타...",
+      "textPlaceholder": "답변을 입력하세요..."
+    }
   },
   "viewer": {
     "zoomIn": "확대",

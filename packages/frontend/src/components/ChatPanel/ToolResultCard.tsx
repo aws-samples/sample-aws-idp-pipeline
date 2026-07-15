@@ -2,6 +2,12 @@ import { useTranslation } from 'react-i18next';
 import { Check, Eye } from 'lucide-react';
 import { getToolEntry, isRegisteredTool } from './toolRegistry';
 import { formatToolDisplayName } from './utils';
+import { ChatChartCard, parseChartSpec } from './chat-charts';
+import {
+  QuestionCard,
+  parseAskSpec,
+  formatAnswersForAgent,
+} from './QuestionCard';
 import type {
   ToolResultImage,
   ToolResultSource,
@@ -38,6 +44,10 @@ interface ToolResultCardProps {
   }) => void;
   onGraphView?: (data: GraphSearchResult) => void;
   documents?: Document[];
+  /** Send the user's answer to an ask_user question as the next message. */
+  onAnswer?: (content: string) => void;
+  /** True for restored-from-history question cards (render read-only). */
+  answered?: boolean;
 }
 
 export default function ToolResultCard({
@@ -56,6 +66,8 @@ export default function ToolResultCard({
   onViewDetails,
   onGraphView,
   documents = [],
+  onAnswer,
+  answered,
 }: ToolResultCardProps) {
   const { t } = useTranslation();
   const entry = getToolEntry(toolName, resultType === 'artifact');
@@ -63,6 +75,28 @@ export default function ToolResultCard({
   const displayName = toolName
     ? formatToolDisplayName(toolName)
     : 'Tool Result';
+
+  // render_chart tool result: draw the inline chart card instead of a pill.
+  // Degrades silently to the normal rendering if the spec doesn't validate.
+  const chartSpec = parseChartSpec(content);
+  if (chartSpec) {
+    return <ChatChartCard spec={chartSpec} />;
+  }
+
+  // ask_user tool result: draw the inline question card. On completion the
+  // answer is posted back as the user's next message (onAnswer).
+  const askSpec = parseAskSpec(content);
+  if (askSpec) {
+    return (
+      <QuestionCard
+        questions={askSpec.questions}
+        answered={answered}
+        onComplete={(answers) =>
+          onAnswer?.(formatAnswersForAgent(askSpec.questions, answers))
+        }
+      />
+    );
+  }
 
   // Build a summary label
   const summaryLabel = buildSummaryLabel(

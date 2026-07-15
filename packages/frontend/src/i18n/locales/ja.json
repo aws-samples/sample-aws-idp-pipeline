@@ -460,7 +460,39 @@
     "graphSourcesFound": "追加発見ページ {{count}}件",
     "graphNoAdditionalSources": "追加発見ページなし",
     "viewGraph": "グラフを見る",
-    "stop": "停止"
+    "stop": "停止",
+    "model": {
+      "select": "モデルを選択",
+      "searchPlaceholder": "モデルを検索...",
+      "notFound": "モデルが見つかりません",
+      "reasoning": "推論",
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "intelligence": "知能",
+      "speed": "速度",
+      "context": "コンテキスト",
+      "cost": "コスト",
+      "contextWindow": "コンテキスト {{value}}",
+      "priceInfo": "入力 {{input}} · 出力 {{output}}",
+      "changeTitle": "モデルを変更",
+      "changeConfirm": "モデルを変更すると新しい会話が始まります。続行しますか?"
+    },
+    "chart": {
+      "scheduled": "予定",
+      "dayGap": "{{count}}日間隔"
+    },
+    "question": {
+      "header": "選択してください",
+      "confirm": "確認",
+      "next": "次へ",
+      "skip": "スキップ",
+      "skipped": "スキップ",
+      "answered": "回答済み",
+      "answeredHint": "この質問は回答済みです。",
+      "customPlaceholder": "その他...",
+      "textPlaceholder": "回答を入力してください..."
+    }
   },
   "viewer": {
     "zoomIn": "拡大",

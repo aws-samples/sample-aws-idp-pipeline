@@ -43,4 +43,7 @@ export const SSM_KEYS = {
   // Lance Service
   TOKA_FUNCTION_NAME: '/idp-v2/lance-service/toka/function-name',
   LANCE_SERVICE_FUNCTION_ARN: '/idp-v2/lance-service/function-arn',
+  // Chat model catalog (operator-managed, not created by CDK). Edit this
+  // parameter to add/remove selectable chat models without redeploying.
+  CHAT_MODEL_CATALOG: '/idp-v2/chat/models',
 } as const;

@@ -136,6 +136,30 @@ def _snake_case_columns(df: "pd.DataFrame") -> "pd.DataFrame":
     return df
 
 
+def _normalize_mixed_columns(df: "pd.DataFrame") -> "pd.DataFrame":
+    """Coerce mixed-type object columns to string so Parquet conversion succeeds.
+
+    Excel/CSV columns frequently mix types in one column (e.g. Titanic's 'Ticket'
+    holds both "A/5 21171" and 349909). pandas keeps these as an object column,
+    but pyarrow infers the Arrow type from the first value and then raises
+    ArrowTypeError ("Expected bytes, got a 'int' object") on the first value of a
+    different type. We only touch object columns that actually contain more than
+    one Python type among non-null values, casting them to string. Clean
+    single-type columns (numeric, all-string) are left untouched so their Parquet
+    types stay correct for SQL. NaN is preserved (not turned into the text 'nan').
+    """
+    import pandas as pd
+
+    for col in df.columns:
+        if df[col].dtype != object:
+            continue
+        non_null = df[col].dropna()
+        types = {type(v) for v in non_null}
+        if len(types) > 1:
+            df[col] = df[col].map(lambda v: v if pd.isna(v) else str(v))
+    return df
+
+
 def _output_dir(document_key: str) -> str:
     """Directory to write parquet/reference into: a `dataset/` subfolder under the
     original document's folder.
@@ -212,6 +236,9 @@ def handler(event: dict, context) -> dict:
         # after validation, so both the Parquet and the reference doc/DDB use
         # the same normalized names.
         df = _snake_case_columns(sheet["df"])
+        # Coerce mixed-type columns to string so Parquet conversion can't fail on
+        # a column that holds e.g. both ints and strings (common in spreadsheets).
+        df = _normalize_mixed_columns(df)
 
         # parquet -> S3
         buf = io.BytesIO()
@@ -365,15 +392,16 @@ def _load_and_validate(
 def _validate_dataframe(df: pd.DataFrame) -> list[str]:
     """Lightweight validation for CSV (openpyxl checks cover Excel).
 
-    Duplicate column names are not rejected: snake_case normalization makes them
-    unique automatically (see _snake_case_columns).
+    Neither duplicate nor unnamed/empty header columns are rejected: snake_case
+    normalization gives every column a unique, valid identifier automatically
+    (see _snake_case_columns; pandas 'Unnamed: 0' -> unnamed_0, a blank header ->
+    col/col_1). Rejecting them would fail common exports (e.g. a leading index
+    column from df.to_csv()) that are otherwise perfectly tabular. No column is
+    dropped, so no data is lost.
     """
     reasons = []
     if df.empty:
         reasons.append("데이터 행이 없습니다.")
-    cols = [str(c) for c in df.columns]
-    if any(c.startswith("Unnamed:") or c.strip() == "" for c in cols):
-        reasons.append("빈 헤더 열이 있습니다.")
     return reasons
 
 
