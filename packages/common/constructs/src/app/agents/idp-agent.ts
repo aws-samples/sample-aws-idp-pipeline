@@ -1,6 +1,8 @@
 import { Construct } from 'constructs';
+import { ArnFormat, Stack } from 'aws-cdk-lib';
 import { Platform } from 'aws-cdk-lib/aws-ecr-assets';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import { SSM_KEYS } from '../../constants/ssm-keys.js';
 import { IBucket } from 'aws-cdk-lib/aws-s3';
 import { ITable } from 'aws-cdk-lib/aws-dynamodb';
 import { IQueue } from 'aws-cdk-lib/aws-sqs';
@@ -133,6 +135,22 @@ export class IdpAgent extends Construct {
           'bedrock:Rerank',
         ],
         resources: ['*'],
+      }),
+    );
+
+    // Read the operator-managed chat model catalog to validate a requested
+    // model_id against the allowlist (defense beyond the broad InvokeModel grant).
+    this.runtime.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['ssm:GetParameter'],
+        resources: [
+          Stack.of(this).formatArn({
+            service: 'ssm',
+            resource: 'parameter',
+            resourceName: SSM_KEYS.CHAT_MODEL_CATALOG.replace(/^\//, ''),
+            arnFormat: ArnFormat.SLASH_RESOURCE_NAME,
+          }),
+        ],
       }),
     );
 

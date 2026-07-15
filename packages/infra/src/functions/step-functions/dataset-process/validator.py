@@ -38,17 +38,15 @@ def validate_workbook(wb) -> list[SheetValidation]:
         if merged is not None and getattr(merged, "ranges", None):
             reasons.append("병합된 셀이 있어 표 구조가 깨집니다.")
 
-        # Header (first row) checks: needs a non-empty header row. Duplicate
-        # column names are NOT rejected: the parquet step normalizes columns to
-        # unique snake_case (e.g. material, material_1), so duplicates are handled
-        # automatically rather than being a user-fix case.
+        # Header (first row) check: only reject when the ENTIRE header row is
+        # empty (no columns at all). Individual empty/duplicate header cells are
+        # NOT rejected: the parquet step normalizes every column to a unique
+        # snake_case identifier (blank -> col/col_1, duplicates -> material,
+        # material_1), so a leading index column or a stray blank column no longer
+        # fails an otherwise-tabular sheet. No column is dropped.
         header = _first_row_values(ws)
-        if not header:
+        if not header or all(v is None or str(v).strip() == "" for v in header):
             reasons.append("헤더(첫 행)가 비어 있습니다.")
-        else:
-            empty = [i for i, v in enumerate(header) if v is None or str(v).strip() == ""]
-            if empty:
-                reasons.append("빈 헤더 열이 있습니다.")
 
         # Needs at least one data row beyond the header.
         if ws.max_row is not None and ws.max_row < 2:

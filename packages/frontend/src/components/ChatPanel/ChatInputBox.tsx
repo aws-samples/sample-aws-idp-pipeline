@@ -14,6 +14,8 @@ import {
 import { formatFileSize, getFileTypeInfo } from './utils';
 import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 import ToolsMenuPopover from './ToolsMenuPopover';
+import { ModelSelectorPrompt } from './ModelSelectorPrompt';
+import type { LlmModel, ReasoningLevel } from './ModelSelectorPrompt';
 import type {
   AttachedFile,
   Artifact,
@@ -48,6 +50,11 @@ interface ChatInputBoxProps {
   onInputChange: (value: string) => void;
   onSendMessage: (files: AttachedFile[], message?: string) => void;
   onStop?: () => void;
+  models?: readonly LlmModel[];
+  modelId?: string;
+  reasonings?: Record<string, ReasoningLevel>;
+  onModelChange?: (modelValue: string) => void;
+  onReasoningChange?: (reasonings: Record<string, ReasoningLevel>) => void;
   onAgentSelect?: (agentName: string | null) => void;
   onAgentClick: () => void;
   voiceChat: InputBoxVoiceChat;
@@ -70,6 +77,11 @@ export default function ChatInputBox({
   onInputChange,
   onSendMessage,
   onStop,
+  models,
+  modelId,
+  reasonings,
+  onModelChange,
+  onReasoningChange,
   onAgentSelect,
   onAgentClick,
   voiceChat,
@@ -660,6 +672,23 @@ export default function ChatInputBox({
                   )}
                 </div>
               )}
+
+              {/* Model selector (text chat only; voice chat picks its own model) */}
+              {!voiceChat.mode &&
+                models &&
+                models.length > 0 &&
+                modelId &&
+                onModelChange && (
+                  <ModelSelectorPrompt
+                    models={models}
+                    value={modelId}
+                    reasonings={reasonings ?? {}}
+                    onModelChange={(model) => onModelChange(model.value)}
+                    onReasoningChange={(_modelValue, _reasoning, next) =>
+                      onReasoningChange?.(next)
+                    }
+                  />
+                )}
 
               {/* Selected tool chips */}
               {(selectedAgent || voiceChat.mode) && (

@@ -105,6 +105,8 @@ async def invoke(request: dict):
         project_id=req.project_id,
         user_id=req.user_id,
         agent_id=req.agent_id,
+        model_id=req.model_id,
+        reasoning=req.reasoning,
     ) as agent:
         content = [block.to_strands() for block in req.prompt]
         stream = agent.stream_async(content)

@@ -351,6 +351,8 @@ export function useAwsClient() {
       agentId?: string,
       runtimeArn?: string,
       signal?: AbortSignal,
+      modelId?: string,
+      reasoning?: string,
     ): Promise<string> => {
       const targetArn = runtimeArn || agentRuntimeArn;
       if (!targetArn) throw new Error('Agent runtime ARN not available');
@@ -373,6 +375,8 @@ export function useAwsClient() {
             project_id: projectId,
             user_id: user.profile?.['cognito:username'] as string,
             agent_id: agentId,
+            ...(modelId ? { model_id: modelId } : {}),
+            ...(reasoning ? { reasoning } : {}),
           }),
           // Aborting closes the HTTP stream, which the agent runtime turns into
           // a cancellation of the in-progress invocation.

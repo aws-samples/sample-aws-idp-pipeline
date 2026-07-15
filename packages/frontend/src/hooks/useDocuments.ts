@@ -60,6 +60,9 @@ export function useDocuments({
   const [workflowProgressMap, setWorkflowProgressMap] = useState<
     Record<string, WorkflowProgress>
   >({});
+  // Mirror of workflowProgressMap for reading the current tracked docs outside
+  // a state updater (kept in sync via the effect below).
+  const workflowProgressMapRef = useRef<Record<string, WorkflowProgress>>({});
   const [uploading, setUploading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -84,6 +87,12 @@ export function useDocuments({
     }, delayMs);
     deferredTimersRef.current.add(id);
   }, []);
+
+  // Keep the ref in sync so async callbacks can read the current tracked docs
+  // without doing side effects inside a state updater.
+  useEffect(() => {
+    workflowProgressMapRef.current = workflowProgressMap;
+  }, [workflowProgressMap]);
 
   const loadDocuments = useCallback(async () => {
     try {
@@ -153,10 +162,38 @@ export function useDocuments({
             }
           >;
         }[]
-      >(`projects/${projectId}/documents/progress`);
+      >(`projects/${projectId}/documents/progress?active_only=true`);
+
+      // Server returns ONLY active (non-terminal) workflows here. Build the map
+      // from them, and drop any previously-tracked doc that is now absent -
+      // absence means the workflow reached a terminal state (even if we missed
+      // the WebSocket completion event), so it should stop showing as in
+      // progress. Dropped docs get a doc/workflow refresh to reflect the final
+      // status. qa_regen entries are kept even if absent (post-completion work).
+      const activeIds = new Set(progressData.map((p) => p.document_id));
+
+      // Detect vanished (now-terminal) tracked docs from the ref, OUTSIDE the
+      // state updater, so the updater stays pure (updaters may be deferred or
+      // re-run in Strict Mode; side effects there are unreliable).
+      const prevMap = workflowProgressMapRef.current;
+      const vanished = Object.entries(prevMap)
+        .filter(
+          ([docId, entry]) =>
+            !activeIds.has(docId) && entry.qaRegen?.status !== 'in_progress',
+        )
+        .map(([docId]) => docId);
 
       setWorkflowProgressMap((prev) => {
-        const newMap = { ...prev };
+        const newMap: Record<string, WorkflowProgress> = {};
+
+        // Carry over entries that are still active or have qa_regen running.
+        for (const [docId, entry] of Object.entries(prev)) {
+          if (activeIds.has(docId)) continue; // rebuilt below from fresh data
+          if (entry.qaRegen?.status === 'in_progress') {
+            newMap[docId] = entry;
+          }
+        }
+
         for (const progress of progressData) {
           const doc = documents.find(
             (d) => d.document_id === progress.document_id,
@@ -201,6 +238,13 @@ export function useDocuments({
         }
         return newMap;
       });
+
+      // A tracked workflow that dropped out of the active list finished while we
+      // weren't looking - refresh docs/workflows so its terminal status shows.
+      if (vanished.length > 0) {
+        loadDocumentsRef.current();
+        loadWorkflowsRef.current();
+      }
     } catch (error) {
       console.error('Failed to fetch document progress:', error);
     }

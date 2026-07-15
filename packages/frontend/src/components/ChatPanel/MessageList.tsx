@@ -37,6 +37,8 @@ interface MessageListProps {
   onGraphView?: (data: GraphSearchResult) => void;
   documents: Document[];
   chatEndRef: React.RefObject<HTMLDivElement | null>;
+  /** Post an ask_user answer back as the user's next message. */
+  onAnswer?: (content: string) => void;
 }
 
 export default function MessageList({
@@ -56,6 +58,7 @@ export default function MessageList({
   onGraphView,
   documents,
   chatEndRef,
+  onAnswer,
 }: MessageListProps) {
   const { t } = useTranslation();
 
@@ -98,6 +101,8 @@ export default function MessageList({
             onViewDetails={onViewDetails}
             onGraphView={onGraphView}
             documents={documents}
+            onAnswer={onAnswer}
+            answered={message.id.startsWith('history-')}
           />
         ) : message.isStageResult ? (
           <StageResult key={message.id} message={message} />
@@ -187,6 +192,7 @@ export default function MessageList({
                     onViewDetails={onViewDetails}
                     onGraphView={onGraphView}
                     documents={documents}
+                    onAnswer={onAnswer}
                   />
                 );
               }

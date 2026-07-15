@@ -74,3 +74,7 @@ class InvokeRequest(BaseModel):
     project_id: str
     user_id: str | None = None
     agent_id: str | None = None
+    # Optional per-turn model override. model_id is passed straight to Bedrock
+    # (the runtime IAM role gates access); reasoning maps to output_config.effort.
+    model_id: str | None = None
+    reasoning: str | None = None

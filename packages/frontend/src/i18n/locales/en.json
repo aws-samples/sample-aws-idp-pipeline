@@ -460,7 +460,39 @@
     "graphSourcesFound": "{{count}} additional pages discovered",
     "graphNoAdditionalSources": "No additional pages discovered",
     "viewGraph": "View graph",
-    "stop": "Stop"
+    "stop": "Stop",
+    "model": {
+      "select": "Select model",
+      "searchPlaceholder": "Search models...",
+      "notFound": "No models found",
+      "reasoning": "Reasoning",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "intelligence": "Intelligence",
+      "speed": "Speed",
+      "context": "Context",
+      "cost": "Cost",
+      "contextWindow": "{{value}} context window",
+      "priceInfo": "{{input}} input · {{output}} output",
+      "changeTitle": "Change model",
+      "changeConfirm": "Changing the model starts a new conversation. Continue?"
+    },
+    "chart": {
+      "scheduled": "Scheduled",
+      "dayGap": "{{count}}d gap"
+    },
+    "question": {
+      "header": "Please choose",
+      "confirm": "Confirm",
+      "next": "Next",
+      "skip": "Skip",
+      "skipped": "skipped",
+      "answered": "answered",
+      "answeredHint": "This question was answered.",
+      "customPlaceholder": "Other...",
+      "textPlaceholder": "Type your answer..."
+    }
   },
   "viewer": {
     "zoomIn": "Zoom In",
