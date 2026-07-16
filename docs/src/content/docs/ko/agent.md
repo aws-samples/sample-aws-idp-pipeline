@@ -9,9 +9,9 @@ description: "Strands SDK 기반 AI 에이전트 아키텍처와 역할"
 
 | 에이전트 | 역할 | 모델 | 인터페이스 |
 |---|---|---|---|
-| **IDP Agent** | 문서 분석, 검색, 아티팩트 생성 | Claude Opus 4.6 | HTTP 스트리밍 |
+| **IDP Agent** | 문서 분석, 검색, 아티팩트 생성 | Claude Opus 4.8 (기본값) | HTTP 스트리밍 |
 | **Voice Agent** | 실시간 양방향 음성 대화 | Nova Sonic | WebSocket |
-| **Web Crawler Agent** | 웹 페이지 크롤링 및 콘텐츠 추출 | Claude Sonnet 4.6 | SQS 트리거 |
+| **Web Crawler Agent** | 웹 페이지 크롤링 및 콘텐츠 추출 | Claude Sonnet 5 | SQS 트리거 |
 
 ## 공통 아키텍처
 

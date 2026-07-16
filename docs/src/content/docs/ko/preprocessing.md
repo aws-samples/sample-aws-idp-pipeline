@@ -40,6 +40,9 @@ Type Detection Lambda
 | 텍스트 | `.txt` `.md` | - | - | - | A | - |
 | 웹 | `.webreq` | - | - | - | - | A |
 | CAD | `.dxf` | - | - | - | A | - |
+| 정형 데이터 | `.xlsx` `.xls` `.csv` `.tsv` | - | - | - | - | - |
+
+> 정형 데이터(엑셀/CSV)는 문서 분석 파이프라인 대신 **전용 dataset 브랜치**(검증 → Parquet 변환 → 레퍼런스 문서 → DATASET# 기록)를 탑니다. 아래 "정형 데이터" 상세 흐름 참고.
 
 - **A** (Automatic): 기본 활성화 (자동 실행)
 - **O** (Optional): 문서 업로드 시 사용자가 선택적으로 활성화
@@ -300,6 +303,31 @@ Type Detection
 | 이미지 | 레이아웃별 PNG (`format-parser/slides/layout_XXXX.png`) |
 | 자동 전처리 | Format Parser |
 | 추출 항목 | TEXT, MTEXT, ATTRIB, DIMENSION 엔티티 + 레이어/블록 메타데이터 |
+
+### 정형 데이터 (XLSX/XLS/CSV/TSV)
+
+엑셀/CSV는 문서 분석 대신 Text2SQL 질의를 위한 **정형 데이터셋**으로 처리됩니다. Type Detection이 `processing_type='dataset'`으로 라우팅하면 Step Functions 시작점의 IsDataset 분기에서 전용 브랜치를 탑니다.
+
+```
+XLSX/CSV 업로드
+  ↓
+Type Detection (processing_type='dataset')
+  └─ Workflow Queue → Step Functions → IsDataset 분기
+      └─ DatasetProcess (단일 Lambda)
+          ├─ 1. 검증: 표 형태 여부 확인 (병합 셀/이미지/차트 → reject)
+          ├─ 2. 시트별 Parquet 변환 (컬럼명 snake_case 정규화)
+          ├─ 3. 레퍼런스 문서 생성 (Bedrock: 스키마/샘플/쿼리 예시)
+          └─ 4. DATASET# 기록 + 카탈로그 인덱싱 (검색용)
+```
+
+| 항목 | 값 |
+|------|-----|
+| 출력 | `.../documents/{document_id}/dataset/{dataset_id}.parquet` + `.txt` (레퍼런스) |
+| 식별자 | `{document_id}` (단일 시트) 또는 `{document_id}__{sheet_index}` (멀티 시트) |
+| 질의 | Data MCP (`search_datasets` / `describe_dataset` / `run_sql`)로 채팅에서 SQL 질의 |
+| 검증 실패 | 워크플로우 상태 `needs_user_fix` + 사유 (표 형태로 정리 후 재업로드 안내) |
+
+> 멀티 시트는 각 시트가 개별 DATASET#로 처리됩니다. 이름없는 인덱스 열이나 혼합 타입 컬럼은 자동 정규화되어 데이터 손실 없이 변환됩니다.
 
 ---
 

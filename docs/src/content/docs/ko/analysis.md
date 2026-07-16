@@ -23,8 +23,8 @@ Segment Analyzer는 Strands SDK 기반의 **ReAct(Reasoning + Acting) 에이전�
   Segment Builder (모든 결과 병합 → S3 세그먼트 JSON)
        ↓
   Segment Analyzer (ReAct Agent)
-  ├─ 문서/이미지 → Claude Sonnet 4.6 + 이미지 분석 도구
-  └─ 영상/음성   → Claude Sonnet 4.6 + Pegasus 영상 분석 도구
+  ├─ 문서/이미지 → Claude Sonnet 5 + 이미지 분석 도구
+  └─ 영상/음성   → Claude Sonnet 5 + Pegasus 영상 분석 도구
        ↓
   Analysis Finalizer → SQS → LanceDB Writer
        ↓
@@ -110,13 +110,13 @@ Segment Analyzer는 **반복적 질문-응답** 방식으로 분석합니다. �
 에이전트가 컨텍스트 확인
   → "이 문서가 어떤 유형인지 확인해야겠다"
     → analyze_image("이 문서의 유형과 구조는?") 호출
-      → Claude Sonnet 4.6이 이미지를 보고 응답
+      → Claude Sonnet 5이 이미지를 보고 응답
   → "테이블이 있으니 자세히 분석해야겠다"
     → analyze_image("테이블의 구조와 데이터를 추출해줘") 호출
-      → Claude Sonnet 4.6이 응답
+      → Claude Sonnet 5이 응답
   → "기술 도면의 치수를 확인해야겠다"
     → analyze_image("도면에 표시된 치수와 사양은?") 호출
-      → Claude Sonnet 4.6이 응답
+      → Claude Sonnet 5이 응답
   → 모든 결과 종합하여 최종 분석 작성
 ```
 
@@ -138,14 +138,14 @@ Segment Analyzer는 **반복적 질문-응답** 방식으로 분석합니다. �
 
 | 모델 | 용도 |
 |------|------|
-| **Claude Sonnet 4.6** | ReAct 에이전트 (추론 + 도구 호출 결정) |
-| **Claude Sonnet 4.6** (Vision) | 이미지 분석 도구 (도구 내부에서 이미지와 질문 처리) |
+| **Claude Sonnet 5** | ReAct 에이전트 (추론 + 도구 호출 결정) |
+| **Claude Sonnet 5** (Vision) | 이미지 분석 도구 (도구 내부에서 이미지와 질문 처리) |
 
 ### 사용 도구
 
 #### analyze_image
 
-문서 이미지에 대해 특정 질문을 던져 분석합니다. Claude Sonnet 4.6의 Vision 기능을 사용하여 이미지를 직접 확인하고 답변합니다.
+문서 이미지에 대해 특정 질문을 던져 분석합니다. Claude Sonnet 5의 Vision 기능을 사용하여 이미지를 직접 확인하고 답변합니다.
 
 ```python
 @tool
@@ -202,7 +202,7 @@ def rotate_image(degrees: int) -> str:
 
 | 모델 | 용도 |
 |------|------|
-| **Claude Sonnet 4.6** | ReAct 에이전트 (추론 + 도구 호출 결정) |
+| **Claude Sonnet 5** | ReAct 에이전트 (추론 + 도구 호출 결정) |
 | **TwelveLabs Pegasus 1.2** | 영상 분석 도구 (도구 내부에서 영상 직접 분석) |
 
 ### 사용 도구
@@ -268,8 +268,8 @@ Pegasus는 S3의 영상 파일을 직접 분석하며, BDA가 추출한 챕터 �
 | 세그먼트 유형 | `PAGE` | `CHAPTER`, `VIDEO`, `AUDIO` |
 | 입력 데이터 | 이미지 URI | 영상 URI + 타임코드 |
 | 전처리 데이터 | OCR + BDA(옵션) + PDF 텍스트 | Transcribe + BDA(옵션) |
-| 에이전트 모델 | Claude Sonnet 4.6 | Claude Sonnet 4.6 |
-| 분석 도구 모델 | Claude Sonnet 4.6 (Vision) | TwelveLabs Pegasus 1.2 |
+| 에이전트 모델 | Claude Sonnet 5 | Claude Sonnet 5 |
+| 분석 도구 모델 | Claude Sonnet 5 (Vision) | TwelveLabs Pegasus 1.2 |
 | 도구 | `analyze_image`, `rotate_image` | `analyze_video` |
 | 분석 초점 | 텍스트, 테이블, 다이어그램, 레이아웃 | 동작, 장면, 음성, 시각적 이벤트 |
 
