@@ -1,3 +1,29 @@
+## 0.2.6 (2026-07-16)
+
+### 🚀 Features
+
+- **Text2SQL structured-data pipeline**: upload Excel/CSV as datasets (validate → Parquet → reference doc → DATASET#), queried from chat via Data MCP (`search_datasets` / `describe_dataset` / `run_sql`) with per-project catalog search ([18c1a90](https://github.com/aws-samples/sample-aws-idp-pipeline/commit/18c1a90))
+- **chat**: per-turn model selector (Sonnet 5 / Opus 4.8 / Sonnet 4.6) with reasoning control and SSM-backed catalog; inline chart cards (`render_chart`: hbar/compare/timeline/donut/stacked/scatter); question cards (`ask_user`); typewriter streaming and stop-response ([181e1bd](https://github.com/aws-samples/sample-aws-idp-pipeline/commit/181e1bd))
+- upgrade default agent models to Sonnet 5 and Opus 4.8 ([afac1ee](https://github.com/aws-samples/sample-aws-idp-pipeline/commit/afac1ee))
+- replace DuckDuckGo with AgentCore Web Search across agents ([6ca7729](https://github.com/aws-samples/sample-aws-idp-pipeline/commit/6ca7729))
+- add chat cancellation and harden UI resource cleanup ([b3234f2](https://github.com/aws-samples/sample-aws-idp-pipeline/commit/b3234f2))
+
+### 🩹 Fixes
+
+- prevent SQL injection in chat history query ([7bac67d](https://github.com/aws-samples/sample-aws-idp-pipeline/commit/7bac67d))
+- websocket reconnect and cleanup ([#342](https://github.com/aws-samples/sample-aws-idp-pipeline/pull/342))
+- **auth**: use light color scheme for managed login so heading and field labels stay visible ([237a106](https://github.com/aws-samples/sample-aws-idp-pipeline/commit/237a106))
+- **frontend:** import fromCognitoIdentityPool from credential-provider-cognito-identity to fix Vite esbuild 'fromTokenFile' export error ([#331](https://github.com/aws-samples/sample-aws-idp-pipeline/pull/331))
+- **infra:** apply prettier formatting to workflow-stack ([f825576](https://github.com/aws-samples/sample-aws-idp-pipeline/commit/f825576))
+
+### ❤️ Thank You
+
+- 윤창헌
+- ChangHun Yoon
+- Keita
+- yunwoong
+- Zoumana Keita @keitazoumana
+
 ## 0.2.5 (2026-04-14)
 
 ### Agent

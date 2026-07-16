@@ -1,6 +1,6 @@
 {
   "name": "@idp-v2/source",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "license": "SEE LICENSE IN LICENSE",
   "packageManager": "pnpm@10.29.3",
   "scripts": {
