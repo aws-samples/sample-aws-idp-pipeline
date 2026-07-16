@@ -9,9 +9,9 @@ This project consists of 3 independent AI agents. Each agent is built on the [St
 
 | Agent | Role | Model | Interface |
 |---|---|---|---|
-| **IDP Agent** | Document analysis, search, artifact generation | Claude Opus 4.6 | HTTP streaming |
+| **IDP Agent** | Document analysis, search, artifact generation | Claude Opus 4.8 (default) | HTTP streaming |
 | **Voice Agent** | Real-time bidirectional voice conversation | Nova Sonic | WebSocket |
-| **Web Crawler Agent** | Web page crawling and content extraction | Claude Sonnet 4.6 | SQS trigger |
+| **Web Crawler Agent** | Web page crawling and content extraction | Claude Sonnet 5 | SQS trigger |
 
 ## Common Architecture
 

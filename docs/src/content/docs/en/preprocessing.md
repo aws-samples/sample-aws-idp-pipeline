@@ -40,6 +40,9 @@ Type Detection Lambda
 | Text | `.txt` `.md` | - | - | - | A | - |
 | Web | `.webreq` | - | - | - | - | A |
 | CAD | `.dxf` | - | - | - | A | - |
+| Structured data | `.xlsx` `.xls` `.csv` `.tsv` | - | - | - | - | - |
+
+> Structured data (Excel/CSV) takes a **dedicated dataset branch** (validate → Parquet conversion → reference doc → DATASET# record) instead of the document analysis pipeline. See the "Structured Data" detail flow below.
 
 - **A** (Automatic): Enabled by default (runs automatically)
 - **O** (Optional): User enables per document at upload time
@@ -300,6 +303,31 @@ Type Detection
 | Images | Per-layout PNG (`format-parser/slides/layout_XXXX.png`) |
 | Automatic Preprocessing | Format Parser |
 | Extracted Entities | TEXT, MTEXT, ATTRIB, DIMENSION + layer/block metadata |
+
+### Structured Data (XLSX/XLS/CSV/TSV)
+
+Excel/CSV are processed as **structured datasets** for Text2SQL querying instead of document analysis. When Type Detection routes them as `processing_type='dataset'`, the IsDataset choice at the start of Step Functions takes a dedicated branch.
+
+```
+XLSX/CSV upload
+  ↓
+Type Detection (processing_type='dataset')
+  └─ Workflow Queue → Step Functions → IsDataset choice
+      └─ DatasetProcess (single Lambda)
+          ├─ 1. Validate: confirm it's tabular (merged cells/images/charts → reject)
+          ├─ 2. Convert each sheet to Parquet (snake_case column normalization)
+          ├─ 3. Generate reference doc (Bedrock: schema/samples/query examples)
+          └─ 4. Record DATASET# + index into the catalog (for search)
+```
+
+| Item | Value |
+|------|-------|
+| Output | `.../documents/{document_id}/dataset/{dataset_id}.parquet` + `.txt` (reference) |
+| Identifier | `{document_id}` (single sheet) or `{document_id}__{sheet_index}` (multi-sheet) |
+| Querying | SQL from chat via Data MCP (`search_datasets` / `describe_dataset` / `run_sql`) |
+| Validation failure | Workflow status `needs_user_fix` + reason (asks the user to clean up and re-upload) |
+
+> In multi-sheet workbooks each sheet becomes its own DATASET#. Unnamed index columns and mixed-type columns are normalized automatically, so no data is lost during conversion.
 
 ---
 

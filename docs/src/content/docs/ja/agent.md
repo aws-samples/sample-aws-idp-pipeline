@@ -9,9 +9,9 @@ description: "Strands SDKベースのAIエージェントアーキテクチャ�
 
 | エージェント | 役割 | モデル | インターフェース |
 |---|---|---|---|
-| **IDP Agent** | 文書分析、検索、アーティファクト生成 | Claude Opus 4.6 | HTTPストリーミング |
+| **IDP Agent** | 文書分析、検索、アーティファクト生成 | Claude Opus 4.8（デフォルト） | HTTPストリーミング |
 | **Voice Agent** | リアルタイム双方向音声会話 | Nova Sonic | WebSocket |
-| **Web Crawler Agent** | Webページクローリングとコンテンツ抽出 | Claude Sonnet 4.6 | SQSトリガー |
+| **Web Crawler Agent** | Webページクローリングとコンテンツ抽出 | Claude Sonnet 5 | SQSトリガー |
 
 ## 共通アーキテクチャ
 

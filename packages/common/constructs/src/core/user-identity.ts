@@ -355,7 +355,11 @@ export class UserIdentity extends Construct {
             location: { horizontal: 'CENTER', vertical: 'CENTER' },
           },
           global: {
-            colorSchemeMode: 'DARK',
+            // LIGHT: the form uses a light card background (f8fafc/f1f5f9), so
+            // the light color scheme applies the dark text colors defined in
+            // pageText/inputLabel. Under DARK the heading/label rendered nearly
+            // invisible against the light card.
+            colorSchemeMode: 'LIGHT',
             pageHeader: { enabled: false },
             pageFooter: { enabled: false },
             spacingDensity: 'REGULAR',
