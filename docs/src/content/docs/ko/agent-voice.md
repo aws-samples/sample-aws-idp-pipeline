@@ -69,8 +69,7 @@ Voice Agent도 MCP 도구를 사용할 수 있습니다.
 | 도구 | 설명 |
 |---|---|
 | `getDateAndTimeTool` | 지정 타임존의 현재 시간 조회 |
-| DuckDuckGo `search` | 웹 검색 |
-| DuckDuckGo `fetch_content` | 웹 페이지 전문 조회 |
+| AgentCore Web Search | 웹 검색 및 페이지 콘텐츠 조회 |
 | AgentCore MCP 도구 | 문서 검색, 그래프 탐색 등 |
 
 ---

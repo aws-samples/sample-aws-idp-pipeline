@@ -70,6 +70,8 @@ class WorkflowStatus:
     COMPLETED = 'completed'
     FAILED = 'failed'
     SKIPPED = 'skipped'
+    # Structured dataset failed validation; the user must clean the file and re-upload.
+    NEEDS_USER_FIX = 'needs_user_fix'
 
 
 class PreprocessStatus:
@@ -175,6 +177,7 @@ class StepName:
     SEGMENT_ANALYZER = 'segment_analyzer'
     GRAPH_BUILDER = 'graph_builder'
     DOCUMENT_SUMMARIZER = 'document_summarizer'
+    DATASET_PROCESS = 'dataset_process'
 
     ORDER = [
         'segment_prep',
@@ -200,6 +203,7 @@ class StepName:
         'segment_analyzer': 'Segment Analysis',
         'graph_builder': 'Building Knowledge Graph',
         'document_summarizer': 'Document Summary',
+        'dataset_process': 'Dataset Processing',
     }
 
 
@@ -269,32 +273,53 @@ def create_workflow(
         'application/dxf',
         'image/vnd.dxf',
     )
+    # Structured datasets (xlsx/xls/csv/tsv) take the dataset_process branch and
+    # skip the entire document-analysis pipeline.
+    is_dataset = file_type in (
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+        'text/csv',
+        'text/tab-separated-values',
+    )
 
-    skip_conditions = {
-        StepName.BDA_PROCESSOR: not use_bda or is_webreq,
-        StepName.PADDLEOCR_PROCESSOR: not (is_pdf or is_image)
-        or is_webreq
-        or not use_ocr,
-        StepName.TRANSCRIBE: not (is_video or is_audio)
-        or is_webreq
-        or not use_transcribe,
-        StepName.FORMAT_PARSER: not (is_pdf or is_dxf_file) or is_webreq,
-        StepName.WEBCRAWLER: not is_webreq,
-        StepName.SEGMENT_ANALYZER: False,
-    }
-
-    # Initialize STEP row with appropriate statuses
     steps_data = {
         'project_id': project_id,
         'document_id': document_id,
         'current_step': '',
     }
-    for step_name in StepName.ORDER:
-        should_skip = skip_conditions.get(step_name, False)
-        steps_data[step_name] = {
-            'status': WorkflowStatus.SKIPPED if should_skip else WorkflowStatus.PENDING,
-            'label': StepName.LABELS.get(step_name, step_name),
+
+    if is_dataset:
+        # Only dataset_process runs; all document-analysis steps are skipped.
+        for step_name in StepName.ORDER:
+            steps_data[step_name] = {
+                'status': WorkflowStatus.SKIPPED,
+                'label': StepName.LABELS.get(step_name, step_name),
+            }
+        steps_data[StepName.DATASET_PROCESS] = {
+            'status': WorkflowStatus.PENDING,
+            'label': StepName.LABELS.get(StepName.DATASET_PROCESS, 'Dataset Processing'),
         }
+    else:
+        skip_conditions = {
+            StepName.BDA_PROCESSOR: not use_bda or is_webreq,
+            StepName.PADDLEOCR_PROCESSOR: not (is_pdf or is_image)
+            or is_webreq
+            or not use_ocr,
+            StepName.TRANSCRIBE: not (is_video or is_audio)
+            or is_webreq
+            or not use_transcribe,
+            StepName.FORMAT_PARSER: not (is_pdf or is_dxf_file) or is_webreq,
+            StepName.WEBCRAWLER: not is_webreq,
+            StepName.SEGMENT_ANALYZER: False,
+        }
+        for step_name in StepName.ORDER:
+            should_skip = skip_conditions.get(step_name, False)
+            steps_data[step_name] = {
+                'status': WorkflowStatus.SKIPPED
+                if should_skip
+                else WorkflowStatus.PENDING,
+                'label': StepName.LABELS.get(step_name, step_name),
+            }
 
     steps_item = {
         'PK': f'WF#{workflow_id}',
@@ -529,6 +554,7 @@ def record_step_start(workflow_id: str, step_name: str, **kwargs) -> dict:
     step_data = data.get(step_name, {})
     step_data['status'] = WorkflowStatus.IN_PROGRESS
     step_data['started_at'] = now
+    step_data.setdefault('label', StepName.LABELS.get(step_name, step_name))
     for key, value in kwargs.items():
         step_data[key] = value
     data[step_name] = step_data
@@ -653,6 +679,73 @@ def record_step_skipped(workflow_id: str, step_name: str, reason: str = '') -> d
         ReturnValues='ALL_NEW',
     )
     return decimal_to_python(response.get('Attributes', {}))
+
+
+def record_step_needs_fix(workflow_id: str, step_name: str, reason: str, details: dict | None = None) -> dict:
+    """Update step status to needs_user_fix (structured dataset failed validation)."""
+    table = get_table()
+    now = now_iso()
+
+    steps = get_steps(workflow_id)
+    if not steps:
+        return {}
+
+    data = steps.get('data', {})
+    step_data = data.get(step_name, {})
+    step_data['status'] = WorkflowStatus.NEEDS_USER_FIX
+    step_data['reason'] = reason
+    if details:
+        step_data['details'] = details
+    data[step_name] = step_data
+    data['current_step'] = ''
+
+    response = table.update_item(
+        Key={'PK': f'WF#{workflow_id}', 'SK': 'STEP'},
+        UpdateExpression='SET #data = :data, updated_at = :updated_at',
+        ExpressionAttributeNames={'#data': 'data'},
+        ExpressionAttributeValues={':data': data, ':updated_at': now},
+        ReturnValues='ALL_NEW',
+    )
+    return decimal_to_python(response.get('Attributes', {}))
+
+
+def save_dataset(
+    project_id: str,
+    dataset_id: str,
+    name: str,
+    dataset_s3_uri: str,
+    reference_s3_uri: str = '',
+    description: str = '',
+    row_count: int | None = None,
+    columns: list | None = None,
+    source_document_id: str = '',
+) -> dict:
+    """Save a structured dataset (Parquet) reference as PROJ#/DATASET# for Text2SQL.
+
+    Schema matches backend app/ddb/datasets.py (DatasetData).
+    """
+    table = get_table()
+    now = now_iso()
+
+    item = {
+        'PK': f'PROJ#{project_id}',
+        'SK': f'DATASET#{dataset_id}',
+        'data': {
+            'dataset_id': dataset_id,
+            'project_id': project_id,
+            'name': name,
+            'description': description,
+            'dataset_s3_uri': dataset_s3_uri,
+            'reference_s3_uri': reference_s3_uri or None,
+            'row_count': row_count,
+            'columns': columns,
+            'source_document_id': source_document_id or None,
+        },
+        'created_at': now,
+        'updated_at': now,
+    }
+    table.put_item(Item=item)
+    return decimal_to_python(item)
 
 
 def save_segment(

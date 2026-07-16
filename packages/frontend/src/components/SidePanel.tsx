@@ -180,6 +180,8 @@ const getStatusBadge = (status: string) => {
     reanalyzing:
       'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-500',
     failed: 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-500',
+    needs_user_fix:
+      'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-500',
     uploading:
       'bg-cyan-50 text-cyan-600 dark:bg-cyan-900/20 dark:text-cyan-500',
     uploaded:
@@ -225,6 +227,7 @@ function StepProgressBar({
     'segment_analyzer',
     'graph_builder',
     'document_summarizer',
+    'dataset_process',
   ];
 
   const visibleSteps = STEP_ORDER.filter(
@@ -286,6 +289,7 @@ function StepProgressBar({
             const isActive = step.status === 'in_progress';
             const isDone = step.status === 'completed';
             const isFailed = step.status === 'failed';
+            const isNeedsFix = step.status === 'needs_user_fix';
 
             const hasNumericProgress =
               isActive && segmentProgress && key === 'segment_analyzer';
@@ -299,7 +303,13 @@ function StepProgressBar({
               <div
                 key={key}
                 className="space-y-0.5"
-                title={isFailed && step.error ? step.error : undefined}
+                title={
+                  isFailed && step.error
+                    ? step.error
+                    : isNeedsFix && step.reason
+                      ? step.reason
+                      : undefined
+                }
               >
                 <div className="flex items-center gap-1.5">
                   {isDone && (
@@ -310,6 +320,9 @@ function StepProgressBar({
                   )}
                   {isFailed && (
                     <CircleAlert className="h-3 w-3 text-red-500 flex-shrink-0" />
+                  )}
+                  {isNeedsFix && (
+                    <CircleAlert className="h-3 w-3 text-orange-500 flex-shrink-0" />
                   )}
                   {step.status === 'pending' && (
                     <div className="h-3 w-3 rounded-full border border-slate-300 dark:border-slate-500 flex-shrink-0" />
@@ -323,7 +336,9 @@ function StepProgressBar({
                           ? 'text-blue-700 dark:text-blue-300 font-medium'
                           : isFailed
                             ? 'text-red-600 dark:text-red-400'
-                            : 'text-slate-400 dark:text-slate-500'
+                            : isNeedsFix
+                              ? 'text-orange-600 dark:text-orange-400'
+                              : 'text-slate-400 dark:text-slate-500'
                     }`}
                   >
                     {step.label}
@@ -370,6 +385,37 @@ function StepProgressBar({
               </div>
             );
           })()}
+
+          {/* Needs-user-fix reasons (structured data validation) */}
+          {(() => {
+            const needsFix = visibleSteps.filter(
+              ([, s]) => s.status === 'needs_user_fix' && s.reason,
+            );
+            if (needsFix.length === 0) return null;
+            return (
+              <div className="mt-1.5 p-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800/40 rounded text-[10px] text-orange-600 dark:text-orange-400 space-y-0.5">
+                {needsFix.map(([key, s]) => (
+                  <p key={key}>{s.reason}</p>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* Completed-with-warning (e.g. some spreadsheet sheets were skipped
+              but the workflow still completed with the valid ones). */}
+          {(() => {
+            const partial = visibleSteps.filter(
+              ([, s]) => s.status === 'completed' && s.reason,
+            );
+            if (partial.length === 0) return null;
+            return (
+              <div className="mt-1.5 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded text-[10px] text-amber-700 dark:text-amber-400 space-y-0.5">
+                {partial.map(([key, s]) => (
+                  <p key={key}>{s.reason}</p>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
@@ -400,6 +446,9 @@ function useVerticalResize(
   });
 
   const dragging = useRef(false);
+  // Track the active drag listeners so they can be removed on unmount even if
+  // the mouseup never fires (e.g. route change / panel unmount mid-drag).
+  const cleanupDragRef = useRef<(() => void) | null>(null);
 
   const onMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -417,10 +466,15 @@ function useVerticalResize(
         setTopRatio(ratio);
       };
 
-      const onMouseUp = () => {
-        dragging.current = false;
+      const removeListeners = () => {
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
+        cleanupDragRef.current = null;
+      };
+
+      const onMouseUp = () => {
+        dragging.current = false;
+        removeListeners();
         // Save to localStorage on release
         setTopRatio((r) => {
           try {
@@ -434,9 +488,17 @@ function useVerticalResize(
 
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
+      cleanupDragRef.current = removeListeners;
     },
     [containerRef, minRatio, maxRatio, storageKey],
   );
+
+  // Remove any dangling drag listeners if the component unmounts mid-drag.
+  useEffect(() => {
+    return () => {
+      cleanupDragRef.current?.();
+    };
+  }, []);
 
   return { topRatio, onMouseDown };
 }

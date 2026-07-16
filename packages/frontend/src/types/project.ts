@@ -159,16 +159,29 @@ export interface ChatSession {
 }
 
 export interface StepStatus {
-  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'skipped';
+  status:
+    | 'pending'
+    | 'in_progress'
+    | 'completed'
+    | 'failed'
+    | 'skipped'
+    | 'needs_user_fix';
   label: string;
   error?: string;
+  reason?: string;
 }
 
 export interface WorkflowProgress {
   workflowId: string;
   documentId: string;
   fileName: string;
-  status: 'pending' | 'in_progress' | 'reanalyzing' | 'completed' | 'failed';
+  status:
+    | 'pending'
+    | 'in_progress'
+    | 'reanalyzing'
+    | 'completed'
+    | 'failed'
+    | 'needs_user_fix';
   currentStep: string;
   stepMessage: string;
   segmentProgress: { completed: number; total: number } | null;

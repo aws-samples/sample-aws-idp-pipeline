@@ -53,6 +53,10 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
   const reconnectAttemptsRef = useRef(0);
   const isManualDisconnectRef = useRef(false);
   const isConnectingRef = useRef(false);
+  // Bumped on every connect() start and on disconnect(). An in-flight async
+  // connect() compares its captured value to detect that it was superseded by a
+  // newer connect or a teardown, and bails before creating a socket.
+  const connectionGenRef = useRef(0);
   const subscribersRef = useRef<Map<string, Set<MessageCallback>>>(new Map());
 
   /** Cognito Identity Pool에서 AWS 자격 증명 획득 */
@@ -92,6 +96,10 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
   /** WebSocket 연결 종료 */
   const disconnect = useCallback(() => {
     isManualDisconnectRef.current = true;
+    // Invalidate any in-flight connect() and clear the connecting latch so a
+    // subsequent connect() isn't permanently blocked.
+    connectionGenRef.current += 1;
+    isConnectingRef.current = false;
 
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
@@ -132,20 +140,36 @@ export function WebSocketProvider({ children }: PropsWithChildren) {
 
     isConnectingRef.current = true;
     isManualDisconnectRef.current = false;
+    // Snapshot the generation for this attempt. disconnect() (teardown) and any
+    // newer connect() bump the counter, letting us detect a stale attempt after
+    // the awaits below.
+    const gen = (connectionGenRef.current += 1);
     setStatus('connecting');
 
-    const credentials = await getCredentials();
-    console.log('WebSocket credentials:', {
-      accessKeyId: credentials.accessKeyId,
-      hasSessionToken: !!credentials.sessionToken,
-    });
+    let signedUrl: string;
+    try {
+      const credentials = await getCredentials();
+      signedUrl = await createSignedWebSocketUrl({
+        websocketUrl,
+        credentials,
+        region: cognitoProps.region,
+      });
+    } catch (err) {
+      // Signing/credentials failed — reset the flag so future connects aren't
+      // permanently blocked, and don't leave status stuck on 'connecting'.
+      console.error('WebSocket connect failed during signing:', err);
+      if (gen === connectionGenRef.current) {
+        isConnectingRef.current = false;
+        setStatus('error');
+      }
+      return;
+    }
 
-    const signedUrl = await createSignedWebSocketUrl({
-      websocketUrl,
-      credentials,
-      region: cognitoProps.region,
-    });
-    console.log('WebSocket signed URL:', signedUrl);
+    // A newer connect() or a teardown happened while we were awaiting signing —
+    // this attempt is stale, so abort before creating the socket / touching state.
+    if (gen !== connectionGenRef.current) {
+      return;
+    }
 
     const ws = new WebSocket(signedUrl);
     wsRef.current = ws;

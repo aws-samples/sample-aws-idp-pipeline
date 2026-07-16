@@ -1,6 +1,8 @@
+pub mod add_dataset;
 pub mod add_graph_keywords;
 pub mod add_record;
 pub mod count;
+pub mod search_datasets;
 pub mod delete_by_workflow;
 pub mod delete_graph_keywords_by_project_id;
 pub mod delete_record;

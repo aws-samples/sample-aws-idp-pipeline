@@ -1,7 +1,7 @@
 import contextlib
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.config import get_config
@@ -115,6 +115,7 @@ class StepProgress(BaseModel):
     status: str
     label: str
     error: str | None = None
+    reason: str | None = None
     qa_regen: dict | None = None
 
 
@@ -126,9 +127,28 @@ class DocumentProgress(BaseModel):
     steps: dict[str, StepProgress]
 
 
+# Non-terminal workflow states that should be returned when active_only=true.
+# A completed/failed/needs_user_fix document is terminal and, once cleared from
+# the UI, must not be re-surfaced by a routine progress poll triggered by an
+# unrelated new upload.
+_ACTIVE_WF_STATUSES = frozenset({"pending", "in_progress", "processing", "reanalyzing"})
+
+
 @router.get("/progress")
-def get_documents_progress(project_id: str) -> list[DocumentProgress]:
-    """Get workflow step progress for all documents (including completed)."""
+def get_documents_progress(
+    project_id: str,
+    active_only: bool = Query(
+        default=False,
+        description="When true, return only documents with a non-terminal (in-progress) workflow.",
+    ),
+) -> list[DocumentProgress]:
+    """Get workflow step progress for documents.
+
+    By default returns all documents (including terminal ones) for a full
+    reconcile. With active_only=true, returns only in-progress/reanalyzing
+    workflows - used by routine polling so a new upload's progress fetch does
+    not re-surface unrelated terminal documents.
+    """
     documents = query_documents(project_id)
     active_docs = [doc for doc in documents if doc.data.status != "deleted"]
 
@@ -142,6 +162,8 @@ def get_documents_progress(project_id: str) -> list[DocumentProgress]:
         if workflows:
             wf = workflows[0]
             wf_id = wf.SK.replace("WF#", "")
+            if active_only and wf.data.status not in _ACTIVE_WF_STATUSES:
+                continue
             doc_workflow_map[wf_id] = (doc.data.document_id, wf.data.status)
 
     if not doc_workflow_map:
@@ -161,6 +183,8 @@ def get_documents_progress(project_id: str) -> list[DocumentProgress]:
                 step = StepProgress(status=value["status"], label=value["label"])
                 if "error" in value:
                     step.error = value["error"]
+                if "reason" in value:
+                    step.reason = value["reason"]
                 if "qa_regen" in value:
                     step.qa_regen = value["qa_regen"]
                 steps[key] = step

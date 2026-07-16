@@ -1,0 +1,8 @@
+boto3
+pandas>=2.0
+pyarrow
+openpyxl
+xlrd
+duckdb
+strands-agents>=1.25
+pyyaml

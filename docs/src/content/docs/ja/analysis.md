@@ -23,8 +23,8 @@ Segment Analyzerは、Strands SDKベースの**ReAct（Reasoning + Acting）エ�
   Segment Builder（全結果をマージ → S3セグメントJSON）
        ↓
   Segment Analyzer (ReAct Agent)
-  ├─ 文書/画像 → Claude Sonnet 4.6 + 画像分析ツール
-  └─ 映像/音声 → Claude Sonnet 4.6 + Pegasus映像分析ツール
+  ├─ 文書/画像 → Claude Sonnet 5 + 画像分析ツール
+  └─ 映像/音声 → Claude Sonnet 5 + Pegasus映像分析ツール
        ↓
   Analysis Finalizer → SQS → LanceDB Writer
        ↓
@@ -110,13 +110,13 @@ Segment Analyzerは**反復的質問-回答**方式で分析します。エー�
 エージェントがコンテキスト確認
   → 「この文書のタイプを確認する必要がある」
     → analyze_image("この文書のタイプと構造は？")を呼び出し
-      → Claude Sonnet 4.6が画像を見て回答
+      → Claude Sonnet 5が画像を見て回答
   → 「テーブルがあるので詳しく分析する必要がある」
     → analyze_image("テーブルの構造とデータを抽出して")を呼び出し
-      → Claude Sonnet 4.6が回答
+      → Claude Sonnet 5が回答
   → 「技術図面の寸法を確認する必要がある」
     → analyze_image("図面に表示された寸法と仕様は？")を呼び出し
-      → Claude Sonnet 4.6が回答
+      → Claude Sonnet 5が回答
   → 全結果を統合して最終分析を作成
 ```
 
@@ -138,14 +138,14 @@ Segment Analyzerは**反復的質問-回答**方式で分析します。エー�
 
 | モデル | 用途 |
 |--------|------|
-| **Claude Sonnet 4.6** | ReActエージェント（推論 + ツール呼び出し判断） |
-| **Claude Sonnet 4.6**（Vision） | 画像分析ツール（ツール内部で画像と質問を処理） |
+| **Claude Sonnet 5** | ReActエージェント（推論 + ツール呼び出し判断） |
+| **Claude Sonnet 5**（Vision） | 画像分析ツール（ツール内部で画像と質問を処理） |
 
 ### 使用ツール
 
 #### analyze_image
 
-文書画像に対して特定の質問を投げかけて分析します。Claude Sonnet 4.6のVision機能を使用して画像を直接確認し回答します。
+文書画像に対して特定の質問を投げかけて分析します。Claude Sonnet 5のVision機能を使用して画像を直接確認し回答します。
 
 ```python
 @tool
@@ -202,7 +202,7 @@ def rotate_image(degrees: int) -> str:
 
 | モデル | 用途 |
 |--------|------|
-| **Claude Sonnet 4.6** | ReActエージェント（推論 + ツール呼び出し判断） |
+| **Claude Sonnet 5** | ReActエージェント（推論 + ツール呼び出し判断） |
 | **TwelveLabs Pegasus 1.2** | 映像分析ツール（ツール内部で映像を直接分析） |
 
 ### 使用ツール
@@ -268,8 +268,8 @@ PegasusはS3の映像ファイルを直接分析し、BDAが抽出したチャ�
 | セグメントタイプ | `PAGE` | `CHAPTER`, `VIDEO`, `AUDIO` |
 | 入力データ | 画像URI | 映像URI + タイムコード |
 | 前処理データ | OCR + BDA（オプション） + PDFテキスト | Transcribe + BDA（オプション） |
-| エージェントモデル | Claude Sonnet 4.6 | Claude Sonnet 4.6 |
-| 分析ツールモデル | Claude Sonnet 4.6（Vision） | TwelveLabs Pegasus 1.2 |
+| エージェントモデル | Claude Sonnet 5 | Claude Sonnet 5 |
+| 分析ツールモデル | Claude Sonnet 5（Vision） | TwelveLabs Pegasus 1.2 |
 | ツール | `analyze_image`, `rotate_image` | `analyze_video` |
 | 分析フォーカス | テキスト、テーブル、ダイアグラム、レイアウト | 動作、シーン、音声、視覚的イベント |
 

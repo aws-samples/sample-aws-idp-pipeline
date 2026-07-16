@@ -100,10 +100,24 @@ Bedrock Agent Core 기반의 대화형 AI 인터페이스입니다. IDP Agent와
 
 ### 대화 기능
 
-- 스트리밍 응답 및 도구 사용 과정 실시간 표시
+- 스트리밍 응답 및 도구 사용 과정 실시간 표시 (타이핑 버퍼링으로 부드러운 렌더링)
+- 응답 중 중지 (진행 중인 생성 취소)
 - 이미지/문서 첨부 (멀티모달 입력)
 - 마크다운 렌더링 및 코드 하이라이팅
 - 세션 관리 (생성/이름변경/삭제, 대화 이력 보존)
+
+### 모델 선택
+
+턴마다 사용할 모델과 추론(reasoning) 강도를 선택합니다.
+
+- 모델 목록은 SSM 파라미터 기반 카탈로그에서 로드 (재배포 없이 추가/제거)
+- 추론 강도(low/medium/high) 조절 — 지원 모델에 한함
+- 모델 변경 시 새 대화 시작, 세션별 마지막 사용 모델 기억 (이 브라우저 한정)
+
+### 인라인 시각화 및 질문
+
+- **인라인 차트**: 수치 응답을 차트 카드로 렌더링 (가로 막대 / 비교 / 타임라인 / 도넛 / 누적 / 산점도)
+- **선택 질문 카드**: 에이전트가 구조화된 질문(단일/복수/자유 입력)을 카드로 제시하고, 사용자의 선택이 다음 턴에 반영
 
 ### 하이브리드 검색
 
@@ -125,10 +139,12 @@ Bedrock Agent Core 기반의 대화형 AI 인터페이스입니다. IDP Agent와
 
 | 도구 | 설명 |
 |------|------|
-| search_documents | 프로젝트 문서 하이브리드 검색 |
+| summarize / graph_traverse / graph_keyword | 프로젝트 문서 하이브리드 검색 및 그래프 탐색 |
+| search_datasets / describe_dataset / run_sql | 정형 데이터(엑셀/CSV) Text2SQL 질의 |
+| create/edit_document, extract_text/tables | 문서(PDF/DOCX/PPTX) 생성 및 텍스트/테이블 추출 |
 | save/load/edit_markdown | 마크다운 파일 생성 및 편집 |
-| create_pdf, extract_pdf_text/tables | PDF 생성 및 텍스트/테이블 추출 |
-| create_docx, extract_docx_text/tables | Word 문서 생성 및 텍스트/테이블 추출 |
+| render_chart | 인라인 차트 카드 렌더링 |
+| ask_user | 선택 질문 카드 표시 |
 | generate_image | AI 이미지 생성 |
 | code_interpreter | Python 코드 실행 |
 

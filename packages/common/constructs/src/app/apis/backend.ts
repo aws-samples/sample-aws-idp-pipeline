@@ -197,6 +197,23 @@ export class Backend extends Construct {
       }),
     );
 
+    // Grant read on the operator-managed chat model catalog parameter (GET
+    // /chat/models). The parameter is not created by CDK - operators edit it to
+    // add/remove models without a redeploy.
+    taskRole.addToPrincipalPolicy(
+      new PolicyStatement({
+        actions: ['ssm:GetParameter'],
+        resources: [
+          Stack.of(this).formatArn({
+            service: 'ssm',
+            resource: 'parameter',
+            resourceName: SSM_KEYS.CHAT_MODEL_CATALOG.replace(/^\//, ''),
+            arnFormat: ArnFormat.SLASH_RESOURCE_NAME,
+          }),
+        ],
+      }),
+    );
+
     // Grant Step Functions start execution permission for re-analysis
     taskRole.addToPrincipalPolicy(
       new PolicyStatement({

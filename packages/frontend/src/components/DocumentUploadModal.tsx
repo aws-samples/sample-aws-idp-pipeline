@@ -57,7 +57,7 @@ const PROJECT_LANG_TO_OCR_LANG: Record<string, string> = {
   fi: 'fi',
 };
 
-type UploadTab = 'file' | 'web';
+type UploadTab = 'file' | 'data' | 'web';
 
 export interface DocumentProcessingOptions {
   use_bda: boolean;
@@ -86,6 +86,31 @@ interface DocumentUploadModalProps {
     files: File[],
     options: DocumentProcessingOptions,
   ) => Promise<void>;
+}
+
+// Format a byte count with an appropriate unit. Using MB alone rounds small
+// files (most spreadsheets/CSVs are tens of KB) down to "0.0 MB".
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+// Accepted file extensions per tab. The File tab handles documents/media; the
+// Data tab handles spreadsheets only (structured datasets). The <input accept>
+// attribute only filters the picker dialog, NOT drag-and-drop, so these sets are
+// also used to filter dropped/selected files explicitly.
+const FILE_TAB_ACCEPT =
+  '.pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.png,.jpg,.jpeg,.gif,.tiff,.mp4,.mov,.avi,.mp3,.wav,.flac,.dxf';
+const DATA_TAB_ACCEPT = '.xlsx,.xls,.csv,.tsv';
+
+function acceptToExtensions(accept: string): string[] {
+  return accept.split(',').map((s) => s.trim().toLowerCase());
+}
+
+function fileMatchesAccept(file: File, accept: string): boolean {
+  const name = file.name.toLowerCase();
+  return acceptToExtensions(accept).some((ext) => name.endsWith(ext));
 }
 
 export default function DocumentUploadModal({
@@ -242,20 +267,33 @@ export default function DocumentUploadModal({
     setIsDragging(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
+  // Keep only files whose extension matches the active tab (Excel belongs in the
+  // Data tab, documents in the File tab). accept on <input> filters the picker
+  // but not drag-and-drop, so filter explicitly here for both paths.
+  const acceptForTab = activeTab === 'data' ? DATA_TAB_ACCEPT : FILE_TAB_ACCEPT;
+  const filterAccepted = useCallback(
+    (incoming: File[]) =>
+      incoming.filter((f) => fileMatchesAccept(f, acceptForTab)),
+    [acceptForTab],
+  );
 
-    const droppedFiles = Array.from(e.dataTransfer.files);
-    if (droppedFiles.length > 0) {
-      setFiles((prev) => [...prev, ...droppedFiles]);
-    }
-  }, []);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+
+      const droppedFiles = filterAccepted(Array.from(e.dataTransfer.files));
+      if (droppedFiles.length > 0) {
+        setFiles((prev) => [...prev, ...droppedFiles]);
+      }
+    },
+    [filterAccepted],
+  );
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const fileArray = Array.from(e.target.files ?? []);
+      const fileArray = filterAccepted(Array.from(e.target.files ?? []));
       if (fileArray.length > 0) {
         setFiles((prev) => [...prev, ...fileArray]);
       }
@@ -264,7 +302,7 @@ export default function DocumentUploadModal({
         fileInputRef.current.value = '';
       }
     },
-    [],
+    [filterAccepted],
   );
 
   const removeFile = useCallback((index: number) => {
@@ -373,6 +411,18 @@ export default function DocumentUploadModal({
         transcribe_language_code: 'ko-KR',
         transcribe_language_options: [],
       });
+    } else if (activeTab === 'data') {
+      if (files.length === 0) return;
+      // Structured data: no BDA/OCR/Transcribe. The backend classifies
+      // xlsx/xls/csv/tsv as datasets and runs the dataset pipeline.
+      await onUpload(files, {
+        use_bda: false,
+        use_ocr: false,
+        use_transcribe: false,
+        language,
+      });
+      setFiles([]);
+      setPdfPageCounts(new Map());
     } else {
       if (!webUrl) return;
       const webreqFile = createWebreqFile();
@@ -431,7 +481,9 @@ export default function DocumentUploadModal({
   useModal({ isOpen, onClose: handleClose, disableClose: uploading });
 
   const isUploadDisabled =
-    activeTab === 'file' ? files.length === 0 : !webUrl.trim();
+    activeTab === 'file' || activeTab === 'data'
+      ? files.length === 0
+      : !webUrl.trim();
 
   if (!isOpen) return null;
 
@@ -487,6 +539,18 @@ export default function DocumentUploadModal({
           >
             <FileUp className="h-4 w-4" />
             {t('documents.tabFile', 'File')}
+          </button>
+          <button
+            onClick={() => setActiveTab('data')}
+            disabled={uploading}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'data'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-[#64748b] hover:text-[#334155] dark:hover:text-[#cbd5e1]'
+            } disabled:opacity-50`}
+          >
+            <Layers className="h-4 w-4" />
+            {t('documents.tabData', 'Data')}
           </button>
           <button
             onClick={() => setActiveTab('web')}
@@ -553,7 +617,7 @@ export default function DocumentUploadModal({
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.png,.jpg,.jpeg,.gif,.tiff,.mp4,.mov,.avi,.mp3,.wav,.flac,.dxf"
+                    accept={FILE_TAB_ACCEPT}
                     className="hidden"
                     onChange={handleFileSelect}
                     disabled={uploading}
@@ -579,7 +643,7 @@ export default function DocumentUploadModal({
                           {file.name}
                         </span>
                         <span className="text-xs text-[#94a3b8]">
-                          {(file.size / 1024 / 1024).toFixed(1)} MB
+                          {formatFileSize(file.size)}
                         </span>
                         <button
                           onClick={() => removeFile(index)}
@@ -933,6 +997,106 @@ export default function DocumentUploadModal({
                 </div>
               )}
             </>
+          ) : activeTab === 'data' ? (
+            <>
+              {/* Data Drop Zone */}
+              <div
+                className={`relative border-2 border-dashed rounded-xl transition-colors ${
+                  isDragging
+                    ? 'border-blue-400 bg-blue-50 dark:bg-blue-500/10'
+                    : 'border-black/10 dark:border-[#3b4264] dark:bg-[#0d1117] hover:border-black/20 dark:hover:border-[#4f5680]'
+                }`}
+                onDragOver={handleDragOver}
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <label
+                  htmlFor="data-upload-input"
+                  className="flex flex-col items-center justify-center p-8 cursor-pointer"
+                >
+                  <CloudUpload
+                    className={`h-12 w-12 mb-3 ${
+                      isDragging ? 'text-blue-500' : 'text-[#94a3b8]'
+                    }`}
+                    strokeWidth={1.5}
+                  />
+                  <p
+                    className={`text-sm font-medium mb-1 ${
+                      isDragging
+                        ? 'text-blue-700'
+                        : 'text-[#334155] dark:text-[#cbd5e1]'
+                    }`}
+                  >
+                    {isDragging
+                      ? t('documents.dropHere', 'Drop files here')
+                      : t(
+                          'documents.dragDrop',
+                          'Drag & drop files or click to browse',
+                        )}
+                  </p>
+                  <p className="text-xs text-[#64748b] text-center">
+                    {t(
+                      'documents.dataFormats',
+                      'Excel (.xlsx, .xls), CSV, TSV (max 500MB)',
+                    )}
+                  </p>
+                  <input
+                    id="data-upload-input"
+                    type="file"
+                    multiple
+                    accept={DATA_TAB_ACCEPT}
+                    className="hidden"
+                    onChange={handleFileSelect}
+                    disabled={uploading}
+                  />
+                </label>
+              </div>
+
+              {/* Selected Files */}
+              {files.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-[#334155] dark:text-[#cbd5e1]">
+                    {t('documents.selectedFiles', 'Selected Files')} (
+                    {files.length})
+                  </p>
+                  <div className="max-h-32 overflow-y-auto space-y-1">
+                    {files.map((file, index) => (
+                      <div
+                        key={`${file.name}-${index}`}
+                        className="flex items-center gap-2 p-2 bg-transparent dark:bg-[#0d1117] rounded-lg"
+                      >
+                        <Layers className="h-4 w-4 text-[#94a3b8] flex-shrink-0" />
+                        <span className="text-sm text-[#475569] dark:text-[#cbd5e1] truncate flex-1">
+                          {file.name}
+                        </span>
+                        <span className="text-xs text-[#94a3b8]">
+                          {formatFileSize(file.size)}
+                        </span>
+                        <button
+                          onClick={() => removeFile(index)}
+                          disabled={uploading}
+                          className="p-1 hover:bg-white/50 dark:hover:bg-[#1e2235] rounded transition-colors disabled:opacity-50"
+                        >
+                          <X className="h-3.5 w-3.5 text-[#64748b]" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Data info */}
+              <div className="flex items-start gap-2 p-2.5 bg-blue-50 dark:bg-blue-500/[0.07] border border-blue-200 dark:border-blue-400/20 rounded-lg">
+                <Info className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  {t(
+                    'documents.dataUploadHint',
+                    'Structured tables are stored as queryable datasets. Each sheet must be a clean table: merged cells, images/charts, or multi-row headers are rejected and must be fixed and re-uploaded.',
+                  )}
+                </p>
+              </div>
+            </>
           ) : (
             <>
               {/* Web URL Input */}
@@ -1063,6 +1227,11 @@ export default function DocumentUploadModal({
               <>
                 <CloudUpload className="h-4 w-4" />
                 {t('documents.upload', 'Upload')}
+              </>
+            ) : activeTab === 'data' ? (
+              <>
+                <CloudUpload className="h-4 w-4" />
+                {t('documents.uploadData', 'Upload Data')}
               </>
             ) : (
               <>

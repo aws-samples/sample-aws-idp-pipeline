@@ -13,7 +13,15 @@ import type {
 } from '../types/project';
 import type { DocumentProcessingOptions } from '../components/DocumentUploadModal';
 
-const EXT_MIME: Record<string, string> = { dxf: 'application/dxf' };
+const EXT_MIME: Record<string, string> = {
+  dxf: 'application/dxf',
+  // Structured data: browsers often leave file.type empty for these, so map by
+  // extension to the MIME types the backend uses to classify datasets.
+  csv: 'text/csv',
+  tsv: 'text/tab-separated-values',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
 const getMimeTypeByExt = (name: string): string => {
   const ext = name.split('.').pop()?.toLowerCase() || '';
   return EXT_MIME[ext] || 'application/octet-stream';
@@ -52,6 +60,9 @@ export function useDocuments({
   const [workflowProgressMap, setWorkflowProgressMap] = useState<
     Record<string, WorkflowProgress>
   >({});
+  // Mirror of workflowProgressMap for reading the current tracked docs outside
+  // a state updater (kept in sync via the effect below).
+  const workflowProgressMapRef = useRef<Record<string, WorkflowProgress>>({});
   const [uploading, setUploading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -64,6 +75,24 @@ export function useDocuments({
   const [showUploadModal, setShowUploadModal] = useState(false);
   const progressFetchedRef = useRef(false);
   const loadDocumentsTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
+  // Track deferred timers from WebSocket status events so they can all be
+  // cancelled on unmount / project switch (otherwise late fetches fire stale).
+  const deferredTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(
+    new Set(),
+  );
+  const deferTimer = useCallback((fn: () => void, delayMs: number) => {
+    const id = setTimeout(() => {
+      deferredTimersRef.current.delete(id);
+      fn();
+    }, delayMs);
+    deferredTimersRef.current.add(id);
+  }, []);
+
+  // Keep the ref in sync so async callbacks can read the current tracked docs
+  // without doing side effects inside a state updater.
+  useEffect(() => {
+    workflowProgressMapRef.current = workflowProgressMap;
+  }, [workflowProgressMap]);
 
   const loadDocuments = useCallback(async () => {
     try {
@@ -108,6 +137,7 @@ export function useDocuments({
       segment_analyzer: t('workflow.steps.segmentAiAnalysis'),
       graph_builder: t('workflow.steps.graphBuilder'),
       document_summarizer: t('workflow.steps.documentSummary'),
+      dataset_process: t('workflow.steps.datasetProcess', 'Dataset Processing'),
     }),
     [t],
   );
@@ -127,14 +157,43 @@ export function useDocuments({
               status: string;
               label: string;
               error?: string;
+              reason?: string;
               qa_regen?: { status: string; segment_index: number };
             }
           >;
         }[]
-      >(`projects/${projectId}/documents/progress`);
+      >(`projects/${projectId}/documents/progress?active_only=true`);
+
+      // Server returns ONLY active (non-terminal) workflows here. Build the map
+      // from them, and drop any previously-tracked doc that is now absent -
+      // absence means the workflow reached a terminal state (even if we missed
+      // the WebSocket completion event), so it should stop showing as in
+      // progress. Dropped docs get a doc/workflow refresh to reflect the final
+      // status. qa_regen entries are kept even if absent (post-completion work).
+      const activeIds = new Set(progressData.map((p) => p.document_id));
+
+      // Detect vanished (now-terminal) tracked docs from the ref, OUTSIDE the
+      // state updater, so the updater stays pure (updaters may be deferred or
+      // re-run in Strict Mode; side effects there are unreliable).
+      const prevMap = workflowProgressMapRef.current;
+      const vanished = Object.entries(prevMap)
+        .filter(
+          ([docId, entry]) =>
+            !activeIds.has(docId) && entry.qaRegen?.status !== 'in_progress',
+        )
+        .map(([docId]) => docId);
 
       setWorkflowProgressMap((prev) => {
-        const newMap = { ...prev };
+        const newMap: Record<string, WorkflowProgress> = {};
+
+        // Carry over entries that are still active or have qa_regen running.
+        for (const [docId, entry] of Object.entries(prev)) {
+          if (activeIds.has(docId)) continue; // rebuilt below from fresh data
+          if (entry.qaRegen?.status === 'in_progress') {
+            newMap[docId] = entry;
+          }
+        }
+
         for (const progress of progressData) {
           const doc = documents.find(
             (d) => d.document_id === progress.document_id,
@@ -148,6 +207,7 @@ export function useDocuments({
                 status: val.status as StepStatus['status'],
                 label: stepLabels[key] || val.label,
                 ...(val.error && { error: val.error }),
+                ...(val.reason && { reason: val.reason }),
               };
             }
             const segAnalyzer = progress.steps.segment_analyzer;
@@ -178,6 +238,13 @@ export function useDocuments({
         }
         return newMap;
       });
+
+      // A tracked workflow that dropped out of the active list finished while we
+      // weren't looking - refresh docs/workflows so its terminal status shows.
+      if (vanished.length > 0) {
+        loadDocumentsRef.current();
+        loadWorkflowsRef.current();
+      }
     } catch (error) {
       console.error('Failed to fetch document progress:', error);
     }
@@ -215,6 +282,7 @@ export function useDocuments({
               status: string;
               label: string;
               error?: string;
+              reason?: string;
               qa_regen?: { status: string; segment_index: number };
             }
           >;
@@ -235,6 +303,7 @@ export function useDocuments({
               status: val.status as StepStatus['status'],
               label: stepLabels[key] || val.label,
               ...(val.error && { error: val.error }),
+              ...(val.reason && { reason: val.reason }),
             };
           }
           const segAnalyzer = progress.steps.segment_analyzer;
@@ -346,7 +415,7 @@ export function useDocuments({
           debouncedLoadDocuments();
 
           // Fetch step progress after a short delay so the API has data
-          setTimeout(() => {
+          deferTimer(() => {
             fetchProgressRef.current();
           }, 2000);
         } else if (data.status === 'reanalyzing') {
@@ -375,29 +444,43 @@ export function useDocuments({
             ),
           );
 
-          setTimeout(() => {
+          deferTimer(() => {
             fetchProgressRef.current();
           }, 2000);
-        } else if (data.status === 'completed' || data.status === 'failed') {
+        } else if (
+          data.status === 'completed' ||
+          data.status === 'failed' ||
+          data.status === 'needs_user_fix'
+        ) {
           setWorkflowProgressMap((prev) => {
             if (!prev[data.documentId]) return prev;
             return {
               ...prev,
               [data.documentId]: {
                 ...prev[data.documentId],
-                status: data.status as 'completed' | 'failed',
+                status: data.status as
+                  | 'completed'
+                  | 'failed'
+                  | 'needs_user_fix',
               },
             };
           });
 
-          setTimeout(() => {
+          deferTimer(() => {
             loadDocuments();
             loadWorkflows();
           }, 1500);
         }
       }
     },
-    [projectId, loadDocuments, loadWorkflows, debouncedLoadDocuments, t],
+    [
+      projectId,
+      loadDocuments,
+      loadWorkflows,
+      debouncedLoadDocuments,
+      deferTimer,
+      t,
+    ],
   );
 
   useWebSocketMessage('workflow', handleWorkflowMessage);
@@ -472,20 +555,40 @@ export function useDocuments({
     [workflows],
   );
 
-  // Handle workflow completion/failure - clear completed/failed after delay
+  // Handle workflow completion/failure - clear completed/failed after delay.
+  // Refresh once per completed workflow: without this, any change to
+  // workflowProgressMap (e.g. another workflow's progress) would re-trigger a
+  // full loadDocuments/loadWorkflows while completed entries linger in the map.
+  const refreshedCompletionsRef = useRef<Set<string>>(new Set());
+  // Reset the completion dedupe set when the project changes so it can't grow
+  // unbounded across a long-lived session spanning many projects/documents.
   useEffect(() => {
-    const completedDocIds = Object.entries(workflowProgressMap)
-      .filter(
-        ([, progress]) =>
-          (progress.status === 'completed' || progress.status === 'failed') &&
-          progress.qaRegen?.status !== 'in_progress',
-      )
-      .map(([docId]) => docId);
+    refreshedCompletionsRef.current = new Set();
+  }, [projectId]);
+  useEffect(() => {
+    const completed = Object.entries(workflowProgressMap).filter(
+      ([, progress]) =>
+        (progress.status === 'completed' ||
+          progress.status === 'failed' ||
+          progress.status === 'needs_user_fix') &&
+        progress.qaRegen?.status !== 'in_progress',
+    );
 
-    if (completedDocIds.length === 0) return;
+    // Only act on completions not already refreshed (keyed by doc+workflow so a
+    // re-analysis with a new workflow_id refreshes again).
+    const fresh = completed.filter(
+      ([docId, p]) =>
+        !refreshedCompletionsRef.current.has(`${docId}:${p.workflowId}`),
+    );
+    if (fresh.length === 0) return;
+
+    for (const [docId, p] of fresh) {
+      refreshedCompletionsRef.current.add(`${docId}:${p.workflowId}`);
+    }
 
     loadDocumentsRef.current();
     loadWorkflowsRef.current();
+    const completedDocIds = fresh.map(([docId]) => docId);
     const timeout = setTimeout(() => {
       setWorkflowProgressMap((prev) => {
         const newMap = { ...prev };
@@ -508,7 +611,12 @@ export function useDocuments({
         const doc = documents.find((d) => d.document_id === docId);
         // Keep entry if qa_regen is active
         if (newMap[docId]?.qaRegen?.status === 'in_progress') continue;
-        if (doc && (doc.status === 'completed' || doc.status === 'failed')) {
+        if (
+          doc &&
+          (doc.status === 'completed' ||
+            doc.status === 'failed' ||
+            doc.status === 'needs_user_fix')
+        ) {
           delete newMap[docId];
           changed = true;
         }
@@ -517,12 +625,15 @@ export function useDocuments({
     });
   }, [documents]);
 
-  // Clean up debounce timer on unmount
+  // Clean up debounce timer and any deferred WebSocket-event timers on unmount
   useEffect(() => {
+    const deferred = deferredTimersRef.current;
     return () => {
       if (loadDocumentsTimerRef.current) {
         clearTimeout(loadDocumentsTimerRef.current);
       }
+      for (const id of deferred) clearTimeout(id);
+      deferred.clear();
     };
   }, []);
 

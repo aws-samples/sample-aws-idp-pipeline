@@ -26,6 +26,7 @@ import ConfirmModal from './ConfirmModal';
 import { LANGUAGES, CARD_COLORS } from './ProjectSettingsModal';
 import OcrDocumentView from './OcrDocumentView';
 import ExcelViewer from './ExcelViewer';
+import DatasetView, { type DatasetMeta } from './DatasetView';
 import DocumentScanner from './ui/document-scanner';
 import { useAwsClient } from '../hooks/useAwsClient';
 import { useModal } from '../hooks/useModal';
@@ -224,6 +225,40 @@ export default function WorkflowDetailModal({
   const fetchApiRef = useRef(fetchApi);
   fetchApiRef.current = fetchApi;
   const [viewMode, setViewMode] = useState<'document' | 'graph'>('document');
+  // Structured datasets (xlsx/csv/tsv) render a table preview and have no
+  // analysis segments, so segment navigation is hidden for them.
+  const isDataset = isSpreadsheetFileType(workflow.file_type);
+  // Dataset sheets (each Excel sheet = one dataset). Held in the parent so the
+  // sheet selector can live in the header bar (same spot/style as the segment
+  // selector) while DatasetView renders the selected sheet.
+  const [datasets, setDatasets] = useState<DatasetMeta[]>([]);
+  const [datasetsLoading, setDatasetsLoading] = useState(false);
+  const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!isDataset) return;
+    let cancelled = false;
+    setDatasetsLoading(true);
+    fetchApiRef
+      .current<DatasetMeta[]>(
+        `projects/${projectId}/datasets?source_document_id=${workflow.document_id}`,
+      )
+      .then((list) => {
+        if (cancelled) return;
+        setDatasets(list);
+        setSelectedDatasetId((prev) => prev ?? list[0]?.dataset_id ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setDatasets([]);
+      })
+      .finally(() => {
+        if (!cancelled) setDatasetsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isDataset, projectId, workflow.document_id]);
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [tagCloudData, setTagCloudData] = useState<TagCloudItem[] | null>(null);
   const [graphLoading, setGraphLoading] = useState(false);
@@ -261,6 +296,18 @@ export default function WorkflowDetailModal({
   const [tagCloudMaxTags, setTagCloudMaxTags] = useState(100);
   const [tagCloudRotation, setTagCloudRotation] = useState(true);
   const [graphRebuilding, setGraphRebuilding] = useState(false);
+  // Deferred post-rebuild refresh timer, tracked so it can be cancelled if the
+  // modal closes during the 5s wait (avoids late fetchGraph/setState).
+  const rebuildTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // False after unmount; guards late async callbacks (segment load, rebuild
+  // timer) from calling setState on an unmounted modal.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const [graphPanelSections, setGraphPanelSections] = useState({
     filters: true,
     display: false,
@@ -413,13 +460,24 @@ export default function WorkflowDetailModal({
         { method: 'POST' },
       )
       .then(() => {
-        setTimeout(() => {
+        rebuildTimerRef.current = setTimeout(() => {
+          rebuildTimerRef.current = null;
+          if (!mountedRef.current) return;
           fetchGraph();
           setGraphRebuilding(false);
         }, 5000);
       })
-      .catch(() => setGraphRebuilding(false));
+      .catch(() => {
+        if (mountedRef.current) setGraphRebuilding(false);
+      });
   }, [graphRebuilding, projectId, workflow.document_id, fetchGraph]);
+
+  // Cancel the pending post-rebuild refresh if the modal unmounts mid-wait.
+  useEffect(() => {
+    return () => {
+      if (rebuildTimerRef.current) clearTimeout(rebuildTimerRef.current);
+    };
+  }, []);
 
   const graphLinkTypes = useMemo(() => {
     if (!graphData) return [];
@@ -530,6 +588,26 @@ export default function WorkflowDetailModal({
   const segmentCacheRef = useRef(segmentCache);
   segmentCacheRef.current = segmentCache;
 
+  // Bound the cache so paging through a large document doesn't grow memory
+  // without limit. Map preserves insertion order, so evict oldest entries first,
+  // but never evict the segment currently being viewed.
+  const MAX_SEGMENT_CACHE = 50;
+  const addToCache = useCallback(
+    (prev: Map<number, SegmentData>, index: number, data: SegmentData) => {
+      const next = new Map(prev);
+      next.set(index, data);
+      if (next.size > MAX_SEGMENT_CACHE) {
+        for (const key of next.keys()) {
+          if (next.size <= MAX_SEGMENT_CACHE) break;
+          if (key === index) continue; // keep the just-added one
+          next.delete(key);
+        }
+      }
+      return next;
+    },
+    [],
+  );
+
   const currentSegment = segmentCache.get(currentSegmentIndex) ?? null;
 
   const fetchSegment = useCallback(
@@ -540,18 +618,15 @@ export default function WorkflowDetailModal({
       prefetchingRef.current.add(index);
       try {
         const data = await onLoadSegment(index);
-        setSegmentCache((prev) => {
-          const next = new Map(prev);
-          next.set(index, data);
-          return next;
-        });
+        if (!mountedRef.current) return;
+        setSegmentCache((prev) => addToCache(prev, index, data));
       } catch (e) {
         console.error(`Failed to load segment ${index}:`, e);
       } finally {
         prefetchingRef.current.delete(index);
       }
     },
-    [onLoadSegment],
+    [onLoadSegment, addToCache],
   );
 
   // Reset image zoom and base size on segment change
@@ -598,31 +673,38 @@ export default function WorkflowDetailModal({
     if (prefetchingRef.current.has(currentSegmentIndex)) return;
     prefetchingRef.current.add(currentSegmentIndex);
 
+    // Guard against the response landing after the index changed (effect re-run)
+    // or the modal unmounted: a stale load must not update state. `cancelled` is
+    // flipped by this effect's cleanup when currentSegmentIndex changes.
+    const loadingIndex = currentSegmentIndex;
+    let cancelled = false;
     setSegmentLoading(true);
-    onLoadSegment(currentSegmentIndex)
+    onLoadSegment(loadingIndex)
       .then((data) => {
-        setSegmentCache((prev) => {
-          const next = new Map(prev);
-          next.set(currentSegmentIndex, data);
-          return next;
-        });
+        if (cancelled || !mountedRef.current) return;
+        setSegmentCache((prev) => addToCache(prev, loadingIndex, data));
         setSegmentLoading(false);
         // Prefetch adjacent
-        if (currentSegmentIndex > 0) fetchSegment(currentSegmentIndex - 1);
-        if (currentSegmentIndex < workflow.total_segments - 1)
-          fetchSegment(currentSegmentIndex + 1);
+        if (loadingIndex > 0) fetchSegment(loadingIndex - 1);
+        if (loadingIndex < workflow.total_segments - 1)
+          fetchSegment(loadingIndex + 1);
       })
       .catch((e) => {
-        console.error(`Failed to load segment ${currentSegmentIndex}:`, e);
-        setSegmentLoading(false);
+        console.error(`Failed to load segment ${loadingIndex}:`, e);
+        if (!cancelled && mountedRef.current) setSegmentLoading(false);
       })
       .finally(() => {
-        prefetchingRef.current.delete(currentSegmentIndex);
+        prefetchingRef.current.delete(loadingIndex);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     currentSegmentIndex,
     onLoadSegment,
     fetchSegment,
+    addToCache,
     workflow.total_segments,
   ]);
 
@@ -1860,6 +1942,62 @@ export default function WorkflowDetailModal({
                           </div>
                         </div>
                       )}
+
+                    {/* Structured dataset: show the selected sheet's row/column
+                        counts and its generated description (the meta above is
+                        sparse for datasets — no segments/analysis). */}
+                    {isDataset &&
+                      (() => {
+                        const ds =
+                          datasets.find(
+                            (d) => d.dataset_id === selectedDatasetId,
+                          ) ?? datasets[0];
+                        if (!ds) return null;
+                        return (
+                          <div className="space-y-3">
+                            {(ds.row_count != null || ds.columns) && (
+                              <div className="grid grid-cols-2 gap-4">
+                                {ds.row_count != null && (
+                                  <div>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                      {t(
+                                        'dataset.totalRows',
+                                        '{{count}} rows',
+                                        {
+                                          count: ds.row_count,
+                                        },
+                                      )}
+                                    </p>
+                                    <p className="text-sm text-slate-800 dark:text-slate-200">
+                                      {ds.row_count.toLocaleString()}
+                                    </p>
+                                  </div>
+                                )}
+                                {ds.columns && (
+                                  <div>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                      {t('dataset.columns', 'Columns')}
+                                    </p>
+                                    <p className="text-sm text-slate-800 dark:text-slate-200">
+                                      {ds.columns.length}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {ds.description && (
+                              <div>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                  {t('dataset.description', 'Description')}
+                                </p>
+                                <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">
+                                  {ds.description}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                   </div>
 
                   <hr className="border-black/[0.08] dark:border-white/[0.08]" />
@@ -2020,7 +2158,78 @@ export default function WorkflowDetailModal({
           {/* View Mode Tabs + Navigation */}
           <div className="flex items-center justify-between min-h-[68px] p-4 pr-16 border-b border-black/[0.08] dark:border-[#2a2f45] bg-transparent">
             <div className="flex items-center gap-2">
-              {viewMode === 'document' && (
+              {isDataset && datasets.length > 0 && (
+                <>
+                  {(() => {
+                    const idx = datasets.findIndex(
+                      (d) => d.dataset_id === selectedDatasetId,
+                    );
+                    const go = (next: number) => {
+                      if (next < 0 || next >= datasets.length) return;
+                      setSelectedDatasetId(datasets[next].dataset_id);
+                    };
+                    return (
+                      <>
+                        <button
+                          onClick={() => go(idx - 1)}
+                          disabled={idx <= 0}
+                          className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <svg
+                            className="h-4 w-4 text-slate-600 dark:text-slate-400"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15 19l-7-7 7-7"
+                            />
+                          </svg>
+                        </button>
+                        <select
+                          value={selectedDatasetId ?? ''}
+                          onChange={(e) => setSelectedDatasetId(e.target.value)}
+                          className="bg-transparent dark:bg-white/[0.06] border border-black/10 dark:border-white/[0.12] text-slate-800 dark:text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[280px]"
+                        >
+                          {datasets.map((ds) => (
+                            <option key={ds.dataset_id} value={ds.dataset_id}>
+                              {ds.name}
+                            </option>
+                          ))}
+                        </select>
+                        {datasets.length > 1 && (
+                          <span className="text-sm text-slate-500">
+                            {idx + 1}/{datasets.length}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => go(idx + 1)}
+                          disabled={idx >= datasets.length - 1}
+                          className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <svg
+                            className="h-4 w-4 text-slate-600 dark:text-slate-400"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 5l7 7-7 7"
+                            />
+                          </svg>
+                        </button>
+                      </>
+                    );
+                  })()}
+                </>
+              )}
+              {viewMode === 'document' && !isDataset && (
                 <>
                   <button
                     onClick={() => {
@@ -2294,6 +2503,19 @@ export default function WorkflowDetailModal({
                   </div>
                 )}
               </div>
+            </div>
+          ) : isDataset ? (
+            // Structured data (xlsx/csv/tsv): show the queryable dataset table
+            // (schema + paginated rows + SQL) in the preview area. Datasets have
+            // no analysis segments (total_segments = 0), so this branch takes
+            // precedence over the segment-based views below.
+            <div className="flex-1 min-w-0">
+              <DatasetView
+                projectId={projectId}
+                datasets={datasets}
+                selectedId={selectedDatasetId}
+                loadingList={datasetsLoading}
+              />
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center p-6 overflow-auto relative min-w-0">

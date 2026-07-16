@@ -40,6 +40,9 @@ Type Detection Lambda
 | テキスト | `.txt` `.md` | - | - | - | A | - |
 | ウェブ | `.webreq` | - | - | - | - | A |
 | CAD | `.dxf` | - | - | - | A | - |
+| 構造化データ | `.xlsx` `.xls` `.csv` `.tsv` | - | - | - | - | - |
+
+> 構造化データ（Excel/CSV）は、文書分析パイプラインではなく**専用の dataset ブランチ**（検証 → Parquet 変換 → リファレンス文書 → DATASET# 記録）を通ります。下記「構造化データ」の詳細フローを参照。
 
 - **A**（Automatic）：デフォルトで有効（自動実行）
 - **O**（Optional）：文書アップロード時にユーザーが選択的に有効化
@@ -300,6 +303,31 @@ Type Detection
 | 画像 | レイアウトごとのPNG（`format-parser/slides/layout_XXXX.png`） |
 | 自動前処理 | Format Parser |
 | 抽出エンティティ | TEXT、MTEXT、ATTRIB、DIMENSION + レイヤー/ブロックメタデータ |
+
+### 構造化データ（XLSX/XLS/CSV/TSV）
+
+Excel/CSV は文書分析ではなく、Text2SQL クエリ用の**構造化データセット**として処理されます。Type Detection が `processing_type='dataset'` としてルーティングすると、Step Functions 開始点の IsDataset 分岐で専用ブランチを通ります。
+
+```
+XLSX/CSV アップロード
+  ↓
+Type Detection（processing_type='dataset'）
+  └─ Workflow Queue → Step Functions → IsDataset 分岐
+      └─ DatasetProcess（単一 Lambda）
+          ├─ 1. 検証：表形式か確認（結合セル/画像/チャート → reject）
+          ├─ 2. シートごとに Parquet 変換（カラム名 snake_case 正規化）
+          ├─ 3. リファレンス文書生成（Bedrock：スキーマ/サンプル/クエリ例）
+          └─ 4. DATASET# 記録 + カタログインデックス（検索用）
+```
+
+| 項目 | 値 |
+|------|-----|
+| 出力 | `.../documents/{document_id}/dataset/{dataset_id}.parquet` + `.txt`（リファレンス） |
+| 識別子 | `{document_id}`（単一シート）または `{document_id}__{sheet_index}`（複数シート） |
+| クエリ | Data MCP（`search_datasets` / `describe_dataset` / `run_sql`）でチャットから SQL クエリ |
+| 検証失敗 | ワークフロー状態 `needs_user_fix` + 理由（表形式に整えて再アップロードするよう案内） |
+
+> 複数シートのブックでは各シートが個別の DATASET# として処理されます。無名のインデックス列や混在型カラムは自動的に正規化され、変換時にデータが失われません。
 
 ---
 

@@ -8,6 +8,7 @@ import type {
   ChatAttachment,
 } from '../../types/project';
 import type { VoiceChatState, BidiModelType } from '../../hooks/useVoiceChat';
+import type { LlmModel, ReasoningLevel } from './ModelSelectorPrompt';
 
 export interface AttachedFile {
   id: string;
@@ -79,12 +80,20 @@ export interface ChatPanelProps {
   documents?: Document[];
   onInputChange: (value: string) => void;
   onSendMessage: (files: AttachedFile[], message?: string) => void;
+  onStop?: () => void;
+  models?: readonly LlmModel[];
+  modelId?: string;
+  reasonings?: Record<string, ReasoningLevel>;
+  onModelChange?: (modelValue: string) => void;
+  onReasoningChange?: (reasonings: Record<string, ReasoningLevel>) => void;
   onAgentSelect?: (agentName: string | null) => void;
   onAgentClick: () => void;
   onNewChat: () => void;
   onArtifactView?: (artifactId: string) => void;
   onSourceClick?: (documentId: string, segmentId: string) => void;
   loadingSourceKey?: string | null;
+  /** Post an ask_user answer back as the user's next message. */
+  onAnswer?: (content: string) => void;
   scrollPositionRef?: React.MutableRefObject<number>;
   voiceChat?: VoiceChatProps;
 }

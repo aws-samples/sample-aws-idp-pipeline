@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { calculateAudioLevel } from '../lib/audioUtils';
 
 function base64ToInt16Array(base64: string): Int16Array {
@@ -107,7 +107,9 @@ export function useAudioPlayback(): UseAudioPlaybackReturn {
     [getAudioContext, isPlaying, startLevelMeter, stopLevelMeter],
   );
 
-  const stop = useCallback(() => {
+  // Release the AudioContext/RAF without touching state; shared by stop() and
+  // the unmount cleanup.
+  const releaseResources = useCallback(() => {
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       audioContextRef.current.close();
     }
@@ -115,9 +117,25 @@ export function useAudioPlayback(): UseAudioPlaybackReturn {
     analyserRef.current = null;
     nextStartTimeRef.current = 0;
     activeSourcesRef.current = 0;
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = 0;
+    }
+  }, []);
+
+  const stop = useCallback(() => {
+    releaseResources();
     setIsPlaying(false);
-    stopLevelMeter();
-  }, [stopLevelMeter]);
+    setAudioLevel(0);
+  }, [releaseResources]);
+
+  // Always release the AudioContext/RAF on unmount, even if stop() was never
+  // called (prevents leaked AudioContext / animation frames).
+  useEffect(() => {
+    return () => {
+      releaseResources();
+    };
+  }, [releaseResources]);
 
   return { isPlaying, enqueueAudio, stop, audioLevel };
 }

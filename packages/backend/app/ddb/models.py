@@ -53,6 +53,26 @@ class Document(BaseModel):
     updated_at: str
 
 
+class DatasetData(BaseModel):
+    """Structured dataset (Parquet) reference for Text2SQL queries."""
+
+    dataset_id: str
+    project_id: str
+    name: str
+    description: str = ""
+    dataset_s3_uri: str
+    reference_s3_uri: str | None = None
+    row_count: int | None = None
+    columns: list[str] | None = None
+    source_document_id: str | None = None
+
+
+class Dataset(BaseModel):
+    data: DatasetData
+    created_at: str
+    updated_at: str
+
+
 class WorkflowData(BaseModel):
     execution_arn: str
     file_name: str

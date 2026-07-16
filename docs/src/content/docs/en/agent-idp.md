@@ -14,12 +14,21 @@ User question
 AgentCore Runtime (HTTP streaming)
   │
   ▼
-Strands Agent (Claude Opus 4.6)
+Strands Agent (Claude Opus 4.8, default)
   ├─ 1. Understand intent
   ├─ 2. Create execution plan
   ├─ 3. Load skill → call tools → collect results
   └─ 4. Generate final response with citations
 ```
+
+### Model Selection
+
+Users can pick the model and reasoning effort per turn from the chat composer.
+
+- The selectable models are loaded at runtime from a catalog defined in an SSM parameter (`/idp-v2/chat/models`). Adding/removing a model is done by editing the parameter — no redeploy needed.
+- The agent validates the requested `model_id` against the catalog allowlist (the frontend selector is not a security boundary). A model that is not allowed falls back to the default.
+- The reasoning effort (low/medium/high) is passed as `output_config.effort` only when the resolved model supports it.
+- Changing the model starts a new conversation, so responses from different models don't mix within one session.
 
 ---
 
@@ -29,7 +38,8 @@ The agent operates in **skill** units. Skills are markdown files defined in `.sk
 
 | Skill | Purpose | Tools Used |
 |---|---|---|
-| **search** | Document search + web search strategy | Search MCP (summarize, graph_traverse, graph_keyword), DuckDuckGo |
+| **search** | Document search + web search strategy | Search MCP (summarize, graph_traverse, graph_keyword), AgentCore Web Search |
+| **dataset** | Structured data (Excel/CSV) Text2SQL querying | Data MCP (search_datasets, describe_dataset, run_sql) |
 | **docx** | Word document creation/editing | Code Interpreter (python-docx) |
 | **xlsx** | Excel spreadsheet creation/editing | Code Interpreter (openpyxl) |
 | **pptx** | PowerPoint creation/editing | Code Interpreter (python-pptx) |
@@ -79,6 +89,16 @@ MCP tools accessed through the AgentCore Gateway.
 | `create_document` | Create PDF/DOCX/PPTX |
 | `edit_document` | Edit existing documents |
 
+### Data MCP (Structured Data Text2SQL)
+
+Queries Parquet datasets converted from Excel/CSV using SQL. Used for structured data that needs exact aggregation, filtering, or sorting.
+
+| Tool | Description |
+|---|---|
+| `search_datasets` | Hybrid search over the project's datasets by name/description |
+| `describe_dataset` | Retrieve a dataset's schema, samples, and query examples (reference doc) |
+| `run_sql` | Run read-only SQL against a Parquet dataset via DuckDB |
+
 ### Other MCPs
 
 | MCP | Tool | Description |
@@ -89,6 +109,21 @@ MCP tools accessed through the AgentCore Gateway.
 | MD MCP | `load_markdown` | Load markdown |
 | MD MCP | `save_markdown` | Save markdown |
 | MD MCP | `edit_markdown` | Edit markdown |
+
+---
+
+## Local Tools
+
+Tools that run directly in the agent process, not through the Gateway.
+
+| Tool | Description |
+|---|---|
+| `render_chart` | Render an inline chart card in the reply (hbar / compare / timeline / donut / stacked / scatter). Uses only real values from a prior tool result |
+| `ask_user` | Show a structured question card (single / multi / free-text). The user's choice is posted back as the next message and picked up on the following turn |
+| `generate_image` | AI image generation |
+| `code_interpreter` | Isolated Python sandbox execution (see below) |
+
+Results from `render_chart` and `ask_user` are rendered by the frontend as dedicated UI cards instead of plain text.
 
 ---
 

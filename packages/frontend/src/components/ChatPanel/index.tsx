@@ -42,12 +42,19 @@ export default function ChatPanel({
   documents = [],
   onInputChange,
   onSendMessage,
+  onStop,
+  models,
+  modelId,
+  reasonings,
+  onModelChange,
+  onReasoningChange,
   onAgentSelect,
   onAgentClick,
   onNewChat,
   onArtifactView,
   onSourceClick,
   loadingSourceKey,
+  onAnswer,
   scrollPositionRef,
   voiceChat,
 }: ChatPanelProps) {
@@ -297,6 +304,28 @@ export default function ChatPanel({
     }
   }, [streamingBlocks.length, sending]);
 
+  // Keep the view pinned to the bottom while content GROWS after a scroll was
+  // already issued - e.g. an inline card (question/chart) mounts and expands
+  // its height once options/bars render, which would otherwise leave the card
+  // clipped below the fold. The scroll container itself is flex-sized (fixed
+  // height), so we watch the message-list content wrapper (chatEndRef's parent)
+  // whose height tracks the messages. Re-attaching on every render keeps the
+  // observer pointed at the current wrapper across conditional renders
+  // (loading / welcome / message list). Respects a deliberate scroll-up.
+  useEffect(() => {
+    const content = chatEndRef.current?.parentElement;
+    const container = scrollContainerRef.current;
+    if (!content || !container) return;
+    const observer = new ResizeObserver(() => {
+      if (userScrolledUpRef.current) return;
+      container.scrollTop = container.scrollHeight;
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+    // Re-attach when the message-list mounts/unmounts (loading/welcome/list)
+    // so the observer always points at the live content wrapper.
+  }, [loadingHistory, messages.length, sending]);
+
   const scrollToBottom = useCallback(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     userScrolledUpRef.current = false;
@@ -336,6 +365,12 @@ export default function ChatPanel({
       selectedAgent={selectedAgent}
       onInputChange={onInputChange}
       onSendMessage={onSendMessage}
+      onStop={onStop}
+      models={models}
+      modelId={modelId}
+      reasonings={reasonings}
+      onModelChange={onModelChange}
+      onReasoningChange={onReasoningChange}
       onAgentSelect={onAgentSelect}
       onAgentClick={onAgentClick}
       voiceChat={{
@@ -417,6 +452,7 @@ export default function ChatPanel({
             onGraphView={(data) => setGraphSearchData(data)}
             documents={documents}
             chatEndRef={chatEndRef}
+            onAnswer={onAnswer}
           />
         )}
       </div>

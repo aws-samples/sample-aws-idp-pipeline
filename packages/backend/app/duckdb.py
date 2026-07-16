@@ -1,3 +1,5 @@
+import re
+
 import duckdb
 from pydantic import BaseModel
 
@@ -122,3 +124,81 @@ def query_agents(user_id: str, project_id: str) -> list[AgentListItem]:
         )
 
     return agents
+
+
+# ── Dataset (Parquet) preview & query ──────────────────────────────────────
+# DuckDB reads the Parquet directly from S3 via httpfs, so only the requested
+# page is materialized regardless of dataset size.
+
+_READ_ONLY_RE = re.compile(r"^\s*(select|with)\b", re.IGNORECASE)
+_FORBIDDEN_RE = re.compile(
+    r"\b(insert|update|delete|drop|create|alter|attach|copy|install|load|"
+    r"pragma|set|export|import|call)\b",
+    re.IGNORECASE,
+)
+_STRING_LITERAL_RE = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"")
+
+
+def is_read_only_sql(query: str) -> bool:
+    """Allow only a single SELECT/WITH statement (reject DDL/DML/multi-statement)."""
+    stripped = query.strip().rstrip(";")
+    if not _READ_ONLY_RE.match(stripped):
+        return False
+    without_strings = _STRING_LITERAL_RE.sub("''", stripped)
+    if ";" in without_strings:
+        return False
+    return not _FORBIDDEN_RE.search(without_strings)
+
+
+def _rows_to_dicts(cursor) -> tuple[list[str], list[dict]]:
+    columns = [d[0] for d in cursor.description]
+    rows = [dict(zip(columns, row, strict=False)) for row in cursor.fetchall()]
+    return columns, rows
+
+
+def get_dataset_schema(dataset_s3_uri: str) -> list[dict]:
+    """Return column name/type for a Parquet dataset."""
+    conn = get_duckdb_connection()
+    safe = dataset_s3_uri.replace("'", "''")
+    result = conn.execute(f"DESCRIBE SELECT * FROM read_parquet('{safe}')").fetchall()
+    return [{"name": r[0], "type": r[1]} for r in result]
+
+
+def get_dataset_rows(dataset_s3_uri: str, offset: int = 0, limit: int = 10) -> dict:
+    """Return a page of rows plus columns from a Parquet dataset."""
+    conn = get_duckdb_connection()
+    safe = dataset_s3_uri.replace("'", "''")
+    cursor = conn.execute(f"SELECT * FROM read_parquet('{safe}') OFFSET {int(offset)} LIMIT {int(limit)}")
+    columns, rows = _rows_to_dicts(cursor)
+    return {"columns": columns, "rows": rows}
+
+
+def run_dataset_query(dataset_s3_uri: str, query: str, offset: int = 0, limit: int = 10) -> dict:
+    """Run a read-only SQL query against a dataset (table 'data'), paginated.
+
+    The user query is wrapped as a subquery so results are returned a page at a
+    time (LIMIT/OFFSET) even for `SELECT * FROM data`. One extra row is fetched to
+    report whether more pages exist.
+    """
+    if not is_read_only_sql(query):
+        raise ValueError("Only read-only SELECT/WITH queries are allowed.")
+
+    conn = get_duckdb_connection()
+    safe = dataset_s3_uri.replace("'", "''")
+    conn.execute(f"CREATE OR REPLACE TEMP VIEW data AS SELECT * FROM read_parquet('{safe}')")
+    inner = query.strip().rstrip(";")
+    offset = max(0, offset)
+    limit = max(1, min(limit, 100))
+    paged = f"SELECT * FROM ({inner}) AS _q OFFSET {offset} LIMIT {limit + 1}"
+    cursor = conn.execute(paged)
+    columns = [d[0] for d in cursor.description]
+    fetched = cursor.fetchall()
+    has_more = len(fetched) > limit
+    rows = [dict(zip(columns, r, strict=False)) for r in fetched[:limit]]
+    return {
+        "columns": columns,
+        "rows": rows,
+        "offset": offset,
+        "limit": limit,
+        "has_more": has_more,
+    }

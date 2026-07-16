@@ -100,10 +100,24 @@ Bedrock Agent Coreベースの対話型AIインターフェースです。IDP Ag
 
 ### チャット機能
 
-- ストリーミング応答およびツール使用過程のリアルタイム表示
+- ストリーミング応答およびツール使用過程のリアルタイム表示（タイピングバッファリングで滑らかなレンダリング）
+- 応答の途中停止（進行中の生成をキャンセル）
 - 画像/文書添付（マルチモーダル入力）
 - マークダウンレンダリングおよびコードハイライト
 - セッション管理（作成/名前変更/削除、会話履歴保存）
+
+### モデル選択
+
+ターンごとに使用するモデルと推論（reasoning）強度を選択します。
+
+- モデル一覧は SSM パラメータベースのカタログから読み込み（再デプロイなしで追加/削除）
+- 推論強度（low/medium/high）の調整 — 対応モデルのみ
+- モデル変更時は新しい会話を開始、セッションごとの最後に使用したモデルを記憶（このブラウザのみ）
+
+### インライン可視化と質問
+
+- **インラインチャート**: 数値回答をチャートカードでレンダリング（横棒 / 比較 / タイムライン / ドーナツ / 積み上げ / 散布図）
+- **質問カード**: エージェントが構造化された質問（単一/複数/自由入力）をカードで提示し、ユーザーの選択が次のターンに反映
 
 ### ハイブリッド検索
 
@@ -125,10 +139,12 @@ Bedrock Agent Coreベースの対話型AIインターフェースです。IDP Ag
 
 | ツール | 説明 |
 |--------|------|
-| search_documents | プロジェクト文書のハイブリッド検索 |
+| summarize / graph_traverse / graph_keyword | プロジェクト文書のハイブリッド検索・グラフ探索 |
+| search_datasets / describe_dataset / run_sql | 構造化データ（Excel/CSV）Text2SQL クエリ |
+| create/edit_document, extract_text/tables | 文書（PDF/DOCX/PPTX）生成およびテキスト/テーブル抽出 |
 | save/load/edit_markdown | マークダウンファイルの作成・編集 |
-| create_pdf, extract_pdf_text/tables | PDF生成およびテキスト/テーブル抽出 |
-| create_docx, extract_docx_text/tables | Word文書生成およびテキスト/テーブル抽出 |
+| render_chart | インラインチャートカードのレンダリング |
+| ask_user | 質問カードの表示 |
 | generate_image | AI画像生成 |
 | code_interpreter | Pythonコード実行 |
 

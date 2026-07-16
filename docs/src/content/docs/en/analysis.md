@@ -23,8 +23,8 @@ Upstream Preprocessing (parallel)
   Segment Builder (merge all results → S3 segment JSON)
        ↓
   Segment Analyzer (ReAct Agent)
-  ├─ Documents/Images → Claude Sonnet 4.6 + image analysis tools
-  └─ Videos/Audio     → Claude Sonnet 4.6 + Pegasus video analysis tool
+  ├─ Documents/Images → Claude Sonnet 5 + image analysis tools
+  └─ Videos/Audio     → Claude Sonnet 5 + Pegasus video analysis tool
        ↓
   Analysis Finalizer → SQS → LanceDB Writer
        ↓
@@ -110,13 +110,13 @@ The Segment Analyzer uses an **iterative question-answer** approach. After revie
 Agent reviews context
   → "I need to identify the document type"
     → analyze_image("What is the type and structure of this document?")
-      → Claude Sonnet 4.6 examines the image and responds
+      → Claude Sonnet 5 examines the image and responds
   → "There's a table that needs detailed analysis"
     → analyze_image("Extract the table structure and data")
-      → Claude Sonnet 4.6 responds
+      → Claude Sonnet 5 responds
   → "I should check the technical drawing dimensions"
     → analyze_image("What are the dimensions and specifications shown?")
-      → Claude Sonnet 4.6 responds
+      → Claude Sonnet 5 responds
   → Synthesize all results into final analysis
 ```
 
@@ -138,14 +138,14 @@ The agent automatically adjusts analysis depth based on content complexity.
 
 | Model | Purpose |
 |-------|---------|
-| **Claude Sonnet 4.6** | ReAct agent (reasoning + tool call decisions) |
-| **Claude Sonnet 4.6** (Vision) | Image analysis tool (processes image + question internally) |
+| **Claude Sonnet 5** | ReAct agent (reasoning + tool call decisions) |
+| **Claude Sonnet 5** (Vision) | Image analysis tool (processes image + question internally) |
 
 ### Available Tools
 
 #### analyze_image
 
-Analyzes document images by asking specific questions. Uses Claude Sonnet 4.6's Vision capability to directly examine images and provide answers.
+Analyzes document images by asking specific questions. Uses Claude Sonnet 5's Vision capability to directly examine images and provide answers.
 
 ```python
 @tool
@@ -202,7 +202,7 @@ Final synthesis → Consolidate all tool responses into structured analysis
 
 | Model | Purpose |
 |-------|---------|
-| **Claude Sonnet 4.6** | ReAct agent (reasoning + tool call decisions) |
+| **Claude Sonnet 5** | ReAct agent (reasoning + tool call decisions) |
 | **TwelveLabs Pegasus 1.2** | Video analysis tool (analyzes video directly internally) |
 
 ### Available Tools
@@ -268,8 +268,8 @@ Final synthesis → Combine Transcribe + Pegasus responses into timeline-based a
 | Segment Type | `PAGE` | `CHAPTER`, `VIDEO`, `AUDIO` |
 | Input Data | Image URI | Video URI + timecodes |
 | Preprocessing Data | OCR + BDA (optional) + PDF text | Transcribe + BDA (optional) |
-| Agent Model | Claude Sonnet 4.6 | Claude Sonnet 4.6 |
-| Analysis Tool Model | Claude Sonnet 4.6 (Vision) | TwelveLabs Pegasus 1.2 |
+| Agent Model | Claude Sonnet 5 | Claude Sonnet 5 |
+| Analysis Tool Model | Claude Sonnet 5 (Vision) | TwelveLabs Pegasus 1.2 |
 | Tools | `analyze_image`, `rotate_image` | `analyze_video` |
 | Analysis Focus | Text, tables, diagrams, layout | Actions, scenes, speech, visual events |
 

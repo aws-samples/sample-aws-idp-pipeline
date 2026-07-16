@@ -34,6 +34,7 @@ import { useProjectData } from '../../hooks/useProjectData';
 import { usePanelLayout } from '../../hooks/usePanelLayout';
 import { useSystemPrompts } from '../../hooks/useSystemPrompts';
 import { useChatSession } from '../../hooks/useChatSession';
+import { useModelCatalog } from '../../hooks/useModelCatalog';
 import { useVoiceChatManager } from '../../hooks/useVoiceChatManager';
 import { useAgents } from '../../hooks/useAgents';
 import { useArtifacts } from '../../hooks/useArtifacts';
@@ -57,8 +58,12 @@ function ProjectDetailPage() {
   const panelLayout = usePanelLayout();
   const { systemPromptTabs } = useSystemPrompts({ fetchApi });
 
+  // Chat model catalog (SSM-backed, runtime-loaded so models can be added
+  // without redeploying).
+  const { models, loaded: modelsLoaded } = useModelCatalog();
+
   // 2. Chat session (provides handleNewSession, setMessages, setStreamingBlocks)
-  const chatSession = useChatSession({ projectId });
+  const chatSession = useChatSession({ projectId, models, modelsLoaded });
 
   // 3. Voice chat manager (needs setMessages, setStreamingBlocks)
   const [selectedVoiceModel, setSelectedVoiceModel] = useState<BidiModelType>(
@@ -178,14 +183,45 @@ function ProjectDetailPage() {
 
   // --- Wrapped callbacks for ChatPanel/Sidebar compatibility ---
 
-  // handleNewSession that also resets voice/agent state
-  const handleNewSession = useCallback(() => {
-    chatSession.handleNewSession();
-    agentsHook.setSelectedAgent(null);
-    voiceChatManager.setVoiceChatMode(false);
-    voiceChatManager.voiceChatDisconnectRef.current();
+  // handleNewSession that also resets voice/agent state. `persistModelId`
+  // remembers the chosen model against the new session id immediately (used
+  // when a model change starts a fresh chat).
+  const handleNewSession = useCallback(
+    (persistModelId?: string) => {
+      chatSession.handleNewSession(persistModelId);
+      agentsHook.setSelectedAgent(null);
+      voiceChatManager.setVoiceChatMode(false);
+      voiceChatManager.voiceChatDisconnectRef.current();
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatSession.handleNewSession]);
+    [chatSession.handleNewSession],
+  );
+
+  // --- Model selection ---
+  // Changing the model mid-conversation would mix responses from different
+  // models in one session, so we confirm and start a fresh chat.
+  const [pendingModelChange, setPendingModelChange] = useState<string | null>(
+    null,
+  );
+  const handleModelChange = useCallback(
+    (modelValue: string) => {
+      if (modelValue === chatSession.modelId) return;
+      if (chatSession.messages.length > 0 || chatSession.sending) {
+        setPendingModelChange(modelValue);
+      } else {
+        chatSession.setModelId(modelValue);
+      }
+    },
+    [chatSession],
+  );
+  const confirmModelChange = useCallback(() => {
+    if (pendingModelChange) {
+      chatSession.setModelId(pendingModelChange);
+      // Start a fresh chat and remember the model for the new session id.
+      handleNewSession(pendingModelChange);
+    }
+    setPendingModelChange(null);
+  }, [pendingModelChange, chatSession, handleNewSession]);
 
   // handleSessionSelect with agent/voice context
   const handleSessionSelect = useCallback(
@@ -219,6 +255,17 @@ function ProjectDetailPage() {
   const handleSendMessage = useCallback(
     (files: AttachedFile[], message?: string) => {
       chatSession.handleSendMessage(files, message, agentsHook.selectedAgent);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chatSession.handleSendMessage, agentsHook.selectedAgent],
+  );
+
+  // ask_user answer: post the user's selection back as their next message so
+  // the agent reads it on the following turn.
+  const handleAnswer = useCallback(
+    (content: string) => {
+      if (!content.trim()) return;
+      chatSession.handleSendMessage([], content, agentsHook.selectedAgent);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [chatSession.handleSendMessage, agentsHook.selectedAgent],
@@ -352,12 +399,19 @@ function ProjectDetailPage() {
                 documents={documentsHook.documents}
                 onInputChange={chatSession.setInputMessage}
                 onSendMessage={handleSendMessage}
+                onStop={chatSession.stopStreaming}
+                models={models}
+                modelId={chatSession.modelId}
+                reasonings={chatSession.reasonings}
+                onModelChange={handleModelChange}
+                onReasoningChange={chatSession.setReasonings}
                 onAgentSelect={agentsHook.handleAgentSelect}
                 onAgentClick={() => agentsHook.setShowAgentModal(true)}
                 onNewChat={handleNewSession}
                 onArtifactView={artifactsHook.handleArtifactSelect}
                 onSourceClick={documentsHook.handleSourceClick}
                 loadingSourceKey={documentsHook.loadingSourceKey}
+                onAnswer={handleAnswer}
                 scrollPositionRef={chatSession.chatScrollPositionRef}
                 voiceChat={{
                   available: !!bidiAgentRuntimeArn,
@@ -524,6 +578,20 @@ function ProjectDetailPage() {
         confirmText={t('common.delete')}
         variant="danger"
         loading={documentsHook.deleting}
+      />
+
+      {/* Model Change Confirmation Modal (starts a new chat) */}
+      <ConfirmModal
+        isOpen={!!pendingModelChange}
+        onClose={() => setPendingModelChange(null)}
+        onConfirm={confirmModelChange}
+        title={t('chat.model.changeTitle', 'Change model')}
+        message={t(
+          'chat.model.changeConfirm',
+          'Changing the model starts a new conversation. Continue?',
+        )}
+        confirmText={t('agent.startNewChat', 'Start new chat')}
+        variant="warning"
       />
 
       {/* Agent Select Modal */}

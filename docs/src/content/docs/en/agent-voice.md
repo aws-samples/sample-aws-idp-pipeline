@@ -69,8 +69,7 @@ The Voice Agent can also use MCP tools.
 | Tool | Description |
 |---|---|
 | `getDateAndTimeTool` | Get current time in specified timezone |
-| DuckDuckGo `search` | Web search |
-| DuckDuckGo `fetch_content` | Fetch full web page content |
+| AgentCore Web Search | Web search and page content retrieval |
 | AgentCore MCP tools | Document search, graph traversal, etc. |
 
 ---

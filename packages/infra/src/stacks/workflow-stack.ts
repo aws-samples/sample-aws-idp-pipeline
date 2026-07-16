@@ -416,6 +416,47 @@ export class WorkflowStack extends Stack {
       environment: { ...commonLambdaProps.environment },
     });
 
+    // Dataset Process (structured data branch): validate xlsx/csv, convert each
+    // sheet to Parquet, generate a Text2SQL reference doc (Bedrock), record DATASET#.
+    // Docker Lambda for pandas/pyarrow/duckdb/openpyxl + strands.
+    const datasetProcess = new lambda.DockerImageFunction(
+      this,
+      'DatasetProcess',
+      {
+        functionName: 'idp-v2-dataset-process',
+        code: lambda.DockerImageCode.fromImageAsset(
+          path.join(__dirname, '../functions'),
+          {
+            file: 'step-functions/dataset-process/Dockerfile',
+            platform: Platform.LINUX_ARM64,
+          },
+        ),
+        architecture: lambda.Architecture.ARM_64,
+        timeout: Duration.minutes(15),
+        // Higher memory => more CPU, which speeds up the heavy imports (pandas,
+        // pyarrow, duckdb, strands) and Parquet conversion.
+        memorySize: 3008,
+        ephemeralStorageSize: Size.gibibytes(2),
+        environment: {
+          ...commonLambdaProps.environment,
+          DATASET_REFERENCE_MODEL_ID: models.analysis,
+          // Index each dataset into the per-project catalog (search_datasets).
+          LANCEDB_FUNCTION_NAME: lancedbService.functionName,
+        },
+      },
+    );
+    // S3 (doc bucket) + DDB grants come from the allFunctions loop below.
+    datasetProcess.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'bedrock:InvokeModel',
+          'bedrock:InvokeModelWithResponseStream',
+        ],
+        resources: ['*'],
+      }),
+    );
+    lancedbService.grantInvoke(datasetProcess);
+
     // Check analysis throttle (called after preprocessing completes)
     const checkPreprocessStatus = new lambda.Function(
       this,
@@ -1609,7 +1650,29 @@ export class WorkflowStack extends Stack {
       )
       .otherwise(parallelPreprocessing);
 
-    const definition = isReanalysisChoice;
+    // Structured dataset branch: xlsx/csv skip the document analysis pipeline and
+    // run validate -> parquet -> reference -> DATASET# in a single Lambda, which
+    // also finalizes the workflow status.
+    const datasetProcessTask = new tasks.LambdaInvoke(this, 'ProcessDataset', {
+      lambdaFunction: datasetProcess,
+      outputPath: '$.Payload',
+      comment:
+        'Validate a spreadsheet, convert each valid sheet to Parquet, generate a Text2SQL reference doc, and record DATASET#. Sets workflow status to completed or needs_user_fix.',
+    });
+    datasetProcessTask.addCatch(errorHandlerTask, catchConfig);
+
+    // Entry Choice: route structured datasets before the document pipeline.
+    const isDatasetChoice = new sfn.Choice(this, 'IsDataset', {
+      comment:
+        "Entry point: if processing_type='dataset' (xlsx/csv), run the structured dataset branch; otherwise fall through to the document pipeline.",
+    })
+      .when(
+        sfn.Condition.stringEquals('$.processing_type', 'dataset'),
+        datasetProcessTask,
+      )
+      .otherwise(isReanalysisChoice);
+
+    const definition = isDatasetChoice;
 
     this.stateMachine = new sfn.StateMachine(
       this,
@@ -1701,6 +1764,7 @@ export class WorkflowStack extends Stack {
       segmentPrep,
       segmentPrepFinalizer,
       formatParser,
+      datasetProcess,
       checkPreprocessStatus,
       segmentBuilder,
       reanalysisPrep,

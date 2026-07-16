@@ -847,21 +847,6 @@ wheels = [
 ]
 
 [[package]]
-name = "duckduckgo-mcp-server"
-version = "0.4.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "beautifulsoup4" },
-    { name = "httpcore" },
-    { name = "httpx" },
-    { name = "mcp", extra = ["cli"] },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/96/a2/d439a55f0c3102902068826ca68825f7921afad639af1ff8649dc3416760/duckduckgo_mcp_server-0.4.0.tar.gz", hash = "sha256:4338b05321bcc8809aadd3b1db808e42ebe7736c5dfa74981770e7d8acf07455", size = 77611, upload-time = "2026-05-08T19:22:52.158Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/92/94/24520ce6721a426bc9ec6978d59238c7b339282e9ab9686b64a1dedb16cf/duckduckgo_mcp_server-0.4.0-py3-none-any.whl", hash = "sha256:6183b27379ead2d9dac50a7580cc249311b619e7dec9a27bf9ec1bef3dd385dd", size = 21014, upload-time = "2026-05-08T19:22:51.003Z" },
-]
-
-[[package]]
 name = "email-validator"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1361,7 +1346,6 @@ source = { editable = "packages/agents/bidi-agent" }
 dependencies = [
     { name = "asyncio" },
     { name = "boto3" },
-    { name = "duckduckgo-mcp-server" },
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
     { name = "mcp" },
@@ -1375,7 +1359,6 @@ dependencies = [
 requires-dist = [
     { name = "asyncio", specifier = ">=4.0.0" },
     { name = "boto3", specifier = ">=1.42.55" },
-    { name = "duckduckgo-mcp-server", specifier = ">=0.1.1" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.132.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "mcp", specifier = ">=1.26.0" },
@@ -1393,7 +1376,6 @@ dependencies = [
     { name = "aws-opentelemetry-distro" },
     { name = "bedrock-agentcore" },
     { name = "boto3" },
-    { name = "duckduckgo-mcp-server" },
     { name = "fastapi" },
     { name = "mcp" },
     { name = "nanoid" },
@@ -1414,7 +1396,6 @@ requires-dist = [
     { name = "aws-opentelemetry-distro", specifier = ">=0.15.0" },
     { name = "bedrock-agentcore", specifier = ">=1.6.0" },
     { name = "boto3", specifier = ">=1.42.55" },
-    { name = "duckduckgo-mcp-server", specifier = ">=0.1.1" },
     { name = "fastapi", specifier = ">=0.132.0" },
     { name = "mcp", specifier = ">=1.26.0" },
     { name = "nanoid", specifier = ">=2.0.0" },
@@ -1438,7 +1419,6 @@ dependencies = [
     { name = "aws-opentelemetry-distro" },
     { name = "bedrock-agentcore" },
     { name = "boto3" },
-    { name = "duckduckgo-mcp-server" },
     { name = "nanoid" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -1451,7 +1431,6 @@ requires-dist = [
     { name = "aws-opentelemetry-distro", specifier = ">=0.15.0" },
     { name = "bedrock-agentcore", specifier = ">=1.3.2" },
     { name = "boto3", specifier = ">=1.42.55" },
-    { name = "duckduckgo-mcp-server", specifier = ">=0.1.1" },
     { name = "nanoid", specifier = ">=2.0.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.1" },
@@ -1726,12 +1705,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c1/ee/94c6c50ffc5b5cf4737052275d11b57367f32d1a8516e31dcd60591b3916/mcp-1.28.0.tar.gz", hash = "sha256:559d3f9943674cafbe5744c5d3794f3237e8b47f9bbc58e20c0fad680d8487c2", size = 636040, upload-time = "2026-06-16T21:37:17.996Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2e/e1/4c1dc1fbb688641a712d34650c3d58bbbdcb314ddb75bc5817bbf33515a4/mcp-1.28.0-py3-none-any.whl", hash = "sha256:9c1e7cf3a9125557e418ecd4fed8e9adddce81b0dfdae4d6601d700f5beb71a4", size = 221959, upload-time = "2026-06-16T21:37:16.579Z" },
-]
-
-[package.optional-dependencies]
-cli = [
-    { name = "python-dotenv" },
-    { name = "typer" },
 ]
 
 [[package]]

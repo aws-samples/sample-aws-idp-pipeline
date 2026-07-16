@@ -69,8 +69,7 @@ Voice AgentもMCPツールを使用できます。
 | ツール | 説明 |
 |---|---|
 | `getDateAndTimeTool` | 指定タイムゾーンの現在時刻を取得 |
-| DuckDuckGo `search` | Web検索 |
-| DuckDuckGo `fetch_content` | Webページ全文取得 |
+| AgentCore Web Search | Web検索およびページコンテンツ取得 |
 | AgentCore MCPツール | 文書検索、グラフ探索など |
 
 ---

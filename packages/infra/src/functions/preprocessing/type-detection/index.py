@@ -44,6 +44,7 @@ MIME_TYPE_MAP = {
     'txt': 'text/plain',
     'md': 'text/markdown',
     'csv': 'text/csv',
+    'tsv': 'text/tab-separated-values',
     # Spreadsheets
     'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'xls': 'application/vnd.ms-excel',
@@ -224,10 +225,21 @@ def send_to_workflow_queue(
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'application/vnd.ms-excel',
         'text/csv',
+        'text/tab-separated-values',
     )
     is_dxf = file_type in ('application/dxf', 'image/vnd.dxf')
 
-    processing_type = 'web' if is_webreq else ('text' if (is_text or is_spreadsheet or is_dxf) else get_processing_type(file_type))
+    # Spreadsheets (xlsx/xls/csv) are treated as structured datasets: they take a
+    # separate Step Functions branch (validate -> parquet -> reference doc ->
+    # DATASET#) instead of the document analysis pipeline.
+    if is_spreadsheet:
+        processing_type = 'dataset'
+    elif is_webreq:
+        processing_type = 'web'
+    elif is_text or is_dxf:
+        processing_type = 'text'
+    else:
+        processing_type = get_processing_type(file_type)
 
     # Resolve OCR language option
     resolved_ocr_options = dict(ocr_options or {})

@@ -109,67 +109,83 @@ export interface ContentBlock {
 async function parseStream(
   response: Response,
   onEvent?: (event: StreamEvent) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('No response body');
+
+  // Cancel the reader if the caller aborts (user pressed Stop). This closes the
+  // HTTP stream, which the agent runtime turns into a cancellation of the
+  // in-progress agent invocation.
+  const onAbort = () => {
+    reader.cancel().catch(() => undefined);
+  };
+  if (signal) {
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  }
 
   const decoder = new TextDecoder();
   let result = '';
   let buffer = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
+      buffer += decoder.decode(value, { stream: true });
 
-    // JSON 객체 단위로 파싱
-    let startIdx = 0;
-    for (let i = 0; i < buffer.length; i++) {
-      if (buffer[i] === '{') {
-        let braceCount = 1;
-        let j = i + 1;
-        let inString = false;
-        let escape = false;
-        while (j < buffer.length && braceCount > 0) {
-          const ch = buffer[j];
-          if (escape) {
-            escape = false;
-          } else if (ch === '\\') {
-            escape = true;
-          } else if (ch === '"') {
-            inString = !inString;
-          } else if (!inString) {
-            if (ch === '{') braceCount++;
-            else if (ch === '}') braceCount--;
-          }
-          j++;
-        }
-        if (braceCount === 0) {
-          const jsonStr = buffer.slice(i, j);
-          try {
-            const event = JSON.parse(jsonStr) as StreamEvent;
-            onEvent?.(event);
-            if (
-              event.type === 'text' &&
-              event.content &&
-              typeof event.content === 'string'
-            ) {
-              result += event.content;
+      // JSON 객체 단위로 파싱
+      let startIdx = 0;
+      for (let i = 0; i < buffer.length; i++) {
+        if (buffer[i] === '{') {
+          let braceCount = 1;
+          let j = i + 1;
+          let inString = false;
+          let escape = false;
+          while (j < buffer.length && braceCount > 0) {
+            const ch = buffer[j];
+            if (escape) {
+              escape = false;
+            } else if (ch === '\\') {
+              escape = true;
+            } else if (ch === '"') {
+              inString = !inString;
+            } else if (!inString) {
+              if (ch === '{') braceCount++;
+              else if (ch === '}') braceCount--;
             }
-          } catch {
-            // JSON 파싱 실패 시 무시
+            j++;
           }
-          startIdx = j;
-          i = j - 1;
-        } else {
-          // 불완전한 JSON - 다음 chunk에서 완성될 때까지 버퍼에 유지
-          startIdx = i;
-          break;
+          if (braceCount === 0) {
+            const jsonStr = buffer.slice(i, j);
+            try {
+              const event = JSON.parse(jsonStr) as StreamEvent;
+              onEvent?.(event);
+              if (
+                event.type === 'text' &&
+                event.content &&
+                typeof event.content === 'string'
+              ) {
+                result += event.content;
+              }
+            } catch {
+              // JSON 파싱 실패 시 무시
+            }
+            startIdx = j;
+            i = j - 1;
+          } else {
+            // 불완전한 JSON - 다음 chunk에서 완성될 때까지 버퍼에 유지
+            startIdx = i;
+            break;
+          }
         }
       }
+      buffer = buffer.slice(startIdx);
     }
-    buffer = buffer.slice(startIdx);
+  } finally {
+    if (signal) signal.removeEventListener('abort', onAbort);
   }
 
   return result;
@@ -262,7 +278,34 @@ export function useAwsClient() {
         throw new Error(`API error: ${response.status}`);
       }
 
-      return response.json();
+      // 본문 없는 응답(예: 204 DELETE, 202 reanalyze)은 파싱하지 않고 undefined
+      // 반환. Content-Length 헤더는 신뢰할 수 없어 실제 본문을 읽어 판단한다.
+      const text = await response.text();
+      return text ? (JSON.parse(text) as T) : (undefined as T);
+    },
+    [apis, createAwsClient, user],
+  );
+
+  /** Backend API 호출 (Blob 응답 - 이미지 등 바이너리) */
+  const fetchApiBlob = useCallback(
+    async (path: string, options?: RequestInit): Promise<Blob> => {
+      if (!apis?.Backend) throw new Error('Backend API URL not available');
+      if (!user?.id_token) throw new Error('User token not available');
+
+      const client = await createAwsClient('execute-api');
+      const headers = new Headers(options?.headers);
+      headers.set('X-User-Id', user.profile?.['cognito:username'] as string);
+
+      const response = await client.fetch(`${apis.Backend}${path}`, {
+        ...options,
+        headers,
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      return response.blob();
     },
     [apis, createAwsClient, user],
   );
@@ -307,6 +350,9 @@ export function useAwsClient() {
       onEvent?: (event: StreamEvent) => void,
       agentId?: string,
       runtimeArn?: string,
+      signal?: AbortSignal,
+      modelId?: string,
+      reasoning?: string,
     ): Promise<string> => {
       const targetArn = runtimeArn || agentRuntimeArn;
       if (!targetArn) throw new Error('Agent runtime ARN not available');
@@ -329,7 +375,12 @@ export function useAwsClient() {
             project_id: projectId,
             user_id: user.profile?.['cognito:username'] as string,
             agent_id: agentId,
+            ...(modelId ? { model_id: modelId } : {}),
+            ...(reasoning ? { reasoning } : {}),
           }),
+          // Aborting closes the HTTP stream, which the agent runtime turns into
+          // a cancellation of the in-progress invocation.
+          signal,
         },
       );
 
@@ -343,7 +394,7 @@ export function useAwsClient() {
         ?.includes('text/event-stream');
 
       if (isStreaming) {
-        return parseStream(response, onEvent);
+        return parseStream(response, onEvent, signal);
       }
 
       return JSON.stringify(await response.json());
@@ -380,6 +431,7 @@ export function useAwsClient() {
 
   return {
     fetchApi,
+    fetchApiBlob,
     uploadToS3,
     invokeAgent,
     getPresignedDownloadUrl,

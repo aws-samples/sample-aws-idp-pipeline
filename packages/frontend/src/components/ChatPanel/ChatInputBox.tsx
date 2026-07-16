@@ -9,10 +9,13 @@ import {
   Settings2,
   Sparkles,
   Mic,
+  Square,
 } from 'lucide-react';
 import { formatFileSize, getFileTypeInfo } from './utils';
 import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 import ToolsMenuPopover from './ToolsMenuPopover';
+import { ModelSelectorPrompt } from './ModelSelectorPrompt';
+import type { LlmModel, ReasoningLevel } from './ModelSelectorPrompt';
 import type {
   AttachedFile,
   Artifact,
@@ -46,6 +49,12 @@ interface ChatInputBoxProps {
   selectedAgent: Agent | null;
   onInputChange: (value: string) => void;
   onSendMessage: (files: AttachedFile[], message?: string) => void;
+  onStop?: () => void;
+  models?: readonly LlmModel[];
+  modelId?: string;
+  reasonings?: Record<string, ReasoningLevel>;
+  onModelChange?: (modelValue: string) => void;
+  onReasoningChange?: (reasonings: Record<string, ReasoningLevel>) => void;
   onAgentSelect?: (agentName: string | null) => void;
   onAgentClick: () => void;
   voiceChat: InputBoxVoiceChat;
@@ -67,6 +76,12 @@ export default function ChatInputBox({
   selectedAgent,
   onInputChange,
   onSendMessage,
+  onStop,
+  models,
+  modelId,
+  reasonings,
+  onModelChange,
+  onReasoningChange,
   onAgentSelect,
   onAgentClick,
   voiceChat,
@@ -658,6 +673,23 @@ export default function ChatInputBox({
                 </div>
               )}
 
+              {/* Model selector (text chat only; voice chat picks its own model) */}
+              {!voiceChat.mode &&
+                models &&
+                models.length > 0 &&
+                modelId &&
+                onModelChange && (
+                  <ModelSelectorPrompt
+                    models={models}
+                    value={modelId}
+                    reasonings={reasonings ?? {}}
+                    onModelChange={(model) => onModelChange(model.value)}
+                    onReasoningChange={(_modelValue, _reasoning, next) =>
+                      onReasoningChange?.(next)
+                    }
+                  />
+                )}
+
               {/* Selected tool chips */}
               {(selectedAgent || voiceChat.mode) && (
                 <>
@@ -700,42 +732,60 @@ export default function ChatInputBox({
                 </>
               )}
             </div>
-            <button
-              onClick={handleSend}
-              disabled={!hasContent || sending}
-              type="button"
-              className={`inline-flex items-center justify-center h-8 w-8 rounded-xl transition-all active:scale-95 ${
-                hasContent && !sending
-                  ? voiceChat.mode
-                    ? 'bg-purple-500 hover:bg-purple-600 text-white shadow-md'
-                    : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md'
-                  : 'bg-slate-200 dark:bg-white/15 text-slate-400 cursor-not-allowed'
-              }`}
-            >
-              {sending ? (
-                <svg
-                  className="w-4 h-4 animate-spin"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                  />
-                </svg>
-              ) : (
-                <ArrowUp className="w-4 h-4" />
-              )}
-            </button>
+            {sending && onStop ? (
+              // While a response streams, the send button becomes a Stop button
+              // that cancels the in-progress generation.
+              <button
+                onClick={onStop}
+                type="button"
+                title={t('chat.stop', 'Stop')}
+                aria-label={t('chat.stop', 'Stop')}
+                className="inline-flex items-center justify-center h-8 w-8 rounded-xl transition-all active:scale-95 text-white shadow-md bg-slate-700 hover:bg-slate-800 dark:bg-slate-600 dark:hover:bg-slate-500"
+              >
+                <Square
+                  className="w-3.5 h-3.5"
+                  fill="currentColor"
+                  strokeWidth={0}
+                />
+              </button>
+            ) : (
+              <button
+                onClick={handleSend}
+                disabled={!hasContent || sending}
+                type="button"
+                className={`inline-flex items-center justify-center h-8 w-8 rounded-xl transition-all active:scale-95 ${
+                  hasContent && !sending
+                    ? voiceChat.mode
+                      ? 'bg-purple-500 hover:bg-purple-600 text-white shadow-md'
+                      : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md'
+                    : 'bg-slate-200 dark:bg-white/15 text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                {sending ? (
+                  <svg
+                    className="w-4 h-4 animate-spin"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
+                  </svg>
+                ) : (
+                  <ArrowUp className="w-4 h-4" />
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>

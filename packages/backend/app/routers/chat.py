@@ -1,6 +1,9 @@
 import json
+import time
 from datetime import datetime
 
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
@@ -11,6 +14,111 @@ from app.message import ContentItem, parse_content_items
 from app.s3 import delete_s3_prefix, get_s3_client
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+# SSM parameter holding the chat model catalog JSON. Operators edit this to
+# add/remove models without redeploying; the agent passes model_id straight to
+# Bedrock so no infra change is needed for a new Anthropic model.
+MODEL_CATALOG_SSM_KEY = "/idp-v2/chat/models"
+_MODEL_CATALOG_TTL_SECONDS = 60
+
+# Built-in fallback used when the SSM parameter is absent or unreadable.
+_DEFAULT_MODEL_CATALOG: list[dict] = [
+    {
+        "value": "global.anthropic.claude-sonnet-5",
+        "label": "Sonnet 5",
+        "description": "일상 작업에 최적",
+        "contextWindow": "1M tokens",
+        "inputPrice": "$3.00 / 1M",
+        "outputPrice": "$15.00 / 1M",
+        "metrics": {"intelligence": 8, "speed": 8, "context": 10, "cost": 7},
+    },
+    {
+        "value": "global.anthropic.claude-opus-4-8",
+        "label": "Opus 4.8",
+        "description": "복잡한 작업에 가장 강력",
+        "contextWindow": "1M tokens",
+        "inputPrice": "$5.00 / 1M",
+        "outputPrice": "$25.00 / 1M",
+        "metrics": {"intelligence": 10, "speed": 5, "context": 10, "cost": 5},
+    },
+    {
+        "value": "global.anthropic.claude-sonnet-4-6",
+        "label": "Sonnet 4.6",
+        "description": "안정적인 이전 세대 모델",
+        "contextWindow": "200K tokens",
+        "inputPrice": "$3.00 / 1M",
+        "outputPrice": "$15.00 / 1M",
+        "metrics": {"intelligence": 7, "speed": 8, "context": 8, "cost": 7},
+        # Sonnet 4.6 has no effort/reasoning control.
+        "supportsReasoning": False,
+    },
+]
+
+# (models, fetched_at monotonic) - refreshed lazily once the TTL elapses.
+_model_catalog_cache: tuple[list["ModelCatalogEntry"], float] | None = None
+
+
+class ModelMetrics(BaseModel):
+    intelligence: int
+    speed: int
+    context: int
+    cost: int
+
+
+class ModelCatalogEntry(BaseModel):
+    """One selectable chat model. Every field the frontend selector renders is
+    required (metrics especially), so a malformed SSM entry is rejected rather
+    than crashing the UI."""
+
+    value: str
+    label: str
+    description: str
+    contextWindow: str
+    inputPrice: str
+    outputPrice: str
+    metrics: ModelMetrics
+    supportsReasoning: bool = True
+
+
+class ModelCatalogResponse(BaseModel):
+    models: list[ModelCatalogEntry]
+
+
+# Built-in fallback, validated once at import so a typo here fails fast in tests.
+_DEFAULT_CATALOG_MODELS: list[ModelCatalogEntry] = [ModelCatalogEntry(**m) for m in _DEFAULT_MODEL_CATALOG]
+
+
+def _load_model_catalog() -> list[ModelCatalogEntry]:
+    """Read + validate the model catalog from SSM (cached), falling back to the
+    built-in default on any read/parse/validation failure so a bad SSM value
+    can never break the selector."""
+    global _model_catalog_cache
+    now = time.monotonic()
+    if _model_catalog_cache is not None and now - _model_catalog_cache[1] < _MODEL_CATALOG_TTL_SECONDS:
+        return _model_catalog_cache[0]
+
+    config = get_config()
+    models = _DEFAULT_CATALOG_MODELS
+    try:
+        ssm = boto3.client("ssm", region_name=config.aws_region)
+        raw = ssm.get_parameter(Name=MODEL_CATALOG_SSM_KEY)["Parameter"]["Value"]
+        parsed = json.loads(raw)
+        # Validate every entry; an invalid or empty catalog raises and we keep
+        # the default.
+        validated = [ModelCatalogEntry.model_validate(item) for item in parsed]
+        if validated:
+            models = validated
+    except (BotoCoreError, ClientError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+        models = _DEFAULT_CATALOG_MODELS
+
+    _model_catalog_cache = (models, now)
+    return models
+
+
+@router.get("/models")
+async def get_model_catalog() -> ModelCatalogResponse:
+    """Return the selectable chat model catalog (SSM-backed, cached)."""
+    return ModelCatalogResponse(models=_load_model_catalog())
 
 
 class ChatMessage(BaseModel):

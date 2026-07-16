@@ -123,6 +123,89 @@ impl ScoredKeyword {
     }
 }
 
+/// A structured-dataset catalog entry: one row per dataset (Excel sheet / CSV),
+/// used to search for relevant datasets by name/description rather than listing
+/// them all. Stored in a per-project table named "{project_id}_datasets".
+#[derive(Serialize)]
+pub struct Dataset {
+    pub dataset_id: String,
+    pub dataset_s3_uri: String,
+    pub name: String,
+    pub description: String,
+    pub row_count: i64,
+}
+
+impl Dataset {
+    pub fn from_batch(batch: &RecordBatch) -> Vec<Self> {
+        let dataset_ids = batch.column_by_name("dataset_id").unwrap().as_string::<i32>();
+        let uris = batch.column_by_name("dataset_s3_uri").unwrap().as_string::<i32>();
+        let names = batch.column_by_name("name").unwrap().as_string::<i32>();
+        let descriptions = batch.column_by_name("description").unwrap().as_string::<i32>();
+        let row_counts = batch.column_by_name("row_count").unwrap().as_primitive::<arrow_array::types::Int64Type>();
+
+        (0..batch.num_rows())
+            .map(|i| Dataset {
+                dataset_id: dataset_ids.value(i).to_string(),
+                dataset_s3_uri: uris.value(i).to_string(),
+                name: names.value(i).to_string(),
+                description: descriptions.value(i).to_string(),
+                row_count: row_counts.value(i),
+            })
+            .collect()
+    }
+}
+
+#[derive(Serialize)]
+pub struct ScoredDataset {
+    #[serde(flatten)]
+    pub dataset: Dataset,
+    pub score: f32,
+}
+
+impl ScoredDataset {
+    pub fn from_batch(batch: &RecordBatch) -> Vec<Self> {
+        let datasets = Dataset::from_batch(batch);
+        let scores = batch.column_by_name("_relevance_score").unwrap().as_primitive::<arrow_array::types::Float32Type>();
+
+        datasets
+            .into_iter()
+            .enumerate()
+            .map(|(i, dataset)| ScoredDataset {
+                dataset,
+                score: scores.value(i),
+            })
+            .collect()
+    }
+}
+
+/// Per-project dataset-catalog table name: "{project_id}_datasets".
+pub fn dataset_catalog_table(project_id: &str) -> String {
+    format!("{project_id}_datasets")
+}
+
+/// Arrow schema for the dataset catalog. One row per dataset (Excel sheet / CSV).
+/// `content` (name + description + column names) is embedded into `vector`, and
+/// `keywords` backs the FTS index for hybrid search.
+pub fn dataset_catalog_schema() -> Arc<Schema> {
+    Arc::new(Schema::new(vec![
+        Field::new("dataset_id", DataType::Utf8, false),
+        Field::new("dataset_s3_uri", DataType::Utf8, false),
+        Field::new("name", DataType::Utf8, false),
+        Field::new("description", DataType::Utf8, false),
+        Field::new("content", DataType::Utf8, false),
+        Field::new(
+            "vector",
+            DataType::FixedSizeList(
+                Arc::new(Field::new("item", DataType::Float32, true)),
+                VECTOR_DIMENSION,
+            ),
+            false,
+        ),
+        Field::new("keywords", DataType::Utf8, false),
+        Field::new("row_count", DataType::Int64, false),
+    ]))
+}
+
 pub const GRAPH_KEYWORDS_TABLE: &str = "graph_keywords";
 
 /// Arrow schema for the keywords table in LanceDB.

@@ -1,0 +1,65 @@
+[
+  {
+    "name": "search_datasets",
+    "description": "Find structured datasets (Parquet tables) relevant to a natural-language query via hybrid search of the project's dataset catalog. Call this FIRST to discover which datasets can answer the question. Returns the top matches with dataset_uri, table_name, name, and description. Use the query to describe what data you need (e.g. 'menu plan materials', 'product prices').",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "The unique identifier of the project"
+        },
+        "query": {
+          "type": "string",
+          "description": "Natural-language description of the data you are looking for"
+        }
+      },
+      "required": ["project_id", "query"]
+    }
+  },
+  {
+    "name": "describe_dataset",
+    "description": "Return the reference document (schema, column dictionary, enum values, query patterns, caveats) for a dataset. Call this BEFORE writing SQL, using a dataset_uri from search_datasets. The returned document is the source of truth for column names and values - do NOT invent columns.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "The unique identifier of the project"
+        },
+        "dataset_uri": {
+          "type": "string",
+          "description": "S3 URI of the dataset Parquet file (from search_datasets)"
+        }
+      },
+      "required": ["project_id", "dataset_uri"]
+    }
+  },
+  {
+    "name": "run_sql",
+    "description": "Run a read-only DuckDB SQL query against one or more Parquet datasets. Single dataset: pass dataset_uri; it is exposed as table 'data' (FROM data). To JOIN across datasets (e.g. multiple sheets), pass dataset_uris (a list) and reference each by its table_name from search_datasets/describe_dataset. Columns are snake_case. Only SELECT/WITH allowed. Every dataset referenced in the SQL MUST be included in dataset_uri/dataset_uris. Example single: run_sql(project_id, dataset_uri, \"SELECT name FROM data ORDER BY attack DESC LIMIT 5\"). Example JOIN: run_sql(project_id, dataset_uris=[uriA, uriB], \"SELECT a.name, b.price FROM t_aaa a JOIN t_bbb b ON a.code = b.code\").",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "The unique identifier of the project"
+        },
+        "dataset_uri": {
+          "type": "string",
+          "description": "S3 URI of a single dataset Parquet file (from search_datasets). Use this for single-table queries; the table is named 'data'."
+        },
+        "dataset_uris": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of dataset S3 URIs to query together (from search_datasets). Use for JOINs; reference each by its table_name. Include every dataset your SQL uses."
+        },
+        "query": {
+          "type": "string",
+          "description": "Read-only SQL query. Use 'data' for a single dataset, or each dataset's table_name when joining."
+        }
+      },
+      "required": ["project_id", "query"]
+    }
+  }
+]

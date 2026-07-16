@@ -1,4 +1,9 @@
-from app.ddb.client import batch_delete_items, generate_project_id, get_table, now_iso
+from app.ddb.client import (
+    batch_delete_items,
+    generate_project_id,
+    get_table,
+    now_iso,
+)
 from app.ddb.documents import (
     delete_document_item,
     get_document_item,
@@ -6,7 +11,12 @@ from app.ddb.documents import (
     query_documents,
     update_document_data,
 )
-from app.ddb.models import Document, DocumentData, Project, ProjectData
+from app.ddb.models import (
+    Document,
+    DocumentData,
+    Project,
+    ProjectData,
+)
 from app.ddb.projects import (
     get_project_item,
     mark_project_updated,
