@@ -35,7 +35,7 @@
     "@valibot/to-json-schema": "^1.7.1",
     "apache-arrow": "^21.1.0",
     "aws-cdk": "2.1102.0",
-    "aws-cdk-lib": "2.235.1",
+    "aws-cdk-lib": "2.260.0",
     "aws4fetch": "^1.0.20",
     "constructs": "10.4.3",
     "esbuild": "0.28.1",
