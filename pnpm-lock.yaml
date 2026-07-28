@@ -107,7 +107,7 @@ importers:
         version: 0.185.0
       '@valibot/to-json-schema':
         specifier: ^1.7.1
-        version: 1.7.1(valibot@1.4.1(typescript@5.9.3))
+        version: 1.7.1(valibot@1.4.2(typescript@5.9.3))
       apache-arrow:
         specifier: ^21.1.0
         version: 21.1.0
@@ -134,7 +134,7 @@ importers:
         version: 4.12.27
       hono-openapi:
         specifier: ^1.3.0
-        version: 1.3.0(@hono/standard-validator@0.2.3(@standard-schema/spec@1.1.0)(hono@4.12.27))(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.1(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.1(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6))(@standard-community/standard-openapi@0.2.9(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.1(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.1(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.1.0)(openapi-types@12.1.3)(valibot@1.4.1(typescript@5.9.3))(zod@4.3.6))(@types/json-schema@7.0.15)(hono@4.12.27)(openapi-types@12.1.3)
+        version: 1.3.0(@hono/standard-validator@0.2.3(@standard-schema/spec@1.1.0)(hono@4.12.27))(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.2(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6))(@standard-community/standard-openapi@0.2.9(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.2(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.1.0)(openapi-types@12.1.3)(valibot@1.4.2(typescript@5.9.3))(zod@4.3.6))(@types/json-schema@7.0.15)(hono@4.12.27)(openapi-types@12.1.3)
       i18next:
         specifier: ^25.10.10
         version: 25.10.10(typescript@5.9.3)
@@ -205,8 +205,8 @@ importers:
         specifier: ^0.185.1
         version: 0.185.1
       valibot:
-        specifier: ^1.4.1
-        version: 1.4.1(typescript@5.9.3)
+        specifier: ^1.4.2
+        version: 1.4.2(typescript@5.9.3)
     devDependencies:
       '@aws-cdk/aws-bedrock-agentcore-alpha':
         specifier: 2.235.1-alpha.0
@@ -357,13 +357,13 @@ importers:
     dependencies:
       '@astrojs/starlight':
         specifier: ^0.37.6
-        version: 0.37.6(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@6.0.2)(yaml@2.9.0))
+        version: 0.37.6(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.9.0))
       astro:
         specifier: ^5.18.1
-        version: 5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@6.0.2)(yaml@2.9.0)
+        version: 5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.9.0)
       astro-mermaid:
         specifier: ^1.3.1
-        version: 1.3.1(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@6.0.2)(yaml@2.9.0))(mermaid@11.12.3)
+        version: 1.3.1(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.9.0))(mermaid@11.12.3)
       highlight.js:
         specifier: ^11.11.1
         version: 11.11.1
@@ -9364,8 +9364,8 @@ packages:
   react-is@18.3.1:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
 
-  react-is@19.2.7:
-    resolution: {integrity: sha512-kZFnouyVv7eP/Phmrlo9FK+zcAdriZJvzxXHF1Sl1P377WSGe2G/JxVolhTrB/jeV47lKImhNUsijjHAAbcl/A==}
+  react-is@19.2.8:
+    resolution: {integrity: sha512-s5un28nYxKJw5gvUHyW5PCC28CvBqLu9r3cWgzHT4Vo/5fqqkFcdRYsGcKf50WMPpjjFZS5d76fn3YCo2njKwQ==}
 
   react-kapsule@2.6.0:
     resolution: {integrity: sha512-HzLJoYb1n1kfwjXbqFFcRR0EA6oPsJ64tNdDmCSaL/bz2o9wUZRSb0cMe//grLFeF9EVoL4CD/e6ozLyzEv+PQ==}
@@ -10527,8 +10527,8 @@ packages:
     deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
-  valibot@1.4.1:
-    resolution: {integrity: sha512-klCmFTz2jeDluy9RwX+F884TCiogtdBJ/YaxSx1EOBYXa3NXNWj8kR1jjN8rzluwojJVWWaHJ4r1U5LfICnM3g==}
+  valibot@1.4.2:
+    resolution: {integrity: sha512-gjdCvJ6d3RyHAneqxMYMW9QMCwYMb3jpOO0IyHZV1bnRHFBHrX3VkIILt5XYR0WhwHiH7Mty8ovuPZ/O3gamrg==}
     peerDependencies:
       typescript: '>=5'
     peerDependenciesMeta:
@@ -11218,12 +11218,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@astrojs/mdx@4.3.13(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@6.0.2)(yaml@2.9.0))':
+  '@astrojs/mdx@4.3.13(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.9.0))':
     dependencies:
       '@astrojs/markdown-remark': 6.3.10
       '@mdx-js/mdx': 3.1.1
       acorn: 8.16.0
-      astro: 5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@6.0.2)(yaml@2.9.0)
+      astro: 5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.9.0)
       es-module-lexer: 1.7.0
       estree-util-visit: 2.0.0
       hast-util-to-html: 9.0.5
@@ -11247,17 +11247,17 @@ snapshots:
       stream-replace-string: 2.0.0
       zod: 3.25.76
 
-  '@astrojs/starlight@0.37.6(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@6.0.2)(yaml@2.9.0))':
+  '@astrojs/starlight@0.37.6(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.9.0))':
     dependencies:
       '@astrojs/markdown-remark': 6.3.10
-      '@astrojs/mdx': 4.3.13(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@6.0.2)(yaml@2.9.0))
+      '@astrojs/mdx': 4.3.13(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.9.0))
       '@astrojs/sitemap': 3.7.0
       '@pagefind/default-ui': 1.4.0
       '@types/hast': 3.0.4
       '@types/js-yaml': 4.0.9
       '@types/mdast': 4.0.4
-      astro: 5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@6.0.2)(yaml@2.9.0)
-      astro-expressive-code: 0.41.7(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@6.0.2)(yaml@2.9.0))
+      astro: 5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.9.0)
+      astro-expressive-code: 0.41.7(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.9.0))
       bcp-47: 2.1.0
       hast-util-from-html: 2.0.3
       hast-util-select: 6.0.4
@@ -15841,24 +15841,24 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.1(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.1(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6)':
+  '@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.2(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6)':
     dependencies:
       '@standard-schema/spec': 1.1.0
       '@types/json-schema': 7.0.15
       quansync: 0.2.11
     optionalDependencies:
-      '@valibot/to-json-schema': 1.7.1(valibot@1.4.1(typescript@5.9.3))
-      valibot: 1.4.1(typescript@5.9.3)
+      '@valibot/to-json-schema': 1.7.1(valibot@1.4.2(typescript@5.9.3))
+      valibot: 1.4.2(typescript@5.9.3)
       zod: 4.3.6
       zod-to-json-schema: 3.25.2(zod@4.3.6)
 
-  '@standard-community/standard-openapi@0.2.9(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.1(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.1(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.1.0)(openapi-types@12.1.3)(valibot@1.4.1(typescript@5.9.3))(zod@4.3.6)':
+  '@standard-community/standard-openapi@0.2.9(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.2(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.1.0)(openapi-types@12.1.3)(valibot@1.4.2(typescript@5.9.3))(zod@4.3.6)':
     dependencies:
-      '@standard-community/standard-json': 0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.1(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.1(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6)
+      '@standard-community/standard-json': 0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.2(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6)
       '@standard-schema/spec': 1.1.0
       openapi-types: 12.1.3
     optionalDependencies:
-      valibot: 1.4.1(typescript@5.9.3)
+      valibot: 1.4.2(typescript@5.9.3)
       zod: 4.3.6
 
   '@standard-schema/spec@1.1.0': {}
@@ -16683,9 +16683,9 @@ snapshots:
       d3-selection: 3.0.0
       d3-transition: 3.0.1(d3-selection@3.0.0)
 
-  '@valibot/to-json-schema@1.7.1(valibot@1.4.1(typescript@5.9.3))':
+  '@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@5.9.3))':
     dependencies:
-      valibot: 1.4.1(typescript@5.9.3)
+      valibot: 1.4.2(typescript@5.9.3)
 
   '@vitejs/plugin-react@4.7.0(vite@7.3.6(@types/node@22.19.1)(jiti@2.4.2)(lightningcss@1.30.2)(terser@5.48.0)(tsx@4.20.6)(yaml@2.9.0))':
     dependencies:
@@ -16711,7 +16711,7 @@ snapshots:
       obug: 2.1.3
       std-env: 4.1.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.9(@types/node@22.19.1)(@vitest/coverage-v8@4.1.9)(@vitest/ui@4.1.9)(jsdom@29.1.1)(vite@7.3.6(@types/node@22.19.1)(jiti@2.4.2)(lightningcss@1.30.2)(terser@5.48.0)(tsx@4.20.6)(yaml@2.9.0))
+      vitest: 4.1.9(@types/node@22.19.1)(@vitest/coverage-v8@4.1.9)(@vitest/ui@4.1.9)(jsdom@29.1.1)(vite@7.3.6(@types/node@22.19.1)(jiti@2.7.0)(lightningcss@1.30.2)(terser@5.48.0)(tsx@4.20.6)(yaml@2.9.0))
 
   '@vitest/expect@4.1.1':
     dependencies:
@@ -16800,7 +16800,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
-      vitest: 4.1.9(@types/node@22.19.1)(@vitest/coverage-v8@4.1.9)(@vitest/ui@4.1.9)(jsdom@29.1.1)(vite@7.3.6(@types/node@22.19.1)(jiti@2.4.2)(lightningcss@1.30.2)(terser@5.48.0)(tsx@4.20.6)(yaml@2.9.0))
+      vitest: 4.1.9(@types/node@22.19.1)(@vitest/coverage-v8@4.1.9)(@vitest/ui@4.1.9)(jsdom@29.1.1)(vite@7.3.6(@types/node@22.19.1)(jiti@2.7.0)(lightningcss@1.30.2)(terser@5.48.0)(tsx@4.20.6)(yaml@2.9.0))
 
   '@vitest/utils@4.1.1':
     dependencies:
@@ -17870,20 +17870,20 @@ snapshots:
 
   astring@1.9.0: {}
 
-  astro-expressive-code@0.41.7(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@6.0.2)(yaml@2.9.0)):
+  astro-expressive-code@0.41.7(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.9.0)):
     dependencies:
-      astro: 5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@6.0.2)(yaml@2.9.0)
+      astro: 5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.9.0)
       rehype-expressive-code: 0.41.7
 
-  astro-mermaid@1.3.1(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@6.0.2)(yaml@2.9.0))(mermaid@11.12.3):
+  astro-mermaid@1.3.1(astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.9.0))(mermaid@11.12.3):
     dependencies:
-      astro: 5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@6.0.2)(yaml@2.9.0)
+      astro: 5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.9.0)
       import-meta-resolve: 4.2.0
       mdast-util-to-string: 4.0.0
       mermaid: 11.12.3
       unist-util-visit: 5.1.0
 
-  astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@6.0.2)(yaml@2.9.0):
+  astro@5.18.1(@types/node@24.13.2)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.30.2)(rollup@4.62.2)(terser@5.48.0)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.9.0):
     dependencies:
       '@astrojs/compiler': 2.13.1
       '@astrojs/internal-helpers': 0.7.6
@@ -17934,7 +17934,7 @@ snapshots:
       svgo: 4.0.1
       tinyexec: 1.0.4
       tinyglobby: 0.2.15
-      tsconfck: 3.1.6(typescript@6.0.2)
+      tsconfck: 3.1.6(typescript@5.9.3)
       ultrahtml: 1.6.0
       unifont: 0.7.4
       unist-util-visit: 5.1.0
@@ -17947,7 +17947,7 @@ snapshots:
       yocto-spinner: 0.2.3
       zod: 3.25.76
       zod-to-json-schema: 3.25.1(zod@3.25.76)
-      zod-to-ts: 1.2.0(typescript@6.0.2)(zod@3.25.76)
+      zod-to-ts: 1.2.0(typescript@5.9.3)(zod@3.25.76)
     optionalDependencies:
       sharp: 0.34.5
     transitivePeerDependencies:
@@ -20437,10 +20437,10 @@ snapshots:
     dependencies:
       parse-passwd: 1.0.0
 
-  hono-openapi@1.3.0(@hono/standard-validator@0.2.3(@standard-schema/spec@1.1.0)(hono@4.12.27))(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.1(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.1(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6))(@standard-community/standard-openapi@0.2.9(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.1(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.1(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.1.0)(openapi-types@12.1.3)(valibot@1.4.1(typescript@5.9.3))(zod@4.3.6))(@types/json-schema@7.0.15)(hono@4.12.27)(openapi-types@12.1.3):
+  hono-openapi@1.3.0(@hono/standard-validator@0.2.3(@standard-schema/spec@1.1.0)(hono@4.12.27))(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.2(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6))(@standard-community/standard-openapi@0.2.9(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.2(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.1.0)(openapi-types@12.1.3)(valibot@1.4.2(typescript@5.9.3))(zod@4.3.6))(@types/json-schema@7.0.15)(hono@4.12.27)(openapi-types@12.1.3):
     dependencies:
-      '@standard-community/standard-json': 0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.1(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.1(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6)
-      '@standard-community/standard-openapi': 0.2.9(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.1(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.1(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.1.0)(openapi-types@12.1.3)(valibot@1.4.1(typescript@5.9.3))(zod@4.3.6)
+      '@standard-community/standard-json': 0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.2(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6)
+      '@standard-community/standard-openapi': 0.2.9(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@5.9.3)))(quansync@0.2.11)(valibot@1.4.2(typescript@5.9.3))(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.1.0)(openapi-types@12.1.3)(valibot@1.4.2(typescript@5.9.3))(zod@4.3.6)
       '@types/json-schema': 7.0.15
       openapi-types: 12.1.3
     optionalDependencies:
@@ -22541,7 +22541,7 @@ snapshots:
       '@jest/schemas': 30.4.1
       ansi-styles: 5.2.0
       react-is-18: react-is@18.3.1
-      react-is-19: react-is@19.2.7
+      react-is-19: react-is@19.2.8
 
   prismjs@1.30.0: {}
 
@@ -22658,7 +22658,7 @@ snapshots:
 
   react-is@18.3.1: {}
 
-  react-is@19.2.7: {}
+  react-is@19.2.8: {}
 
   react-kapsule@2.6.0(react@19.2.0):
     dependencies:
@@ -23738,10 +23738,6 @@ snapshots:
     optionalDependencies:
       typescript: 5.9.3
 
-  tsconfck@3.1.6(typescript@6.0.2):
-    optionalDependencies:
-      typescript: 6.0.2
-
   tsconfig-paths@3.15.0:
     dependencies:
       '@types/json5': 0.0.29
@@ -24029,7 +24025,7 @@ snapshots:
 
   uuid@9.0.1: {}
 
-  valibot@1.4.1(typescript@5.9.3):
+  valibot@1.4.2(typescript@5.9.3):
     optionalDependencies:
       typescript: 5.9.3
 
@@ -24480,9 +24476,9 @@ snapshots:
     dependencies:
       zod: 4.3.6
 
-  zod-to-ts@1.2.0(typescript@6.0.2)(zod@3.25.76):
+  zod-to-ts@1.2.0(typescript@5.9.3)(zod@3.25.76):
     dependencies:
-      typescript: 6.0.2
+      typescript: 5.9.3
       zod: 3.25.76
 
   zod@3.25.76: {}
