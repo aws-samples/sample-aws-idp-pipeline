@@ -18,7 +18,7 @@
     "@aws-sdk/client-s3": "^3.1015.0",
     "@aws-sdk/client-sqs": "^3.1015.0",
     "@aws-sdk/lib-dynamodb": "^3.1015.0",
-    "nanoid": "^5.1.5"
+    "nanoid": "^5.1.16"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.160",
